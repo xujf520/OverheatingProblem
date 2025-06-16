@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <unistd.h>
 #include "initialize.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
 #include "time_advance.h"
 #include "scheme.h"
-#include <unistd.h>
+
 
 /*                                            *********                                          */
 /*                                            声明子程序                                          */
@@ -32,12 +33,13 @@ void Mesh(int n, double deltax, double *x);
 /*                                            *********                                          */
 /*                                              主程序                                            */
 /*                                            *********                                          */
+const int n = 200;
+const int vis = 1;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
+const int scheme = 2;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
 
 int main(){
     //定义初始参数
-    const int n = 200;
-    const int vis = 1;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
-    const int scheme = 2;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
+    
     double t = 0;
     double l = 1.,       tmax = 0.15;       //计算域参数
     double cfl = 0.4; 
@@ -56,41 +58,49 @@ int main(){
 
     deltax = l / n; 
     *deltat= 0.0;
+    double  dt = 1e-4;
+    int Ite = 0;
 
 
 //初始条件
     double u_r = 0.0;
 
     Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                        //激波对撞
+    printf("Read initial conditions successfully!\n");
   
     //mesh
     Mesh(n,deltax,x);
+    printf("Mesh successfully!\n");
    
     Init_Euler(3,n+4,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
+   
+    
 
     //时间推进：时间一阶和时间二阶格式
-    double  dt = 1e-4;
-    int Ite = 0;
     for (t = 0; t < tmax; t = t+dt) {
-
         RK1_TVD(vis,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);
         //RK1_TVD_FluxM(vis,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);                                   //Riemann问题是否设置相对运动
         Ite++;
+        if (Ite % 100 == 0 ){
+              printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
+        }
+        
     }
+    printf("end of calculation!\n");
 
     //实现输出最后的结果
    //ConS_to_Pri_1D(3,n+4,pri,U_S);
     Con_to_Pri_1D(3,n+4,pri,U,gamma);
     //打开文件并输出结果
     OutputData_file(0,n+4,x,U_S,FU_S,pri,t);
+    
     free(deltat);
+
+    printf("The program has completed its execution.\n");
     return 0;
 
 }
 
-
-//一些数值方法
-//RK1_TVD(vis,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);                                   //TVD重构配合不同Riemann Solver
 
 //初始条件
 void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
@@ -113,8 +123,7 @@ void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
 
 void Init_Sod_Rare(double pri_Ver1[3], double pri_Ver2[3]) {
 
-    //0.43757818061324344    u_L =  0.9013775087441291       p_L =  0.31439665844271514
-    //rho2 =  0.4263194281784952;          u2 =  0.9274526200489499 ;      double p2 = 0.30313017805064685;
+
     double rho1 = 1.0;
     double rho2 =  0.43757818061324344;
     //double rho2 =  0.5;
@@ -259,9 +268,11 @@ void OutputData_file(int k, int cols, double* x, double (*U)[cols], double (*FU)
 
     if (k == 0)
     {
-        FILE* file = fopen("D:/Desktop/Single_Med_data/output_data.dat","w");
+        FILE* file = fopen("/mnt/d/Desktop/RP_FVM/data/output_data.dat","w");
         if (file == NULL) {
-            printf("error");
+            
+            printf("File opening failed\n");
+            printf("---------------Error----------------\n");
             return; // 返回错误代码
         }
         fprintf(file, "variables=x \t rho \t u\t p\t T\n");
@@ -269,13 +280,13 @@ void OutputData_file(int k, int cols, double* x, double (*U)[cols], double (*FU)
             fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",x[i-2], pri[0][i], pri[1][i], pri[2][i],pri[2][i]/pri[0][i]);
         }
         fclose(file);
-        printf("end of calculation!\n");
+        printf("Output calculation result successful\n");
        // printf("%f\n",t);
     }
     else
     {
         char filename[100];
-        sprintf(filename, "D:/Desktop/Single_Med_data/output_%d.dat", k);
+        sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_%d.dat", k);
         FILE* file = fopen(filename, "w");
         if (file == NULL) {
             printf("无法打开文件 %s\n", filename);
