@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "cfd_convection.h"
-#include "cfd_diffusion.h"
+#include "CFD_convection.h"
+#include "CFD_diffusion.h"
 #include "initialize.h"
 #include "scheme.h"
 
@@ -15,7 +15,7 @@ void OutputFluxData_file();
 
 
  //TVD重构配合不同Riemann Solver
-static inline void RK1_TVD(int vis, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
+static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
                             ,double (*z)[cols],double dt,double dx,double cfl ,double gamma, int k,double u_r) {
     int i,j;
     //计算时间步长
@@ -26,25 +26,19 @@ static inline void RK1_TVD(int vis, int AR_scheme, int rows, int cols , double (
      //数值通量
     switch (AR_scheme) {
         case 0:
-            RS_HLL(vis,3,cols,y,z,dt,dx,cfl,gamma,u_r);
-            //RS_Lax(vis,3,cols,y,z,dt,dx,cfl,gamma);
+            RS_HLL(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma,u_r);
             break;
         case 1:
-            RS_HLLC(vis,3,cols,y,z,dt,dx,cfl,gamma);
-            //RS_ER(vis,3,cols,y,z,dt,dx,cfl,gamma);
-            //RSHLLC_pri(vis,3,cols,y,z,dt,dx,cfl,gamma);
-            //RSHLLC_pri_S(vis,3,cols,y,z,dt,dx,cfl);
+            RS_HLLC(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma);
             break;
         case 2:
-            RS_Roe(vis,3,cols,y,z,dt,dx,cfl,gamma);
-            //RS_Roe_diag(vis,3,cols,y,z,dt,dx,cfl,gamma);
-            //RS_HLLC_diag(vis,3,cols,y,z,dt,dx,cfl,gamma);
+            RS_Roe(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma);
             break;
         case 3:
-            RS_ER(vis,3,cols,y,z,dt,dx,cfl,gamma);
+            RS_ER(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma);
             break;
         case 4:
-            RS_Marquina(vis,3,cols,y,z,dt,dx,cfl,gamma);
+            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma);
             break;
         default:
             // 这里可以处理 scheme 不是 0、1、2 的情况
@@ -80,7 +74,7 @@ static inline void RK1_TVD(int vis, int AR_scheme, int rows, int cols , double (
 }
 
 
-static inline void RK1_TVD_FluxM(int vis, int Rela_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
+static inline void RK1_TVD_FluxRela(int Recon_Accur, int Rela_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
                             ,double (*z)[cols],double dt,double dx,double cfl ,double gamma, int k, double u_r) {
     int i,j;
     //计算时间步长
@@ -91,13 +85,14 @@ static inline void RK1_TVD_FluxM(int vis, int Rela_scheme, int rows, int cols , 
     //数值通量
     switch (Rela_scheme) {
         case 0:
-            RS_Marquina(vis,3,cols,y,z,dt,dx,cfl,gamma);
+            RS_HLL_XRela(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma,u_r);
             break;
         case 1:
-            RS_HLL(vis,3,cols,y,z,dt,dx,cfl,gamma,u_r);
+            printf("代码未完成\n");
+            exit(1);
             break;
         default:
-            RS_Marquina_XRela(vis,3,cols,y,z,dt,dx,cfl,gamma,u_r);
+            RS_Marquina_XRela(Recon_Accur,3,cols,y,z,dt,dx,cfl,gamma,u_r);
             break;
     }
 

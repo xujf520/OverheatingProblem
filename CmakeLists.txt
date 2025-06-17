@@ -7,19 +7,22 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS_RELEASE "-O3 -Wall")
 set(CMAKE_C_FLAGS_DEBUG "-g -Wall")
 
+#对于未使用变量不出现wearing
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable -Wno-unused-but-set-variable")
+
 # 包含头文件目录
 include_directories(include)
 
 # 创建可执行文件
-add_executable(fvm_solver src/RP_FVM.c)
+add_executable(ShockImpact_RPS src/RP_FVM.c)
 
 # 链接数学库
-target_link_libraries(fvm_solver m)
+target_link_libraries(ShockImpact_RPS m)
 
 # 自动复制数据文件到构建目录
 file(GLOB DATA_FILES "data/*")
 if(DATA_FILES)
-    add_custom_command(TARGET fvm_solver POST_BUILD
+    add_custom_command(TARGET ShockImpact_RPS POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
         COMMAND ${CMAKE_COMMAND} -E copy ${DATA_FILES} ${CMAKE_BINARY_DIR}/data
         COMMENT "Copying data files to build directory"
@@ -28,8 +31,8 @@ endif()
 
 # 添加运行目标
 add_custom_target(run
-    COMMAND ${CMAKE_BINARY_DIR}/fvm_solver
-    DEPENDS fvm_solver
+    COMMAND ${CMAKE_BINARY_DIR}/ShockImpact_RPS
+    DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running CFD solver"
 )

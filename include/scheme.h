@@ -70,6 +70,16 @@ static inline void ConS_to_Pri_1D(int rows, int cols, double (*x)[cols], double 
 }
 
 
+
+/*                               ************************************                               */
+/*                               ************************************                               */
+/*                              Riemann Solver：Exact and Approximate                               */
+/*                               ************************************                               */
+/*                               ************************************                               */
+
+/*                                      ******************                                          */
+/*                                   在固定参考系下的黎曼解法器                                        */
+/*                                      ******************                                          */
 //Flux计算方法
 static inline void HLL_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
@@ -513,6 +523,110 @@ double ExactRieamnna_ustar(double p_star, double rhol, double rhor, double ul,do
 	double u_star = 0.5 * (ul + ur) + 0.5 * (F_K_P(p_star, pr,rhor,gammar,cr) - F_K_P(p_star, pl,rhol,gammal,cl));
     return u_star;
 }
+
+
+
+
+
+
+
+/*                               ************************************                               */
+/*                               ************************************                               */
+/*                              Riemann Solver：Exact and Approximate                               */
+/*                               ************************************                               */
+/*                               ************************************                               */
+
+/*                                      ******************                                          */
+/*                                   在相对参考系下的黎曼解法器                                        */
+/*                                      ******************                                          */
+//Flux计算方法
+static inline void HLL_Flux_XRela(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_r) {
+    
+    int h;
+    for (int j = 1; j < cols-1; j++) {
+
+
+        //读取已知的左右原始变量
+        double rho_L = x[0][j];
+        double rho_R = y[0][j];
+        double u_L = x[1][j] - u_r;
+        double u_R = y[1][j] - u_r;
+        double p_L = x[2][j];
+        double p_R = y[2][j];
+
+        //计算需要使用的参数
+        //计算声速
+        double a_L = sqrt(gamma * p_L/rho_L);
+        double a_R = sqrt(gamma * p_R/rho_R);
+
+        //计算总焓H
+        double H_L = 0.5 * pow(u_L,2) + (gamma/(gamma-1) ) * (p_L/rho_L);
+        double H_R = 0.5 * pow(u_R,2) + (gamma/(gamma-1) ) * (p_R/rho_R);
+
+    
+        //计算Roe平均
+        double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
+        double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+
+        //利用Roe平均的变量计算近似波速
+        double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
+        double sleft = ubar - cbar;
+        double sright = ubar + cbar;
+
+
+        //变换到原本参考系
+        double rho_FL = rho_L * (u_L + u_r);
+        double rho_FR = rho_R * (u_R + u_r);
+        double rhou_L = rho_L * (u_L + u_r);
+        double rhou_R = rho_R * (u_R + u_r);
+        double rhou_FL = rho_L * pow(u_L + u_r, 2) + p_L;
+        double rhou_FR = rho_R * pow(u_R + u_r, 2) + p_R;
+        double rhoe_L = 0.5 * rho_L * pow(u_L+u_r, 2) + p_L/(gamma-1);
+        double rhoe_R = 0.5 * rho_R * pow(u_R+u_r, 2) + p_R/(gamma-1);
+        double rhoe_FL = (0.5 * rho_L * pow(u_L+u_r, 2) + p_L/(gamma-1) + p_L) * (u_L+u_r);
+        double rhoe_FR = (0.5 * rho_R * pow(u_R+u_r, 2) + p_R/(gamma-1) + p_R) * (u_R+u_r);
+
+        //计算一个最大波速
+        double Splus = max_of_two(fabs(u_L) +fabs(u_r) + a_L, fabs(u_R) + fabs(u_r) + a_R);
+        //计算最大流体速度
+        double u_plus =  max_of_two(fabs(u_L) +fabs(u_r), fabs(u_R) + fabs(u_r));
+ 
+
+        //确定HLL数值通量
+        double rho_F = 0, rhou_F = 0, rhoe_F = 0;
+        if (sleft >= 0 ){
+            rho_F = rho_FL;
+            rhou_F = rhou_FL;
+            rhoe_F = rhoe_FL;
+        }
+        else if(sleft < 0 && sright >0){
+            //rho_F = rho_HLL * u_HLL;
+            //rhou_F = rho_HLL * pow(u_HLL,2) + p_HLL;
+            //rhoe_F = (0.5 * rho_HLL * pow(u_HLL,2) + p_HLL/(gamma-1) + p_HLL) * u_HLL;
+            rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+            rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
+            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+
+
+            //rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+            //rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
+            //rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+            //rho_F = (sright*rho_R - sleft*rho_L + rho_FL_Mov-rho_FR_Mov)/(sright-sleft) + rho_HLL *u_r;
+            //rhou_F =(sright*rhou_R_Mov - sleft*rhou_L_Mov + rhou_FL_Mov-rhou_FR_Mov)/(sright-sleft) + rho_HLL * u_r * u_r;
+            //rhoe_F = (sright*rhoe_R_Mov - sleft*rhoe_L_Mov + rhoe_FL_Mov-rhoe_FR_Mov)/(sright-sleft) + (0.5* rho_HLL*pow(u_r,2) + p_HLL)*u_r;
+        }
+        else if (sright <= 0){
+            rho_F = rho_FR;
+            rhou_F = rhou_FR;
+            rhoe_F = rhoe_FR;
+        }
+
+        z[0][j] = rho_F; 
+        z[1][j] = rhou_F; 
+        z[2][j] = rhoe_F; 
+    }   
+}
+
 
 
 #endif  

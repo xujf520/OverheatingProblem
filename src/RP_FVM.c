@@ -33,11 +33,15 @@ void Mesh(int n, double deltax, double *x);
 /*                                            *********                                          */
 /*                                              主程序                                            */
 /*                                            *********                                          */
+
 const int n = 200;
-const int vis = 1;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
-const int scheme = 2;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
+const int Rela = 0;
+const int Recon_Accur = 2;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
+const int scheme = 4;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
 
 int main(){
+
+    
     //定义初始参数
     
     double t = 0;
@@ -63,7 +67,8 @@ int main(){
 
 
 //初始条件
-    double u_r = 0.0;
+    double u_r = 1.2;
+
 
     Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                        //激波对撞
     printf("Read initial conditions successfully!\n");
@@ -71,17 +76,23 @@ int main(){
     //mesh
     Mesh(n,deltax,x);
     printf("Mesh successfully!\n");
-   
+
     Init_Euler(3,n+4,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
-   
-    
+    printf("Euler equation initialization successful!\n");
 
     //时间推进：时间一阶和时间二阶格式
     for (t = 0; t < tmax; t = t+dt) {
-        RK1_TVD(vis,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);
-        //RK1_TVD_FluxM(vis,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);                                   //Riemann问题是否设置相对运动
+        switch (Rela) {
+            case 0:
+                RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);
+                break;
+            default:
+                RK1_TVD_FluxRela(Recon_Accur,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);     
+                break;
+        }
+
         Ite++;
-        if (Ite % 100 == 0 ){
+        if (Ite % 500 == 0 ){
               printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
         }
         
