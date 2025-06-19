@@ -13,6 +13,7 @@
 /*                               ************************************                               */
 /*                               ************************************                               */
 
+
 /*                                      ******************                                          */
 /*                                      重构步：基于守恒变量                                          */
 /*                                      ******************                                          */
@@ -20,10 +21,8 @@
                                     /*……………………………………………………*/
                                         /*近似黎曼求解*/
                                     /*……………………………………………………*/
-/*……………………………………………………………………………………………………*/
-//双激波近似黎曼求解
-static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma, double u_r) {
+static inline void RS_Rusanov(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma, double u_r) {
     int i,j;
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
@@ -64,7 +63,173 @@ static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],d
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+                    exit(1);
+            }
+        }
+    }
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
+        }
+    }
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
+        }
+    }
+    //边界条件，降价为0阶重构
+    for ( i = 0; i < rows; i++){
+        coverr[i][0] = y[i][1];
+        coverl[i][0] = y[i][0];
+        coverr[i][cols-2] = y[i][cols-1];
+        coverl[i][cols-2] = y[i][cols-2];
+    }
+
+    
+
+    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+    
+    Rusanov_Flux(rows, cols, prileft,priright,Flux,gamma);
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            z[i][j] = Flux[i][j];
+        }
+    }
+
+}
+
+
+static inline void RS_Lax(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma, double u_r) {
+    int i,j;
+    double coverl[3][cols],coverr[3][cols];
+    double prileft[3][cols], priright[3][cols];
+    double Flux[3][cols];
+    double slope[3][cols-1],a[3][cols-1],b[3][cols-1];
+
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            a[i][j]=(y[i][j] - y[i][j-1])/dx;
+        }
+    }
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            b[i][j]=(y[i][j+1] - y[i][j])/dx;
+        }
+    }
+    
+    //重构
+    for (int i = 0; i < rows; i++){   
+        for (int j = 1; j < cols-1; j++)
+        {
+            switch (Recon_Accur)
+            {
+                case 0:
+                    slope[i][j]=0;
+                    break;
+                case 1:
+                    //vanleer
+                    slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
+                    //minibee
+                    //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
+                    //vanalbada
+                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    break;
+                
+                default:
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+                    exit(1);
+            }
+        }
+    }
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
+        }
+    }
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
+        }
+    }
+    //边界条件，降价为0阶重构
+    for ( i = 0; i < rows; i++){
+        coverr[i][0] = y[i][1];
+        coverl[i][0] = y[i][0];
+        coverr[i][cols-2] = y[i][cols-1];
+        coverl[i][cols-2] = y[i][cols-2];
+    }
+
+    
+
+    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+    
+    Lax_Flux(rows, cols, prileft,priright,Flux,gamma);
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            z[i][j] = Flux[i][j];
+        }
+    }
+
+}
+
+
+/*……………………………………………………………………………………………………*/
+//双激波近似黎曼求解
+static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma, double u_r) {
+    int i,j;
+    double coverl[3][cols],coverr[3][cols];
+    double prileft[3][cols], priright[3][cols];
+    double Flux[3][cols];
+    double slope[3][cols-1],a[3][cols-1],b[3][cols-1];
+
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            a[i][j]=(y[i][j] - y[i][j-1])/dx;
+        }
+    }
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            b[i][j]=(y[i][j+1] - y[i][j])/dx;
+        }
+    }
+    
+    //重构
+    for (int i = 0; i < rows; i++){   
+        for (int j = 1; j < cols-1; j++)
+        {
+            switch (Recon_Accur)
+            {
+                case 0:
+                    slope[i][j]=0;
+                    break;
+                case 1:
+                    //vanleer
+                    slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
+                     //minibee
+                    //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
+                    //vanalbada
+                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    break;
+                
+                default:
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -107,7 +272,7 @@ static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],d
 /*……………………………………………………………………………………………………*/
 //三波近似黎曼求解
 static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma) {
+                                ,double dt,double dx, double gamma) {
     int i,j;
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
@@ -147,7 +312,7 @@ static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -188,7 +353,7 @@ static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],
 /*……………………………………………………………………………………………………*/
 //Roe近似黎曼求解并且存在两种重构&&作用于守恒变量
 static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma) {
+                                ,double dt,double dx, double gamma) {
     //直接作用守恒变量
     int i,j;
     double coverl[rows][cols],coverr[rows][cols];
@@ -231,7 +396,7 @@ static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],d
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -275,7 +440,7 @@ static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],d
 /*……………………………………………………………………………………………………*/
 //精确黎曼求解
 static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma) {
+                                ,double dt,double dx, double gamma) {
     int i,j;
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
@@ -317,7 +482,7 @@ static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],do
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -367,7 +532,7 @@ static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],do
 /*……………………………………………………………………………………………………*/
 //“The algorithmic description of Marquina’s flux formula is as follows:” ([Donat 和 Marquina, 1996, p. 44]
 static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma) {
+                                ,double dt,double dx, double gamma) {
     double coverl[3][cols],coverr[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double prileft[3][cols], priright[3][cols];
@@ -473,7 +638,7 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -585,7 +750,7 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
 /*……………………………………………………………………………………………………*/
 //双激波近似黎曼求解
 static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma, double u_r) {
+                                ,double dt,double dx, double gamma, double u_r) {
     int i,j;
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
@@ -626,7 +791,7 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -669,19 +834,19 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
 /*……………………………………………………………………………………………………*/
 //“The algorithmic description of Marquina’s flux formula is as follows:” ([Donat 和 Marquina, 1996, p. 44]
 static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double cfl,double gamma,double u_r) {
-    double coverl[3][cols],coverr[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double prileft[3][cols], priright[3][cols];
+                                ,double dt,double dx, double gamma,double u_r) {
+    double coverl[rows][cols],coverr[rows][cols];
+    double fluxl[rows][cols],fluxr[rows][cols];
+    double prileft[rows][cols], priright[rows][cols];
     double pri[rows][cols];
-    double slope[3][cols-1],a[3][cols-1],b[3][cols-1];
+    double slope[rows][cols-1],a[rows][cols-1],b[rows][cols-1];
     
-    double eigen_l[3][3][cols],eigen_r[3][3][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
     double w_l[rows][cols], w_r[rows][cols];
     double phi_fl[rows][cols], phi_fr[rows][cols];
     double phi_fp[rows][cols], phi_fm[rows][cols];
-    double flux[3][cols];
-    double lamda[3][cols];
+    double flux[rows][cols];
+    double lamda[rows][cols], lamda_plus[rows][cols];
     double alpha[rows][cols];
 
     //初始化数组
@@ -753,9 +918,13 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
         _c = sqrt(c2);
 
         //计算对应特征值
-        lamda[0][j] = _u - _c ;
+        lamda[0][j] = _u - _c;
         lamda[1][j] = _u;
         lamda[2][j] = _u + _c;
+
+        lamda_plus[0][j] = fabs(_u) + _c ;
+        lamda_plus[1][j] = _u;
+        lamda_plus[2][j] = fabs(_u) + _c ;
     }
     
 
@@ -780,14 +949,14 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
                 case 1:
                     //vanleer
                     slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                     //minibee
+                    //minibee
                     //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
                     //vanalbada
                     //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
                     break;
                 
                 default:
-                    printf(" The reconstruction program with a precision greater than the  %d-th order has not been implemented.\n",Recon_Accur);
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
         }
@@ -842,8 +1011,8 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
     //计算通量分量
     for (int k = 0; k < 3; k++){
         for (int j = 1; j < cols-1; j++){
-            if (lamda[k][j] * lamda[k][j+1] >= 0){
-                if (lamda[k][j] >= 0){
+            if (lamda[k][j] * lamda[k][j+1] > 0.0){
+                if (lamda[k][j] > 0){
                     phi_fp[k][j] = phi_fl[k][j];
                     phi_fm[k][j] = 0.0;
                 }
@@ -892,8 +1061,6 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
 /*                                      ******************                                          */
 
 
-
-
 /*                                      ******************                                          */
 /*                                      重构步：基于特征变量                                          */
 /*                                      ******************                                          */
@@ -909,8 +1076,6 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
                                     /*……………………………………………………*/
                                         /*近似黎曼求解*/
                                     /*……………………………………………………*/
-
-
 
 
 

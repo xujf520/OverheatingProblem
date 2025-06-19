@@ -36,8 +36,8 @@ void Mesh(int n, double deltax, double *x);
 
 const int n = 200;
 const int Rela = 0;
-const int Recon_Accur = 2;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
-const int scheme = 4;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
+const int Recon_Accur = 1;                      //重构方式控制变量{0是0阶，1是TVD；高精度数值方法则0是3阶weno，1是5阶weno}
+const int scheme = 6;                   //近似黎曼问题求解器的控制变量            &&& 控制是否使用相对参考系的Riemann Solver
 
 int main(){
 
@@ -45,11 +45,11 @@ int main(){
     //定义初始参数
     
     double t = 0;
-    double l = 1.,       tmax = 0.15;       //计算域参数
-    double cfl = 0.4; 
+    double L = 1.,       Tmax = 0.15;       //计算域参数
+    double CFL = 0.7; 
     double gamma = 1.4;                     //物性参数
-    double deltax;
-    double * deltat = malloc(sizeof(double));
+    double Delta_x;
+    double Delta_T;
 
     // 添加声明，2个虚拟网格
     double x[n];
@@ -60,39 +60,37 @@ int main(){
     double FU_S[3][n + 4];
     double pri_Ver1[3], pri_Ver2[3];
 
-    deltax = l / n; 
-    *deltat= 0.0;
-    double  dt = 1e-4;
+    Delta_x = L / n; 
     int Ite = 0;
 
-
 //初始条件
-    double u_r = 1.2;
+    double u_r = 0.0;
 
 
     Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                        //激波对撞
     printf("Read initial conditions successfully!\n");
   
     //mesh
-    Mesh(n,deltax,x);
+    Mesh(n,Delta_x,x);
     printf("Mesh successfully!\n");
 
     Init_Euler(3,n+4,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
     printf("Euler equation initialization successful!\n");
 
     //时间推进：时间一阶和时间二阶格式
-    for (t = 0; t < tmax; t = t+dt) {
+    for (t = 0; t < Tmax; t = t+Delta_T) {
+        Delta_T = Get_Delta_T(3,n+4,U,Delta_x,CFL,gamma);
         switch (Rela) {
             case 0:
-                RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);
+                RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
                 break;
             default:
-                RK1_TVD_FluxRela(Recon_Accur,scheme,3,n+4,x,U,FU,dt,deltax,cfl,gamma,1,u_r);     
+                RK1_TVD_FluxRela(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
                 break;
         }
 
         Ite++;
-        if (Ite % 500 == 0 ){
+        if (Ite % 10 == 0 ){
               printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
         }
         
@@ -105,8 +103,6 @@ int main(){
     //打开文件并输出结果
     OutputData_file(0,n+4,x,U_S,FU_S,pri,t);
     
-    free(deltat);
-
     printf("The program has completed its execution.\n");
     return 0;
 
@@ -260,12 +256,12 @@ void Mesh(int n, double deltax, double *x) {
 
 
 // 控制计算步数子程序
-void StepLoop(double* deltat, double deltax, double cfl, double t, int l, int cols, int vis, int scheme, 
+void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int cols, int vis, int scheme, 
                                             double* x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols],double gamma) {
     for (int k = 0; k < l; k++) {
         //计算格式
-        //RK1_TVD(vis, scheme, 3, cols, x, U, FU, 1e-10, deltax, cfl, gamma, k+1);
-        //RK_2Roe(vis, scheme, 3, n+4, U, FU, deltat, deltax, cfl);
+        //RK1_TVD(vis, scheme, 3, cols, x, U, FU, 1e-10, deltax, CFL, gamma, k+1);
+        //RK_2Roe(vis, scheme, 3, n+4, U, FU, deltat, deltax, CFL);
 
         t += *deltat;
         Con_to_Pri_1D(3, cols, pri, U,gamma);
