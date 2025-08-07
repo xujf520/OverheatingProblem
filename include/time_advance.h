@@ -14,40 +14,86 @@ void OutputFluxData_file();
                             /*1阶Euler时间推进方法*/
 
 
- //TVD重构配合不同Riemann Solver
+//TVD重构配合不同Riemann Solver
 static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
                                             ,double (*z)[cols],double dt,double dx, double gamma, int k,double u_r) {
     int i,j;
-    //计算时间步长
-    //*dt =Get_lamdat(cols,y,dx,CFL,gamma);
-    
+
+
+    //施加边界条件，
+    BC_OutFlow(3,cols,y,0,2);                       //边界条件说明见具体子程序
+    BC_Reflect(3,cols,y,1,2);
+//    BC_OutFlow(3,cols,y,1,1);
 
     //AR_scheme is Approximate Riemann Solver
      //数值通量
     switch (AR_scheme) {
         case 0:
-            RS_HLL(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 1:
-            RS_HLLC(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 2:
-            RS_Roe(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 3:
-            RS_ER(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 4:
-            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 5:
-            RS_Rusanov(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 6:
             RS_Lax(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
             break;
+        case 1:
+            RS_Rusanov(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 2:
+            RS_HLL(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 3:
+            RS_HLLC(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
+        case 4:
+            RS_Roe(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
+        case 5:
+            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
         default:
-            // 这里可以处理 scheme 不是 0、1、2 的情况
+            RS_ER(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            // 你可以根据实际需求添加相应的处理逻辑
+            break;
+    }
+
+    // 第一步计算
+/*                                            *********                                          */
+/*                                            输出数值通量                                        */
+/*                                            *********                                          */
+//    OutputFluxData_file(k, cols, dx, x_d, z);
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            y[i][j] = y[i][j] - dt*(z[i][j]-z[i][j-1])/dx;
+        }
+    }
+
+}
+
+
+//TVD重构配合不同Riemann Solver
+static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
+                                            ,double (*z)[cols],double dt,double dx, double gamma, int k,double u_r) {
+    int i,j;
+    //AR_scheme is Approximate Riemann Solver
+     //数值通量
+    switch (AR_scheme) {
+        case 0:
+            RS_Lax_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 1:
+            RS_Rusanov_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 2:
+            RS_HLL_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 3:
+            RS_HLLC_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 4:
+            RS_Roe_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+            break;
+        case 5:
+            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
+        default:
+            RS_ER_Heat(Recon_Accur,3,cols,y,z,dt,dx,gamma);
             // 你可以根据实际需求添加相应的处理逻辑
             break;
     }
@@ -78,6 +124,7 @@ static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , 
         
     }
 }
+
 
 
 static inline void RK1_TVD_FluxRela(int Recon_Accur, int Rela_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
