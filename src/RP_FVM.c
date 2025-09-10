@@ -37,16 +37,16 @@ void Mesh(int n, double deltax, double *x);
 
 //网格参数
 const int n = 200;                                                      //网格数量 
-const int RP_Method = 1;                                                //Riemann Solver的具体方法  
-const int Recon_Accur = 0;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
+const int RP_Method = 0;                                                //Riemann Solver的具体方法  
+const int Recon_Accur = 1;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
                                                                         //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：             
-const int scheme = 3;                                                   //Riemann Solver：包括Exact，Lax，Rusanov,HLL,HLLC,Roe，Marquina   
+const int scheme = 8;                                                   //Riemann Solver：包括Exact，Lax，Rusanov,HLL,HLLC,Roe，Marquina   
 const int Control_output = 50;
 int main(){
     //定义初始参数
     double t = 0;
     double L = 1.,       Tmax = 0.15;       //计算域参数
-    double CFL = 0.6; 
+    double CFL = 0.4; 
     double gamma = 1.4;                     //物性参数
     double Delta_x;
     double Delta_T;
@@ -64,9 +64,9 @@ int main(){
 //初始条件
     double u_r = 0.0;
 
-//    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
+    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
     //Init_DRare(pri_Ver1,pri_Ver2,u_r);  
-    Init_Shock3(pri_Ver1,pri_Ver2);  
+//    Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
   
     //mesh
@@ -79,6 +79,9 @@ int main(){
     //时间推进：时间一阶和时间二阶格式
     for (t = 0; t < Tmax; t = t+Delta_T) {
         Delta_T = Get_Delta_T(3,n+4,U,Delta_x,CFL,gamma);
+        if (t + Delta_T > Tmax)
+            Delta_T = Tmax - t ;
+        
         switch (RP_Method) {
             case 0:
                 RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
@@ -92,9 +95,8 @@ int main(){
         }
  
         Ite++;
-        if (Ite % Control_output == 0 ){
-              printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
-        }
+        if (Ite % Control_output == 0 )
+            printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
         
     }
    
