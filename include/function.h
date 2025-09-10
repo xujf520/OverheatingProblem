@@ -62,5 +62,16 @@ static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx
     return CFL * dx / S_plus;
 }
 
+//计算总守恒量
+static inline void Total_Conser(int rows, int cols, double Ghost_Cell , double (*x)[cols], double Conser[rows],double delta_x) {
+    
+    for (int i = 0; i < rows; i++){
+        for (int j = Ghost_Cell ; j < cols - Ghost_Cell; j++){
+            Conser[i] += x[i][j] * delta_x;  
+        } 
+        
+    }
+}
+
 
 #endif

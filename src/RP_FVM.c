@@ -24,6 +24,7 @@ void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r);
 void Init_Shock_Impact(double pri_Ver1[3], double pri_Ver2[3],double u_r);
 void Init_Shock1(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]);
+void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3],double gamma);
 
 //简单的网格代码
@@ -36,10 +37,10 @@ void Mesh(int n, double deltax, double *x);
 
 //网格参数
 const int n = 200;                                                      //网格数量 
-const int RP_Method = 0;                                                //Riemann Solver的具体方法  
-const int Recon_Accur = 1;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
+const int RP_Method = 1;                                                //Riemann Solver的具体方法  
+const int Recon_Accur = 0;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
                                                                         //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：             
-const int scheme = 6;                                                   //Riemann Solver：包括Exact，Lax，Rusanov,HLL,HLLC,Roe，Marquina   
+const int scheme = 3;                                                   //Riemann Solver：包括Exact，Lax，Rusanov,HLL,HLLC,Roe，Marquina   
 const int Control_output = 50;
 int main(){
     //定义初始参数
@@ -63,9 +64,9 @@ int main(){
 //初始条件
     double u_r = 0.0;
 
-    //Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                        //激波对撞
+//    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
     //Init_DRare(pri_Ver1,pri_Ver2,u_r);  
-    Init_Shock2(pri_Ver1,pri_Ver2);  
+    Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
   
     //mesh
@@ -100,9 +101,9 @@ int main(){
 
     //迭代步数控制
     /*t = 0;
-    for (int m = 0; m <= 1500; m++) {
+    for (int m = 0; m <= 1000; m++) {
         //Delta_T = Get_Delta_T(3,n+4,U,Delta_x,CFL,gamma);
-        Delta_T = 0.1*Delta_x;
+        Delta_T = 0.2*Delta_x;
         switch (RP_Method) {
             case 0:
                 RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
@@ -248,11 +249,30 @@ void Init_Shock1(double pri_Ver1[3], double pri_Ver2[3]) {
     pri_Ver2[2] = p2;
 }
 
+
 void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]) {
+    double rho1 = 600.0/107.0;
+    double rho2 = 1.0;
+    double u1 = 493.0/60.0;
+    double u2 = 0.0;
+    double p1 = 499.0/6.0;
+    double p2 = 1.0;
+
+    // 将变量赋值给数组
+    pri_Ver1[0] = rho1;
+    pri_Ver1[1] = u1;
+    pri_Ver1[2] = p1;
+
+    pri_Ver2[0] = rho2;
+    pri_Ver2[1] = u2;
+    pri_Ver2[2] = p2;
+}
+
+void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
     double rho2 = 1.0;
     double u1 = 1.0;
-    double u2 = 1.0;
+    double u2 = -1.0;
     double p1 = 1.0;
     double p2 = 1.0;
 
@@ -317,10 +337,12 @@ void OutputData_file(int k, int cols, double* x, double (*U)[cols], double (*FU)
             printf("---------------Error----------------\n");
             return; // 返回错误代码
         }
-        fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t F_rho\t F_rhou\t F_rhoE\n");
+        fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t rhoE_K\t rhoE_I\t F_rho\t F_rhou\t F_rhoE\n");
         for (int i = 2; i < cols-2 ; i++) {
-            fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",x[i-2], pri[0][i], pri[1][i], pri[2][i],pri[2][i]/pri[0][i],\
-                                                        U[1][i], U[2][i], U[1][i], U[1][i] * pri[1][i] + pri[2][i] ,pri[1][i] * (U[2][i] + pri[2][i]));
+            fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",\
+                        x[i-2], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
+                        U[1][i], U[2][i], 0.5*pri[1][i]*U[1][i], pri[2][i]/(1.4-1) , \
+                        U[1][i], U[1][i] * pri[1][i] + pri[2][i] ,pri[1][i] * (U[2][i] + pri[2][i]));
         }
         fclose(file);
         printf("Output calculation result successful\n");

@@ -1,4 +1,5 @@
 # 忽略特定目录
-/.vscode/
-/build/
-/data/
+.git/
+.vscode/
+build/
+data/
