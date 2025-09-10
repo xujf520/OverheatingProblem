@@ -423,16 +423,6 @@ static inline void Roe_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
         z[1][j] = rhou_F; 
         z[2][j] = rhoe_F; 
 
-        if (j == 200) {
-            //double p_diff = p_star - 2.926650;
-            //p_star_accumulator += p_diff;
-            //printf("p_Refect = %f, p_Refect - p_Exact = %f, 累计差值 = %f.\n",p_star, p_diff, p_star_accumulator);
-            //int k = 0;
-            //z[1][j] = p_star;
-
-            Flux_test += rho_F;
-            printf("累加通量 = %f.\n", Flux_test);
-        }
     }   
 }
 
