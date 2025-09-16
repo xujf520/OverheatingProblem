@@ -27,8 +27,12 @@ void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3],double gamma);
 
+// 读取黎曼问题
+int Get_RP_input(int argc, char *argv[]);
+
 //简单的网格代码
 void Mesh(int n, double deltax, double *x);
+
 
 
 /*                                            *********                                          */
@@ -41,17 +45,19 @@ void Mesh(int n, double deltax, double *x);
 const int n = 200;                                                      //网格数量 
 const int RP_Method = 0;                                                //Riemann Solver的具体方法  
 const int Recon_Accur = 1;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
-                                                                        //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：             
-const int scheme = 4;                                                   //Riemann Solver：包括Exact，Lax，Rusanov,HLL,HLLC,Roe，Marquina
-const int Control_Compution = 0;   
-const int Control_output = 50;
+                                                                        //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：                                              
+const int Control_Compution = 0;
+const int Control_output = 100;
 
+//Riemann Solver
+int scheme;                                                   
+int main(int argc, char *argv[]) {
 
-int main(){
-    //定义初始参数
+    scheme = Get_RP_input(argc, argv);
+
     double t = 0;
     double L = 1.,       Tmax = 0.14;       //计算域参数
-    double CFL = 0.4; 
+    double CFL = 0.6; 
     double gamma = 1.4;                     //物性参数
     double Delta_x;
     double Delta_T;
@@ -69,9 +75,9 @@ int main(){
 //初始条件
     double u_r = 0.0;
 
-    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
-//    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r); 
-    //Init_DRare(pri_Ver1,pri_Ver2,u_r);  
+//    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
+    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r); 
+//    Init_DRare(pri_Ver1,pri_Ver2,u_r);  
 //    Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
   
@@ -147,6 +153,41 @@ int main(){
 }
 
 
+// 函数定义：从命令行参数或用户输入获取黎曼求解器方案
+int Get_RP_input(int argc, char *argv[]) {
+    int selected_scheme;
+    
+    if (argc > 1) {
+        selected_scheme = atoi(argv[1]);
+        printf("Using scheme %d from command line argument\n", selected_scheme);
+    } else {
+        // 显示可用的黎曼求解器选项
+        printf("Available Riemann Solvers:\n");
+        printf("0: Lax\n");
+        printf("1: Rusanov\n");
+        printf("2: HLL\n");
+        printf("3: HLLC\n");
+        printf("4: Roe\n");
+        printf("5: Marquina\n");
+        printf("6: StegerWarming\n");
+        printf("7: VanLeer\n");
+        printf("8: LiouSteffen\n");
+        printf("Other: Exact Riemann\n");
+        
+        printf("Please enter the scheme value (0-8): ");
+        scanf("%d", &selected_scheme);
+        printf("Using scheme %d from user input\n", selected_scheme);
+    }
+
+    // 验证输入的有效性
+    if (selected_scheme < 0 || selected_scheme >= 10) {
+        printf("Warning: Scheme value %d is outside recommended range (0-8)\n", selected_scheme);
+        printf("Using Exact Riemann solver as default\n");
+    }
+    return selected_scheme;
+}
+
+
 //初始条件
 void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
@@ -207,8 +248,8 @@ void Init_Sod_Shock(double pri_Ver1[3], double pri_Ver2[3]) {
 void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
     double rho1 = 1.0;
     double rho2 = 1.0;
-    double u1 = -2.0 + u_r;
-    double u2 = 2.0 + u_r;
+    double u1 = -1.0 + u_r;
+    double u2 = 1.0 + u_r;
     double p1 = 1.0;
     double p2 = 1.0;
 
@@ -281,8 +322,8 @@ void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]) {
 void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
     double rho2 = 1.0;
-    double u1 = 1.0;
-    double u2 = -1.0;
+    double u1 = 4.0;
+    double u2 = 4.0;
     double p1 = 1.0;
     double p2 = 1.0;
 

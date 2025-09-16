@@ -442,8 +442,8 @@ static inline void StegerWarming_Flux(int rows, int cols,double (*x)[cols], doub
         double a_P = sqrt(gamma * p_P / rho_P);
         double a_N = sqrt(gamma * p_N / rho_N);
         //计算总焓H
-        double H_P = 0.5 * pow(u_P,2) + (gamma/(gamma-1) ) * (p_P/rho_P);
-        double H_N = 0.5 * pow(u_N,2) + (gamma/(gamma-1) ) * (p_N/rho_N);
+        double H_P = 0.5 * pow(u_P,2) + (gamma/(gamma-1)) * (p_P/rho_P);
+        double H_N = 0.5 * pow(u_N,2) + (gamma/(gamma-1)) * (p_N/rho_N);
 
         //计算Roe平均
         double rhobar = sqrt(rho_P * rho_N);
@@ -452,7 +452,19 @@ static inline void StegerWarming_Flux(int rows, int cols,double (*x)[cols], doub
         double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
 
         //利用Roe平均计算近似波速&&&&同时分裂为正负波速度
-        double lambda1 = ubar - cbar;
+        double lambdap1 = u_P - a_P;
+        double lambdap2 = u_P;
+        double lambdap3 = u_P + a_P;
+        double lambdan1 = u_N - a_N;
+        double lambdan2 = u_N;
+        double lambdan3 = u_N + a_N;
+        double lambda1_p = 0.5*(lambdap1  + fabs(lambdap1));
+        double lambda2_p = 0.5*(lambdap2  + fabs(lambdap2));
+        double lambda3_p = 0.5*(lambdap3  + fabs(lambdap3));
+        double lambda1_n = 0.5*(lambdan1  - fabs(lambdan1));
+        double lambda2_n = 0.5*(lambdan2  - fabs(lambdan2));
+        double lambda3_n = 0.5*(lambdan3  - fabs(lambdan3));
+        /*double lambda1 = ubar - cbar;
         double lambda2 = ubar;
         double lambda3 = ubar + cbar;
         double lambda1_p = 0.5*(lambda1  + fabs(lambda1));
@@ -460,19 +472,17 @@ static inline void StegerWarming_Flux(int rows, int cols,double (*x)[cols], doub
         double lambda3_p = 0.5*(lambda3  + fabs(lambda3));
         double lambda1_n = 0.5*(lambda1  - fabs(lambda1));
         double lambda2_n = 0.5*(lambda2  - fabs(lambda2));
-        double lambda3_n = 0.5*(lambda3  - fabs(lambda3));
+        double lambda3_n = 0.5*(lambda3  - fabs(lambda3));*/
 
         //计算中间变量
         double F_rhou_PP =  u_P - a_P;
         double F_rhou_PN =  u_P + a_P;
         double F_rhou_NP =  u_N - a_N;
         double F_rhou_NN =  u_N + a_N;
-
         double F_rhoe_PP =  H_P - u_P *a_P;
         double F_rhoe_PN =  H_P + u_P *a_P;
         double F_rhoe_NP =  H_N - u_N *a_N;
         double F_rhoe_NN =  H_N + u_N *a_N;
-
 
         //计算分裂之后的正负通量
         double rho_FP = (0.5*rho_P/gamma) * (lambda1_p + 2.0*(gamma-1)*lambda2_p + lambda3_p);
@@ -502,19 +512,14 @@ static inline void VanLeer_Flux(int rows, int cols,double (*x)[cols], double (*y
         //计算声速
         double a_P = sqrt(gamma * p_P / rho_P);
         double a_N = sqrt(gamma * p_N / rho_N);
+
         //计算当地Ma
         double Ma_P = u_P / a_P;
         double Ma_N = u_N / a_N;
+        
         //计算总焓H
         double H_P = 0.5 * pow(u_P,2) + (gamma/(gamma-1) ) * (p_P/rho_P);
         double H_N = 0.5 * pow(u_N,2) + (gamma/(gamma-1) ) * (p_N/rho_N);
-
-        //计算Roe平均
-        double ubar = (sqrt(rho_P) * u_P + sqrt(rho_N) * u_N)/(sqrt(rho_P)+sqrt(rho_N));
-        double Hbar = (sqrt(rho_P) * H_P + sqrt(rho_N) * H_N)/(sqrt(rho_P)+sqrt(rho_N));
-        double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
-        double Mabar = ubar/cbar;
-
 
         //计算相关系数：
         double gamma_1 = (gamma-1)/2;
@@ -604,6 +609,137 @@ static inline void LiouSteffen_Flux(int rows, int cols,double (*x)[cols], double
     }   
 }
 
+
+
+static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+    
+    for (int j = 1; j < cols-1; j++) {
+        //读取已知的左右原始变量
+        double rho_P = x[0][j];
+        double rho_N = y[0][j];
+        double u_P = x[1][j];
+        double u_N = y[1][j];
+        double p_P = x[2][j];
+        double p_N = y[2][j];
+        //计算声速
+        double a_P = sqrt(gamma * p_P / rho_P);
+        double a_N = sqrt(gamma * p_N / rho_N);
+        //计算总焓H
+        double H_P = 0.5 * pow(u_P,2) + (gamma/(gamma-1)) * (p_P/rho_P);
+        double H_N = 0.5 * pow(u_N,2) + (gamma/(gamma-1)) * (p_N/rho_N);
+
+        //计算Roe平均
+        double rhobar = sqrt(rho_P * rho_N);
+        double ubar = (sqrt(rho_P) * u_P + sqrt(rho_N) * u_N)/(sqrt(rho_P)+sqrt(rho_N));
+        double Hbar = (sqrt(rho_P) * H_P + sqrt(rho_N) * H_N)/(sqrt(rho_P)+sqrt(rho_N));
+        double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
+
+        //利用Roe平均计算近似波速&&&&同时分裂为正负波速度
+        double lambdap1 = u_P - a_P;
+        double lambdap2 = u_P;
+        double lambdap3 = u_P + a_P;
+        double lambdan1 = u_N - a_N;
+        double lambdan2 = u_N;
+        double lambdan3 = u_N + a_N;
+        double lambda1_p = 0.5*(lambdap1  + fabs(lambdap1));
+        double lambda2_p = 0.5*(lambdap2  + fabs(lambdap2));
+        double lambda3_p = 0.5*(lambdap3  + fabs(lambdap3));
+        double lambda1_n = 0.5*(lambdan1  - fabs(lambdan1));
+        double lambda2_n = 0.5*(lambdan2  - fabs(lambdan2));
+        double lambda3_n = 0.5*(lambdan3  - fabs(lambdan3));
+        /*double lambda1 = ubar - cbar;
+        double lambda2 = ubar;
+        double lambda3 = ubar + cbar;
+        double lambda1_p = 0.5*(lambda1  + fabs(lambda1));
+        double lambda2_p = 0.5*(lambda2  + fabs(lambda2));
+        double lambda3_p = 0.5*(lambda3  + fabs(lambda3));
+        double lambda1_n = 0.5*(lambda1  - fabs(lambda1));
+        double lambda2_n = 0.5*(lambda2  - fabs(lambda2));
+        double lambda3_n = 0.5*(lambda3  - fabs(lambda3));*/
+
+        //计算中间变量
+        double F_rhou_PP =  u_P - a_P;
+        double F_rhou_PN =  u_P + a_P;
+        double F_rhou_NP =  u_N - a_N;
+        double F_rhou_NN =  u_N + a_N;
+        double F_rhoe_PP =  H_P - u_P *a_P;
+        double F_rhoe_PN =  H_P + u_P *a_P;
+        double F_rhoe_NP =  H_N - u_N *a_N;
+        double F_rhoe_NN =  H_N + u_N *a_N;
+
+        //计算分裂之后的正负通量
+        double rho_FP = (0.5*rho_P/gamma) * (lambda1_p + 2.0*(gamma-1)*lambda2_p + lambda3_p);
+        double rho_FN = (0.5*rho_N/gamma) * (lambda1_n + 2.0*(gamma-1)*lambda2_n + lambda3_n);
+        double rhou_FP = (0.5*rho_P/gamma) * (F_rhou_PP*lambda1_p + 2.0*(gamma-1)*ubar*lambda2_p + F_rhou_PN* lambda3_p);
+        double rhou_FN = (0.5*rho_N/gamma) * (F_rhou_NP*lambda1_n + 2.0*(gamma-1)*ubar*lambda2_n + F_rhou_NN* lambda3_n);
+        double rhoe_FP = (0.5*rho_P/gamma) * (F_rhoe_PP*lambda1_p + (gamma-1)*pow(u_P,2)*lambda2_p + F_rhoe_PN * lambda3_p);
+        double rhoe_FN = (0.5*rho_N/gamma) * (F_rhoe_NP*lambda1_n + (gamma-1)*pow(u_N,2)*lambda2_n + F_rhoe_NN * lambda3_n);
+
+
+        //读取已知的左右原始变量
+        double rho_L = x[0][j];
+        double rho_R = y[0][j];
+        double u_L = x[1][j];
+        double u_R = y[1][j];
+        double p_L = x[2][j];
+        double p_R = y[2][j];
+
+        double a_L = sqrt(gamma * p_L / rho_L);
+        double a_R = sqrt(gamma * p_R / rho_R);
+
+        //计算需要使用的参数
+        //计算声速
+
+        //计算总焓H
+        double H_L = 0.5 * pow(u_L,2) + (gamma/(gamma-1) ) * (p_L/rho_L);
+        double H_R = 0.5 * pow(u_R,2) + (gamma/(gamma-1) ) * (p_R/rho_R);
+
+
+        //计算左右守恒变量和通量
+        double rho_FL = rho_L * u_L;
+        double rho_FR = rho_R * u_R;
+        double rhou_L = rho_L * u_L;
+        double rhou_R = rho_R * u_R;
+        double rhou_FL = rho_L * u_L*u_L + p_L;
+        double rhou_FR = rho_R * u_R*u_R + p_R;
+        double rhoe_L = 0.5 * rho_L * pow(u_L, 2) + p_L/(gamma-1);
+        double rhoe_R = 0.5 * rho_R * pow(u_R, 2) + p_R/(gamma-1);
+        double rhoe_FL = rho_L * H_L * u_L;
+        double rhoe_FR = rho_R * H_R * u_R;
+    
+        //计算Roe平均
+        //double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
+       //double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+
+        //利用Roe平均的变量计算近似波速
+        //double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
+        double sleft = ubar - cbar;
+        double sright = ubar + cbar;
+        double Splus = max_of_two(fabs(u_L)  + a_L, fabs(u_R) + a_R);
+
+        //确定HLL数值通量
+        double rho_F = 0, rhou_F = 0, rhoe_F = 0;
+        if (sleft >= 0 ){
+            rho_F = rho_FL;
+            rhou_F = rhou_FL;
+            rhoe_F = rhoe_FL;
+        }
+        else if(sleft < 0 && sright >0){
+            rho_F = rho_FP + rho_FN;
+            rhou_F = rhou_FP + rhou_FN;
+            rhoe_F = rhoe_FP + rhoe_FN;
+        }
+        else if (sright <= 0){
+            rho_F = rho_FR;
+            rhou_F = rhou_FR;
+            rhoe_F = rhoe_FR;
+        }
+
+        z[0][j] = rho_F; 
+        z[1][j] = rhou_F; 
+        z[2][j] = rhoe_F; 
+    }   
+}
 
 
 static inline void ER_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
@@ -1161,27 +1297,13 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
 
         //针对新的相对波速添加相对的热扩散即可
         if (s_L_P * s_R_P < 0)
-            rhoe_F = rhoe_F - (1.0/(gamma-1)) * rhobar *  (T_R - T_L ) * (fabs(s_L_P * s_R_P/(s_R_P-s_L_P)) + fabs(u_point));
-
-
-
-        
-       if (j == 201) {
-            Ite++;
-            //rho_F = 0;
-            //rhou_F = 2.926650;
-            //rhoe_F = 0;
-
-            p_star_accumulator += rhou_F;
-            double there = p_star_accumulator/Ite;
-            printf("累计压强 = %f.\n", there);
-        }
+            rhoe_F = rhoe_F - ((gamma-1)/(gamma-1)) * rhobar *  (T_R - T_L ) * (fabs(s_L_P * s_R_P/(s_R_P-s_L_P)));
+            //rho_F = 0.5 * (rho_FL + rho_FR) - 0.5 * Splus * (rho_R - rho_L);
 
         z[0][j] = rho_F; 
         z[1][j] = rhou_F; 
         z[2][j] = rhoe_F; 
 
-        
     }   
 }
 

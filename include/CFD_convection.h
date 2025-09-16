@@ -561,7 +561,7 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
     
     //重构
     for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
+        for (int j = 1; j < cols; j++)
         {
             switch (Recon_Accur)
             {
@@ -585,7 +585,7 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
     }
 
     for (int i = 0; i < rows; i++){
-        for (int j = 1; j < cols-2; j++){
+        for (int j = 1; j < cols-1; j++){
             coverl[i][j] = y[i][j] + 0.5  * slope[i][j]*dx;
             coverr[i][j] = y[i][j+1] - 0.5 * slope[i][j+1]*dx;
         }
@@ -649,14 +649,12 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
         }  
     }
 
-
-    Flux_test += flux[0][200];
-    printf("累加通量 = %f.\n", Flux_test);
     for (int i = 0; i < rows; i++){
-        for (int  j = 1; j < cols-1; j++){
+        for (int j = 1; j < cols-1; j++){
             z[i][j] = flux[i][j];
         }
     }
+
 }
 
 
@@ -917,6 +915,94 @@ static inline void RS_LiouSteffen(int Recon_Accur,int rows, int cols,double (*y)
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
     LiouSteffen_Flux(rows, cols, prileft,priright,flux,gamma);
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            z[i][j] = flux[i][j];
+        }
+    }
+}
+
+
+static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma) {
+    int i,j;
+    double coverl[3][cols],coverr[3][cols];
+    double prileft[3][cols], priright[3][cols];
+    double fluxl[3][cols],fluxr[3][cols];
+    double flux[3][cols];
+    double slope[3][cols],a[3][cols],b[3][cols];
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            a[i][j]=(y[i][j] - y[i][j-1])/dx;
+        }
+    }
+
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 1; j < cols-1; j++){
+            b[i][j]=(y[i][j+1] - y[i][j])/dx;
+        }
+    }
+    
+
+    //重构
+    for (int i = 0; i < rows; i++){   
+        for (int j = 1; j < cols-1; j++)
+        {
+            switch (Recon_Accur)
+            {
+                case 0:
+                    slope[i][j]=0;
+                    break;
+                case 1:
+                    //vanleer
+                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
+                    //minibee
+                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
+                    //vanalbada
+                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    break;
+                
+                default:
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+                    exit(1);
+            }
+        }
+    }
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverl[i][j] = y[i][j];
+        }
+    }
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
+        }
+    }
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-2; j++){
+            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
+        }
+    }
+    //边界条件，降价为0阶重构
+    for ( i = 0; i < rows; i++){
+        coverr[i][0] = y[i][1];
+        coverl[i][0] = y[i][0];
+        coverr[i][cols-2] = y[i][cols-1];
+        coverl[i][cols-2] = y[i][cols-2];
+    }
+    
+    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
+    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
+    
+    XJF_Flux(rows, cols, prileft,priright,flux,gamma);
     
     for ( i = 0; i < rows; i++){
         for ( j = 1; j < cols-1; j++){

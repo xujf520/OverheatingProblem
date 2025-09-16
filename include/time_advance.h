@@ -65,6 +65,9 @@ static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , 
         case 8:
             RS_LiouSteffen(Recon_Accur,3,cols,y,z,dt,dx,gamma);
             break;
+        case 9:
+            RS_XJF(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
         default:
             RS_ER(Recon_Accur,3,cols,y,z,dt,dx,gamma);
             // 你可以根据实际需求添加相应的处理逻辑
@@ -95,7 +98,8 @@ static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int
     int i,j;
      //施加边界条件，
     BC_OutFlow(3,cols,y,0,2);                       //边界条件说明见具体子程序
-    BC_Reflect(3,cols,y,1,2);
+    BC_OutFlow(3,cols,y,1,2);
+//    BC_Reflect(3,cols,y,1,2);
 
     //AR_scheme is Approximate Riemann Solver
      //数值通量
