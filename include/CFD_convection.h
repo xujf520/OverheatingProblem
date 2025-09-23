@@ -27,23 +27,8 @@ static inline void RS_Rusanov(int Recon_Accur,int rows, int cols,double (*y)[col
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
-    
     //重构
     for (int i = 0; i < rows; i++){   
         for (int j = 1; j < cols-1; j++)
@@ -51,17 +36,15 @@ static inline void RS_Rusanov(int Recon_Accur,int rows, int cols,double (*y)[col
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -69,12 +52,6 @@ static inline void RS_Rusanov(int Recon_Accur,int rows, int cols,double (*y)[col
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
 
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -96,22 +73,8 @@ static inline void RS_Lax(int Recon_Accur,int rows, int cols,double (*y)[cols],d
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -120,15 +83,13 @@ static inline void RS_Lax(int Recon_Accur,int rows, int cols,double (*y)[cols],d
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
                     break;
                 
                 default:
@@ -138,13 +99,6 @@ static inline void RS_Lax(int Recon_Accur,int rows, int cols,double (*y)[cols],d
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
-
 
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -168,22 +122,8 @@ static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],d
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -192,17 +132,15 @@ static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],d
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                     //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -210,12 +148,6 @@ static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],d
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
 
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -239,21 +171,7 @@ static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -262,18 +180,15 @@ static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //slope[i][j] = 0.0;
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -281,12 +196,6 @@ static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
    
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -308,23 +217,9 @@ static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],d
     //直接作用守恒变量
     int i,j;
     double coverl[rows][cols],coverr[rows][cols];
-    double slope[rows][cols],a[rows][cols],b[rows][cols];
     double prileft[rows][cols], priright[rows][cols];
     double Flux[rows][cols];
     
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
 
@@ -335,29 +230,20 @@ static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],d
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
             }
-        }
-    }
-
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
         }
     }
 
@@ -387,21 +273,7 @@ static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],do
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     //重构
@@ -411,15 +283,14 @@ static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],do
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
                     break;
                 
                 default:
@@ -429,32 +300,10 @@ static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],do
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
-    
+   
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
     initEulerflux1D(rows, cols, coverl, fluxl,gamma);
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
@@ -501,7 +350,6 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
         }
         
     }
-
 
     Con_to_Pri_1D(3,cols,pri,y,gamma);
     //计算特征矩阵
@@ -566,15 +414,13 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
                     break;
                 
                 default:
@@ -583,13 +429,7 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
             }
         }
     }
-
-    for (int i = 0; i < rows; i++){
-        for (int j = 1; j < cols-1; j++){
-            coverl[i][j] = y[i][j] + 0.5  * slope[i][j]*dx;
-            coverr[i][j] = y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }                                      
+                              
 
     
     //执行计算Marquina flux
@@ -655,6 +495,41 @@ static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[co
         }
     }
 
+     // 输出特定网格点的特征值
+    /*printf("\n=== Marquina Riemann Solver - Eigenvalues ===\n");
+    int output_points[] = {199, 200, 201}; // 需要输出的网格点
+    int num_points = sizeof(output_points) / sizeof(output_points[0]);
+    
+    for (int i = 0; i < num_points; i++) {
+        int j = output_points[i];
+        if (j >= 0 && j < cols) {
+            printf("Grid point j=%d:\n", j);
+            printf("  λ1 (u-c) = %f\n", lamda[0][j]);
+            printf("  λ2 (u)   = %f\n", lamda[1][j]);
+            printf("  λ3 (u+c) = %f\n", lamda[2][j]);
+            printf("  Primitive variables: ρ=%f, u=%f, p=%f\n", 
+                   pri[0][j], pri[1][j], pri[2][j]);
+            printf("  Sound speed c = %f\n", sqrt(gamma * pri[2][j] / pri[0][j]));
+            printf("  Mach number M = %f\n", pri[1][j] / sqrt(gamma * pri[2][j] / pri[0][j]));
+            printf("\n");
+        }
+    }*/
+
+    // 输出特定网格点的特征值
+    printf("\n=== Marquina Riemann Solver - Eigenvalues ===\n");
+    int output_points[] = {199, 200, 201}; // 需要输出的网格点
+    int num_points = sizeof(output_points) / sizeof(output_points[0]);
+    
+    for (int i = 0; i < num_points; i++) {
+        int j = output_points[i];
+        if (j >= 0 && j < cols) {
+            double Error = 0.5 * (fluxl[2][j] + fluxr[2][j]) - 0.5 * min_of_two(lamda[2][j],lamda[2][j+1]) * (coverr[2][j] - coverl[2][j]) - z[2][j];
+            printf("Grid point j=%d:\n", j);
+            printf("  Error = %f\n", Error);
+            printf("\n");
+        }
+    }
+
 }
 
 
@@ -666,21 +541,7 @@ static inline void RS_StegerWarming(int Recon_Accur,int rows, int cols,double (*
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     //重构
@@ -690,17 +551,14 @@ static inline void RS_StegerWarming(int Recon_Accur,int rows, int cols,double (*
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -708,32 +566,10 @@ static inline void RS_StegerWarming(int Recon_Accur,int rows, int cols,double (*
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
     
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
     initEulerflux1D(rows, cols, coverl, fluxl,gamma);
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
@@ -755,21 +591,7 @@ static inline void RS_VanLeer(int Recon_Accur,int rows, int cols,double (*y)[col
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     //重构
@@ -779,15 +601,13 @@ static inline void RS_VanLeer(int Recon_Accur,int rows, int cols,double (*y)[col
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
                     break;
                 
                 default:
@@ -797,32 +617,10 @@ static inline void RS_VanLeer(int Recon_Accur,int rows, int cols,double (*y)[col
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
-    
+
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
     initEulerflux1D(rows, cols, coverl, fluxl,gamma);
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
@@ -843,21 +641,7 @@ static inline void RS_LiouSteffen(int Recon_Accur,int rows, int cols,double (*y)
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
 
     //重构
@@ -867,17 +651,16 @@ static inline void RS_LiouSteffen(int Recon_Accur,int rows, int cols,double (*y)
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+                    
+                    
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -885,32 +668,10 @@ static inline void RS_LiouSteffen(int Recon_Accur,int rows, int cols,double (*y)
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
     
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
     initEulerflux1D(rows, cols, coverl, fluxl,gamma);
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
@@ -931,21 +692,8 @@ static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],d
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
+    double slope[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
 
     //重构
@@ -955,17 +703,14 @@ static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],d
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -973,32 +718,10 @@ static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],d
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
     
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
     initEulerflux1D(rows, cols, coverl, fluxl,gamma);
     initEulerflux1D(rows, cols, coverr, fluxr,gamma);
     
@@ -1027,22 +750,8 @@ static inline void RS_Rusanov_HeatConduction(int Recon_Accur,int rows, int cols,
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -1051,17 +760,15 @@ static inline void RS_Rusanov_HeatConduction(int Recon_Accur,int rows, int cols,
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -1069,13 +776,6 @@ static inline void RS_Rusanov_HeatConduction(int Recon_Accur,int rows, int cols,
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
-
     
 
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
@@ -1098,22 +798,8 @@ static inline void RS_Lax_HeatConduction(int Recon_Accur,int rows, int cols,doub
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -1122,17 +808,14 @@ static inline void RS_Lax_HeatConduction(int Recon_Accur,int rows, int cols,doub
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -1140,12 +823,7 @@ static inline void RS_Lax_HeatConduction(int Recon_Accur,int rows, int cols,doub
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
+
 
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -1169,23 +847,7 @@ static inline void RS_HLL_HeatConduction(int Recon_Accur,int rows, int cols,doub
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
-    
     //重构
     for (int i = 0; i < rows; i++){   
         for (int j = 1; j < cols-1; j++)
@@ -1193,17 +855,15 @@ static inline void RS_HLL_HeatConduction(int Recon_Accur,int rows, int cols,doub
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two (fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -1211,12 +871,6 @@ static inline void RS_HLL_HeatConduction(int Recon_Accur,int rows, int cols,doub
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
 
     
 
@@ -1234,6 +888,7 @@ static inline void RS_HLL_HeatConduction(int Recon_Accur,int rows, int cols,doub
 }
 
 
+
 /*……………………………………………………………………………………………………*/
 //三波近似黎曼求解
 static inline void RS_HLLC_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
@@ -1242,95 +897,6 @@ static inline void RS_HLLC_HeatConduction(int Recon_Accur,int rows, int cols,dou
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    slope[i][j]=0;
-                    break;
-                case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                     //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
-   
-    
-    
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    HLLC_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma,u_point);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-/*……………………………………………………………………………………………………*/
-//Roe近似黎曼求解并且存在两种重构&&作用于守恒变量
-static inline void RS_Roe_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma,double u_r) {
-    //直接作用守恒变量
-    int i,j;
-    double coverl[rows][cols],coverr[rows][cols];
-    double slope[rows][cols-1],a[rows][cols-1],b[rows][cols-1];
-    double prileft[rows][cols], priright[rows][cols];
-    double Flux[rows][cols];
-    
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
-    
-    //重构
 
     //重构
     for (int i = 0; i < rows; i++){   
@@ -1339,15 +905,18 @@ static inline void RS_Roe_HeatConduction(int Recon_Accur,int rows, int cols,doub
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                     //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
+                case 5:
+                    WENO5_Reconstruction(rows,cols,y,coverl,coverr);
                     break;
                 
                 default:
@@ -1357,13 +926,56 @@ static inline void RS_Roe_HeatConduction(int Recon_Accur,int rows, int cols,doub
         }
     }
 
-    
+
+
+    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
+//    HLLC_Flux(rows, cols, prileft,priright,Flux,gamma);
+    HLLC_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma,u_point);
+
     for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
+        for ( j = 1; j < cols-1; j++){
+            z[i][j] = Flux[i][j];
         }
     }
+}
+
+
+/*……………………………………………………………………………………………………*/
+//Roe近似黎曼求解并且存在两种重构&&作用于守恒变量
+static inline void RS_Roe_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma,double u_r) {
+    //直接作用守恒变量
+    int i,j;
+    double coverl[rows][cols],coverr[rows][cols];
+    double prileft[rows][cols], priright[rows][cols];
+    double Flux[rows][cols];
+    
+
+    //重构
+    for (int i = 0; i < rows; i++){   
+        for (int j = 1; j < cols-1; j++)
+        {
+            switch (Recon_Accur)
+            {
+                case 0:
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
+                    break;
+                case 1:
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    break;
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+                default:
+                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+                    exit(1);
+            }
+        }
+    }
+
+    
     
     //计算Roe平均
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
@@ -1389,23 +1001,8 @@ static inline void RS_ER_Heat(int Recon_Accur,int rows, int cols,double (*y)[col
     double prileft[3][cols], priright[3][cols];
     double fluxl[3][cols],fluxr[3][cols];
     double flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
-    //重构
     //重构
     for (int i = 0; i < rows; i++){   
         for (int j = 1; j < cols-1; j++)
@@ -1413,17 +1010,15 @@ static inline void RS_ER_Heat(int Recon_Accur,int rows, int cols,double (*y)[col
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                    //minibee
-                    slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
-                
+                case 3:
+                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
+                    break;
+
                 default:
                     printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
                     exit(1);
@@ -1431,30 +1026,7 @@ static inline void RS_ER_Heat(int Recon_Accur,int rows, int cols,double (*y)[col
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j] = y[i][j];
-        }
-    }
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+ 0.5  * slope[i][j]*dx;
-        }
-    }
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverr[i][j]=y[i][j+1] - 0.5 * slope[i][j+1]*dx;
-        }
-    }
-    //边界条件，降价为0阶重构
-    for ( i = 0; i < rows; i++){
-        coverr[i][0] = y[i][1];
-        coverl[i][0] = y[i][0];
-        coverr[i][cols-2] = y[i][cols-1];
-        coverl[i][cols-2] = y[i][cols-2];
-    }
-    
+
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
 
@@ -1487,22 +1059,9 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
+    double slope[3][cols];
 
 
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-        }
-    }
-
-    for ( i = 0; i < rows; i++)
-    {
-        for ( j = 1; j < cols-1; j++){
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-        }
-    }
     
     //重构
     for (int i = 0; i < rows; i++){   
@@ -1511,15 +1070,10 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
-                    //vanleer
-                    slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
-                     //minibee
-                    //slope[i][j] = 0.5 * (sgn(a[i][j])+sgn(b[i][j])) * min_of_two(fabs(a[i][j]), fabs(b[i][j]));
-                    //vanalbada
-                    //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
                     break;
                 
                 default:
@@ -1529,12 +1083,6 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
         }
     }
     
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-2; j++){
-            coverl[i][j]=y[i][j]+0.5*slope[i][j]*dx;
-            coverr[i][j]=y[i][j+1]-0.5*slope[i][j+1]*dx;
-        }
-    }
   
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
@@ -1665,7 +1213,7 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
             switch (Recon_Accur)
             {
                 case 0:
-                    slope[i][j]=0;
+                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
                     //vanleer

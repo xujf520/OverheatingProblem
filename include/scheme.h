@@ -313,12 +313,27 @@ static inline void HLLC_Flux(int rows, int cols,double (*x)[cols], double (*y)[c
         double p_star = p_L + rho_L * (sleft-u_L) * (s_star-u_L);
         double u_stat_L = rho_L * (sleft-u_L)/(sleft-s_star);
         double u_stat_R = rho_R * (sright-u_R)/(sright-s_star);
+        //double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L))) + (p_R/rho_R - p_L/rho_L)/(gamma-1);
+        //double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R))) - (p_R/rho_R - p_L/rho_L)/(gamma-1);
         double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L)));
         double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
+        
+        double P_testL = u_stat_L * fe_star_L  - 0.5 * u_stat_L*pow (s_star, 2) - p_star/(gamma-1);
+        double P_testR = u_stat_R * fe_star_R  - 0.5 * u_stat_R*pow (s_star, 2) - p_star/(gamma-1);
 
-     
+        //UHLL = ((s_star-sleft)*(u_stat_L*fe_star_L) + (sright -s_star)*(u_stat_R*fe_star_R))/(sright-sleft)
+
+        
+        if (P_testL != 0 || P_testR !=0 )
+        {
+            int teste1;
+            teste1=1;
+        }
+        
         //HLLC数值通量
+        double test_e = 0;
         double rho_F = 0, rhou_F = 0, rhoe_F = 0;
+
 
         if (sleft >= 0 ){
             rho_F = rho_FL;
@@ -329,12 +344,16 @@ static inline void HLLC_Flux(int rows, int cols,double (*x)[cols], double (*y)[c
             rho_F = rho_FL + sleft * (u_stat_L - rho_L);
             rhou_F = rhou_FL + sleft *(u_stat_L * s_star  - rhou_L);
             rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L);
+            //rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L) - rho_L * (p_R/rho_R - p_L/rho_L)* fabs(sleft)/(gamma-1);
 
         }
         else if(s_star < 0 && sright > 0){
             rho_F = rho_FR + sright * (u_stat_R - rho_R);
             rhou_F = rhou_FR + sright *(u_stat_R * s_star  - rhou_R);
             rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R);
+            //rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R) - rho_R * (p_R/rho_R - p_L/rho_L) * fabs(sright)/(gamma-1);
+            //double test_fe = 0.5 * u_stat_R *pow (s_star, 2) + p_star/(gamma-1);
+            //rhoe_F = rhoe_FR + sright *  (test_fe -  rhoe_R);
         }
         else if (sright <= 0){
             rho_F = rho_FR;
@@ -615,68 +634,6 @@ static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
     
     for (int j = 1; j < cols-1; j++) {
         //读取已知的左右原始变量
-        double rho_P = x[0][j];
-        double rho_N = y[0][j];
-        double u_P = x[1][j];
-        double u_N = y[1][j];
-        double p_P = x[2][j];
-        double p_N = y[2][j];
-        //计算声速
-        double a_P = sqrt(gamma * p_P / rho_P);
-        double a_N = sqrt(gamma * p_N / rho_N);
-        //计算总焓H
-        double H_P = 0.5 * pow(u_P,2) + (gamma/(gamma-1)) * (p_P/rho_P);
-        double H_N = 0.5 * pow(u_N,2) + (gamma/(gamma-1)) * (p_N/rho_N);
-
-        //计算Roe平均
-        double rhobar = sqrt(rho_P * rho_N);
-        double ubar = (sqrt(rho_P) * u_P + sqrt(rho_N) * u_N)/(sqrt(rho_P)+sqrt(rho_N));
-        double Hbar = (sqrt(rho_P) * H_P + sqrt(rho_N) * H_N)/(sqrt(rho_P)+sqrt(rho_N));
-        double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
-
-        //利用Roe平均计算近似波速&&&&同时分裂为正负波速度
-        double lambdap1 = u_P - a_P;
-        double lambdap2 = u_P;
-        double lambdap3 = u_P + a_P;
-        double lambdan1 = u_N - a_N;
-        double lambdan2 = u_N;
-        double lambdan3 = u_N + a_N;
-        double lambda1_p = 0.5*(lambdap1  + fabs(lambdap1));
-        double lambda2_p = 0.5*(lambdap2  + fabs(lambdap2));
-        double lambda3_p = 0.5*(lambdap3  + fabs(lambdap3));
-        double lambda1_n = 0.5*(lambdan1  - fabs(lambdan1));
-        double lambda2_n = 0.5*(lambdan2  - fabs(lambdan2));
-        double lambda3_n = 0.5*(lambdan3  - fabs(lambdan3));
-        /*double lambda1 = ubar - cbar;
-        double lambda2 = ubar;
-        double lambda3 = ubar + cbar;
-        double lambda1_p = 0.5*(lambda1  + fabs(lambda1));
-        double lambda2_p = 0.5*(lambda2  + fabs(lambda2));
-        double lambda3_p = 0.5*(lambda3  + fabs(lambda3));
-        double lambda1_n = 0.5*(lambda1  - fabs(lambda1));
-        double lambda2_n = 0.5*(lambda2  - fabs(lambda2));
-        double lambda3_n = 0.5*(lambda3  - fabs(lambda3));*/
-
-        //计算中间变量
-        double F_rhou_PP =  u_P - a_P;
-        double F_rhou_PN =  u_P + a_P;
-        double F_rhou_NP =  u_N - a_N;
-        double F_rhou_NN =  u_N + a_N;
-        double F_rhoe_PP =  H_P - u_P *a_P;
-        double F_rhoe_PN =  H_P + u_P *a_P;
-        double F_rhoe_NP =  H_N - u_N *a_N;
-        double F_rhoe_NN =  H_N + u_N *a_N;
-
-        //计算分裂之后的正负通量
-        double rho_FP = (0.5*rho_P/gamma) * (lambda1_p + 2.0*(gamma-1)*lambda2_p + lambda3_p);
-        double rho_FN = (0.5*rho_N/gamma) * (lambda1_n + 2.0*(gamma-1)*lambda2_n + lambda3_n);
-        double rhou_FP = (0.5*rho_P/gamma) * (F_rhou_PP*lambda1_p + 2.0*(gamma-1)*ubar*lambda2_p + F_rhou_PN* lambda3_p);
-        double rhou_FN = (0.5*rho_N/gamma) * (F_rhou_NP*lambda1_n + 2.0*(gamma-1)*ubar*lambda2_n + F_rhou_NN* lambda3_n);
-        double rhoe_FP = (0.5*rho_P/gamma) * (F_rhoe_PP*lambda1_p + (gamma-1)*pow(u_P,2)*lambda2_p + F_rhoe_PN * lambda3_p);
-        double rhoe_FN = (0.5*rho_N/gamma) * (F_rhoe_NP*lambda1_n + (gamma-1)*pow(u_N,2)*lambda2_n + F_rhoe_NN * lambda3_n);
-
-
-        //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
         double u_L = x[1][j];
@@ -708,14 +665,18 @@ static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
         double rhoe_FR = rho_R * H_R * u_R;
     
         //计算Roe平均
-        //double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
-       //double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+        double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
+        double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
 
         //利用Roe平均的变量计算近似波速
-        //double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
+        double cbar = sqrt((gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
         double sleft = ubar - cbar;
         double sright = ubar + cbar;
         double Splus = max_of_two(fabs(u_L)  + a_L, fabs(u_R) + a_R);
+        double s_LL = u_L - a_L;
+        double s_LR = u_L + a_L;
+        double s_RL = u_R - a_R;
+        double s_RR = u_R + a_R;
 
         //确定HLL数值通量
         double rho_F = 0, rhou_F = 0, rhoe_F = 0;
@@ -725,9 +686,16 @@ static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
             rhoe_F = rhoe_FL;
         }
         else if(sleft < 0 && sright >0){
-            rho_F = rho_FP + rho_FN;
-            rhou_F = rhou_FP + rhou_FN;
-            rhoe_F = rhoe_FP + rhoe_FN;
+            rho_F = 0.5 * ((s_LR*rho_FL - s_LL*rho_FR + s_LR*s_LL * (rho_R - rho_L))/(s_LR-s_LL) \
+                            + (s_RR*rho_FL - s_RL*rho_FR + s_RR*s_RL * (rho_R - rho_L))/(s_RR-s_RL));
+            rhou_F = 0.5 * ((s_LR*rhou_FL - s_LL*rhou_FR + s_LR*s_LL * (rhou_R - rhou_L))/(s_LR-s_LL) \
+                           + (s_RR*rhou_FL - s_RL*rhou_FR + s_RR*s_RL * (rhou_R - rhou_L))/(s_RR-s_RL));
+            rhoe_F = 0.5 * ((s_LR*rhoe_FL - s_LL*rhoe_FR + s_LR*s_LL * (rhoe_R - rhoe_L))/(s_LR-s_LL) \
+                            + (s_RR*rhoe_FL - s_RL*rhoe_FR + s_RR*s_RL * (rhoe_R - rhoe_L))/(s_RR-s_RL));
+
+            //rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+            //rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
+            //rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
         }
         else if (sright <= 0){
             rho_F = rho_FR;
@@ -860,10 +828,15 @@ static inline void ER_Flux(int rows, int cols,double (*x)[cols], double (*y)[col
             }
         }
 
-
+        
+        double rhobar = sqrt(rho_l*rho_r);
+        double T_R = p_r/rho_r;
+        double T_L = p_l/rho_l;
+        double s_L_P = u_l - c_l;
+        double s_R_P = u_r + c_r;
         z[0][j] = rho_F * u_F; 
         z[1][j] = rho_F * u_F *u_F + p_F; 
-        z[2][j] = ((0.5*rho_F * u_F *u_F + p_F/(gamma-1)) + p_F) * u_F; 
+        z[2][j] = ((0.5*rho_F * u_F *u_F + p_F/(gamma-1)) + p_F) * u_F - ((gamma)/(gamma-1)) * rhobar *  (T_R - T_L ) * (fabs(s_L_P * s_R_P/(s_R_P-s_L_P))); 
 
         if (j == 200) {
             //double p_diff = p_star - 2.926650;
@@ -1098,7 +1071,7 @@ static inline void Lax_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
         rho_F = 0.5*(rho_FL + rho_FR) - 0.5*S_plus*(rho_R - rho_L);
         rhou_F = 0.5*(rhou_FL + rhou_FR) - 0.5*S_plus*(rhou_R - rhou_L);
         //能量方程增加热传导机制
-        rhoe_F = 0.5*(rhoe_FL + rhoe_FR) - 0.5*S_plus*(rhoe_R - rhoe_L) - S_plus * rhobar*(T_R - T_L);
+        rhoe_F = 0.5*(rhoe_FL + rhoe_FR) - 0.5*S_plus*(rhoe_R - rhoe_L);
         
         z[0][j] = rho_F; 
         z[1][j] = rhou_F; 
@@ -1134,6 +1107,8 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
 //        double rhobar = 0.5*(rho_L+rho_R);
         double T_L = p_L / rho_L;
         double T_R = p_R / rho_R;
+        double e_L = T_L/(gamma-1);
+        double e_R = T_R/(gamma-1);
 
         //计算左右守恒变量和通量
         double rho_FL = rho_L * u_L;
@@ -1165,9 +1140,16 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
             rhoe_F = rhoe_FL;
         }
         else if(sleft <= 0 && sright >=0){
+            double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
+            double Error = ((p_R*rho_L-p_L*rho_R) * (rho_L*(sleft-u_L) + rho_R*(sright-u_R)))/((-1+gamma)*rho_L*rho_R*(sleft-sright));
             rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
             rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
             rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
+//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+//           rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + 0.5 * (sright + sleft) * Error;
+//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - (1.0/4.0) * rho_HLL * (sright-sleft) * (e_R-e_L);
+//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - 0.5 * (p_R*(sright-u_R)+p_L*(sleft-u_L) - p_L*rho_R*(sright - u_R)/rho_L - p_R*rho_L*(sleft -u_L)/rho_R)/(gamma-1);
         }
         else if (sright < 0){
             rho_F = rho_FR;
@@ -1175,21 +1157,6 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
             rhoe_F = rhoe_FR;
         }
 
-         //针对新的相对波速添加相对的热扩散即可
-        double S_L = min_of_two(u_L - a_L,u_R - a_R);
-        double S_R = max_of_two(u_L + a_L,u_R + a_R);
-        double s_L_P = sleft - u_point;
-        double s_R_P = sright - u_point;
-        double S_LW_L = u_L - a_L;
-        double S_LW_R = u_R - a_R;
-        double S_RW_L = u_L + a_L;
-        double S_RW_R = u_R + a_R;
-
-        if (s_L_P * s_R_P <= 0.1){
-            //rho_F = rho_F + sleft * sright /(sright -sleft) * (rho_R - rho_L);
-            rhoe_F = rhoe_F -(gamma/(gamma-1)) * fabs(Splus) * (T_R - T_L) * rhobar;
-        }
-            
         z[0][j] = rho_F; 
         z[1][j] = rhou_F; 
         z[2][j] = rhoe_F; 
@@ -1218,9 +1185,11 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         double H_R = 0.5 * pow(u_R,2) + (gamma/(gamma-1) ) * (p_R/rho_R);
 
          //计算温度变量
-        double rhobar = sqrt(rho_L*rho_R);
         double T_L = p_L / rho_L;
         double T_R = p_R / rho_R;
+
+        double e_L = T_L / (gamma-1);
+        double e_R = T_R / (gamma-1);
 
         //计算左右守恒变量和通量
         double rho_FL = rho_L * u_L;
@@ -1252,6 +1221,12 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L)));
         double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
 
+    //    double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L))) + (p_R/rho_R - p_L/rho_L)/(gamma-1);
+    //    double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R))) - (p_R/rho_R - p_L/rho_L)/(gamma-1);
+
+        double T_star_L = p_star / rho_star_L;
+        double T_star_R = p_star / rho_star_R;
+
         //热扩散相对的速度计算
         double Splus = max_of_two(fabs(u_L) + a_L, fabs(u_R) + a_R);
         double s_L_P = sleft - u_point;
@@ -1265,6 +1240,9 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         double s_LW_R = u_R - a_R- u_point;
         double s_RW_R = u_R + a_R- u_point;
         double ma = u_L/cbar;
+        Splus = fabs(ubar) + cbar;
+
+        double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
 
 
         //HLLC数值通量
@@ -1278,27 +1256,20 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         else if(sleft < 0 && s_star >=0 ){
             rho_F = rho_FL + sleft * (rho_star_L - rho_L);
             rhou_F = rhou_FL + sleft *(rho_star_L * s_star  - rhou_L);
-            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L);
+            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - (1.0/4.0) * rho_HLL * (sright -sleft) * (e_R-e_L);
+//            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
         }
         else if(s_star < 0 && sright > 0){
             rho_F = rho_FR + sright * (rho_star_R - rho_R);
             rhou_F = rhou_FR + sright *(rho_star_R * s_star  - rhou_R);
-            rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R);
+            rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) - (1.0/4.0) * rho_HLL * (sright-sleft) * (e_R-e_L);
+//            rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
         }
         else if (sright  <= 0){
             rho_F = rho_FR;
             rhou_F = rhou_FR;
             rhoe_F = rhoe_FR;
         }
-
-
-        double p_test = p_L * (1.0 + rho_L * u_L * (a_R+u_L)/p_L + gamma * pow(ma,3));
-        double p_diff  = p_star-p_test;
-
-        //针对新的相对波速添加相对的热扩散即可
-        if (s_L_P * s_R_P < 0)
-            rhoe_F = rhoe_F - ((gamma-1)/(gamma-1)) * rhobar *  (T_R - T_L ) * (fabs(s_L_P * s_R_P/(s_R_P-s_L_P)));
-            //rho_F = 0.5 * (rho_FL + rho_FR) - 0.5 * Splus * (rho_R - rho_L);
 
         z[0][j] = rho_F; 
         z[1][j] = rhou_F; 
@@ -1832,6 +1803,242 @@ static inline void HLLC_Flux_Rela(int rows, int cols,double (*x)[cols], double (
         z[2][j] = rhoe_F; 
     }   
 }
+
+
+
+
+/*                               ************************************                               */
+/*                               ************************************                               */
+/*                                    Reconstruction Scheme                                         */
+/*                               ************************************                               */
+/*                               ************************************                               */
+
+/*                                      ******************                                          */
+/*                                         重构格式计算                                              */
+/*                                      ******************                                          */
+
+
+
+/*                                      ******************                                          */
+/*                                                TVD                                               */
+/*                                      ******************                                          */
+
+
+static inline void Reconstruction_Godunov(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double delta_x) {
+    int i, j;
+    double epsilo = 1e-6;
+
+    double slope[rows][cols],slope_a[rows][cols],slope_b[rows][cols];
+
+     for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            slope[i][j] = 0.0;
+            slope_a[i][j] = 0.0;
+            slope_b[i][j] = 0.0;
+        }
+    }
+
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            slope_a[i][j] = (y[i][j] - y[i][j-1])/delta_x;
+            slope_b[i][j] = (y[i][j+1] - y[i][j])/delta_x;
+        }
+    }
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
+            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
+        }
+    }
+
+    
+    
+}
+
+static inline void TVD_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double delta_x) {
+    int i, j;
+    double epsilo = 1e-6;
+
+    double slope[rows][cols],slope_a[rows][cols],slope_b[rows][cols];
+
+     for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            slope[i][j] = 0.0;
+            slope_a[i][j] = 0.0;
+            slope_b[i][j] = 0.0;
+        }
+    }
+
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            slope_a[i][j] = (y[i][j] - y[i][j-1])/delta_x;
+            slope_b[i][j] = (y[i][j+1] - y[i][j])/delta_x;
+        }
+    }
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
+            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
+        }
+    }
+
+
+    //重构
+    for (int i = 0; i < rows; i++){   
+        for (int j = 1; j < cols-1; j++)
+        {
+            //vanleer
+            //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
+            //minibee
+            slope[i][j] = 0.5 * (sgn(slope_a[i][j])+sgn(slope_b[i][j])) * min_of_two(fabs(slope_a[i][j]), fabs(slope_b[i][j]));
+            //vanalbada
+            //slope[i][j]=(fmax(a[i][j]*b[i][j],0) * (a[i][j]+b[i][j]))/(pow(a[i][j],2)+pow(b[i][j],2)+10e-6);
+        }
+    }
+
+    for ( i = 0; i < rows; i++){
+        for ( j = 1; j < cols-1; j++){
+            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
+            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
+        }
+    }
+    
+}
+
+
+/*                                      ******************                                          */
+/*                                               WENO                                               */
+/*                                      ******************                                          */
+
+
+// 三阶WENO重构
+static inline void WENO3_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols]) {
+    int i, j;
+    double epsilo = 1e-6;
+    
+    // 声明局部变量
+    double beta_0[rows][cols], beta_1[rows][cols];
+    double alphal_0[rows][cols], alphal_1[rows][cols];
+    double alphar_0[rows][cols], alphar_1[rows][cols];
+    double weightl_0[rows][cols], weightl_1[rows][cols];
+    double weightr_0[rows][cols], weightr_1[rows][cols];
+    
+    // 初始化数组
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            beta_0[i][j] = beta_1[i][j] = 0.0;
+            alphal_0[i][j] = alphal_1[i][j] = 0.0;
+            alphar_0[i][j] = alphar_1[i][j] = 0.0;
+            weightl_0[i][j] = weightl_1[i][j] = 0.0;
+            weightr_0[i][j] = weightr_1[i][j] = 0.0;
+            coverl[i][j] = coverr[i][j] = 0.0;
+        }
+    }
+
+    for (i = 0; i < rows; i++) {
+        for (j = 1; j <= cols-2; j++) {
+
+            //计算间断因子
+            beta_0[i][j] = pow(y[i][j+1] - y[i][j], 2);
+            beta_1[i][j] = pow(y[i][j] - y[i][j-1], 2);
+            
+            //计算非线性的系数
+            alphal_0[i][j] = (2.0 / 3.0) * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphal_1[i][j] = (1.0 / 3.0) * (1.0 / pow(epsilo + beta_1[i][j], 2));
+            alphar_0[i][j] = (1.0 / 3.0) * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphar_1[i][j] = (2.0 / 3.0) * (1.0 / pow(epsilo + beta_1[i][j], 2));
+        
+            //计算非线性权
+            weightl_0[i][j] = alphal_0[i][j] / (alphal_0[i][j] + alphal_1[i][j]);
+            weightl_1[i][j] = alphal_1[i][j] / (alphal_0[i][j] + alphal_1[i][j]);
+            weightr_0[i][j] = alphar_0[i][j] / (alphar_0[i][j] + alphar_1[i][j]);
+            weightr_1[i][j] = alphar_1[i][j] / (alphar_0[i][j] + alphar_1[i][j]);
+        }
+    
+        for (j = 1; j <= cols-3; j++) {
+            coverl[i][j] = weightl_0[i][j] * (0.5 * y[i][j] + 0.5 * y[i][j+1]) 
+                          + weightl_1[i][j] * (-0.5 * y[i][j-1] + 1.5 * y[i][j]);
+
+            coverr[i][j] = weightr_0[i][j+1] * (1.5 * y[i][j+1] - 0.5 * y[i][j+2])
+                            + weightr_1[i][j+1] * (0.5 * y[i][j] + 0.5 * y[i][j+1]);
+        }
+    }
+}
+
+// 五阶WENO重构
+static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols]) {
+    int i, j;
+    double epsilo = 1e-6;
+    
+    // 声明局部变量
+    double beta_0[rows][cols], beta_1[rows][cols], beta_2[rows][cols];
+    double alphal_0[rows][cols], alphal_1[rows][cols], alphal_2[rows][cols];
+    double alphar_0[rows][cols], alphar_1[rows][cols], alphar_2[rows][cols];
+    double weightl_0[rows][cols], weightl_1[rows][cols], weightl_2[rows][cols];
+    double weightr_0[rows][cols], weightr_1[rows][cols], weightr_2[rows][cols];
+    
+    // 初始化数组
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            beta_0[i][j] = beta_1[i][j] = beta_2[i][j] = 0.0;
+            alphal_0[i][j] = alphal_1[i][j] = alphal_2[i][j] = 0.0;
+            alphar_0[i][j] = alphar_1[i][j] = alphar_2[i][j] = 0.0;
+            weightl_0[i][j] = weightl_1[i][j] = weightl_2[i][j] = 0.0;
+            weightr_0[i][j] = weightr_1[i][j] = weightr_2[i][j] = 0.0;
+            coverl[i][j] = coverr[i][j] = 0.0;
+        }
+    }
+
+    for (i = 0; i < rows; i++) {
+        for (j = 2; j < cols-2; j++) {
+            beta_0[i][j] = (13.0 / 12.0) * pow(y[i][j] - 2.0 * y[i][j+1] + y[i][j+2], 2)
+                          + (1.0 / 4.0) * pow(3.0 * y[i][j] - 4.0 * y[i][j+1] + y[i][j+2], 2);
+            beta_1[i][j] = (13.0 / 12.0) * pow(y[i][j-1] - 2.0 * y[i][j] + y[i][j+1], 2)
+                          + (1.0 / 4.0) * pow(y[i][j-1] - y[i][j+1], 2);
+            beta_2[i][j] = (13.0 / 12.0) * pow(y[i][j-2] - 2.0 * y[i][j-1] + y[i][j], 2)
+                          + (1.0 / 4.0) * pow(y[i][j-2] - 4.0 * y[i][j-1] + 3.0 * y[i][j], 2);
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 2; j < cols-2; j++) {
+            alphal_0[i][j] = 0.3 * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphal_1[i][j] = 0.6 * (1.0 / pow(epsilo + beta_1[i][j], 2));
+            alphal_2[i][j] = 0.1 * (1.0 / pow(epsilo + beta_2[i][j], 2));
+            alphar_0[i][j] = 0.1 * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphar_1[i][j] = 0.6 * (1.0 / pow(epsilo + beta_1[i][j], 2));
+            alphar_2[i][j] = 0.3 * (1.0 / pow(epsilo + beta_2[i][j], 2));
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 2; j < cols-2; j++) {
+            weightl_0[i][j] = alphal_0[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightl_1[i][j] = alphal_1[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightl_2[i][j] = alphal_2[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightr_0[i][j] = alphar_0[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+            weightr_1[i][j] = alphar_1[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+            weightr_2[i][j] = alphar_2[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 2; j < cols-3; j++) {
+            coverl[i][j] = weightl_0[i][j] * ((1.0/3.0)*y[i][j] + (5.0/6.0)*y[i][j+1] - (1.0/6.0)*y[i][j+2]) 
+                          + weightl_1[i][j] * (-(1.0/6.0)*y[i][j-1] + (5.0/6.0)*y[i][j] + (1.0/3.0)*y[i][j+1])
+                          + weightl_2[i][j] * ((1.0/3.0)*y[i][j-2] - (7.0/6.0)*y[i][j-1] + (11.0/6.0)*y[i][j]);
+
+            coverr[i][j-1] = weightr_0[i][j] * ((11.0/6.0)*y[i][j] - (7.0/6.0)*y[i][j+1] + (1.0/3.0)*y[i][j+2]) 
+                            + weightr_1[i][j] * ((1.0/3.0)*y[i][j-1] + (5.0/6.0)*y[i][j] - (1.0/6.0)*y[i][j+1])
+                            + weightr_2[i][j] * (-(1.0/6.0)*y[i][j-2] + (5.0/6.0)*y[i][j-1] + (1.0/3.0)*y[i][j]);
+        }
+    }
+}
+
 
 
 

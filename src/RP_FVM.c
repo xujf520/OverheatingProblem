@@ -42,12 +42,12 @@ void Mesh(int n, double deltax, double *x);
 //网格参数
  
 
-const int n = 200;                                                      //网格数量 
-const int RP_Method = 0;                                                //Riemann Solver的具体方法  
-const int Recon_Accur = 1;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
+const int n = 400;                                                      //网格数量 
+const int RP_Method = 1;                                                //Riemann Solver的具体方法  
+const int Recon_Accur = 3;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
                                                                         //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：                                              
 const int Control_Compution = 0;
-const int Control_output = 100;
+const int Control_output = 50;
 
 //Riemann Solver
 int scheme;                                                   
@@ -73,10 +73,10 @@ int main(int argc, char *argv[]) {
     int Ite = 0;
 
 //初始条件
-    double u_r = 0.0;
+    double u_r = 2.0;
 
-//    Init_Sod(pri_Ver1,pri_Ver2);                        //激波对撞
-    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r); 
+    Init_Sod(pri_Ver1,pri_Ver2);                       
+//    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                  //激波对撞 
 //    Init_DRare(pri_Ver1,pri_Ver2,u_r);  
 //    Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
         case 1:
             //迭代步数控制
             t = 0;
-            for (int m = 0; m <= 100; m++) {
+            for (int m = 0; m <= 20; m++) {
                 Delta_T = 0.2*Delta_x;
                 switch (RP_Method) {
                     case 0:
@@ -192,7 +192,7 @@ int Get_RP_input(int argc, char *argv[]) {
 void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
     double rho2 = 0.125;
-    double u1 = -0;
+    double u1 = 0;
     double u2 = 0;
     double p1 = 1.0;
     double p2 = 0.1;
@@ -248,8 +248,8 @@ void Init_Sod_Shock(double pri_Ver1[3], double pri_Ver2[3]) {
 void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
     double rho1 = 1.0;
     double rho2 = 1.0;
-    double u1 = -1.0 + u_r;
-    double u2 = 1.0 + u_r;
+    double u1 = -2.0 + u_r;
+    double u2 = 2.0 + u_r;
     double p1 = 1.0;
     double p2 = 1.0;
 
