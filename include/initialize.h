@@ -61,26 +61,28 @@ static inline void initEulerpri1D_Sod(int rows, int cols,double (*x)[cols]) {
 
 
 
-static inline void initEulerpri1D_Osher(int rows, int cols,double (*pri)[cols], double (*x)) {
+static inline void initEulerpri1D_Osher(int rows, int cols, int GC, double (*pri)[cols], double Deltax) {
     int i, j;
+
+    int NGC= 2*GC;
+
     for (i = 0; i < rows; i++) {
         if(i == 0){
             pri[i][0] = 3.857;
             pri[i][1] = 3.857;
-            for (j = 2; j < cols-2; j++) {
-                if( j < (cols-4)/10){
+            for (j = 0; j < cols; j++) {
+                if( j < (cols - NGC)/10){
                     pri[i][j] = 3.857;
                 }
                 else{
-                    pri[i][j] = 1. + 0.2 * sin(5*(x[j-2]-5));
+                    pri[i][j] = 1. + 0.2 * sin(5*((j-GC)*Deltax-5));
                 }
             }
-            pri[i][cols-2] = pri[i][cols-3];
-            pri[i][cols-1] = pri[i][cols-3];
+
         }
         if(i == 1){
             for (j = 0; j < cols; j++) {
-                if( j < (cols-4)/10){
+                if( j < (cols-NGC)/10){
                     pri[i][j] = 2.629;
                 }
                 else{
@@ -90,7 +92,7 @@ static inline void initEulerpri1D_Osher(int rows, int cols,double (*pri)[cols], 
         }
         if(i == 2){
             for (j = 0; j < cols; j++) {
-                if( j < (cols-4)/10){
+                if( j < (cols - NGC)/10){
                     pri[i][j] = 10.333;
                 }
                 else{

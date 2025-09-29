@@ -21,717 +21,87 @@
                                     /*……………………………………………………*/
                                         /*近似黎曼求解*/
                                     /*……………………………………………………*/
-static inline void RS_Rusanov(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
 
 
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    Rusanov_Flux(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-static inline void RS_Lax(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    Lax_Flux(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-/*……………………………………………………………………………………………………*/
-//双激波近似黎曼求解
-static inline void RS_HLL(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    HLL_Flux(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-/*……………………………………………………………………………………………………*/
-//三波近似黎曼求解
-static inline void RS_HLLC(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-   
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    HLLC_Flux(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-/*……………………………………………………………………………………………………*/
-//Roe近似黎曼求解并且存在两种重构&&作用于守恒变量
-static inline void RS_Roe(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    //直接作用守恒变量
+static inline void Flux_Reconstruction_RP(int Recon_Accur, int AR_scheme, int rows, int cols, int GC, \
+                                            double (*y)[cols],double (*z)[cols], double dt, double dx, double gamma) {
     int i,j;
     double coverl[rows][cols],coverr[rows][cols];
     double prileft[rows][cols], priright[rows][cols];
     double Flux[rows][cols];
-    
-    
-    //重构
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
 
 
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
+    switch (Recon_Accur){
+        case 0:
+            Reconstruction_Godunov(rows,cols,GC,y,coverl,coverr,gamma,dx);
+            break;
+        case 1:
+            TVD_Reconstruction(rows,cols,GC,y,coverl,coverr,gamma,dx);
+            break;
+        case 3:
+            WENO3_Reconstruction(rows,cols,GC,y,coverl,coverr,gamma);
+            break;
+        case 5:
+//            WENO5_Reconstruction(rows,cols,GC,y,coverl,coverr);
+//            WENO5_Reconstruction_C(rows,cols,GC,y,coverl,coverr,gamma);
+            break;
+
+        default:
+            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            exit(1);
     }
 
     
-    //计算Roe平均
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+    Con_to_Pri_1D(rows,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(rows,cols,priright,coverr,gamma);
 
-    Roe_Flux(rows, cols, prileft,priright,Flux,gamma);
+
+    //演化过程：
+    //AR_scheme is Approximate Riemann Solver
+    switch (AR_scheme) {
+        case 0:
+            Lax_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 1:
+            Rusanov_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 2:
+            HLL_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 3:
+            HLLC_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 4:
+            Roe_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 5:
+            RS_Marquina(Recon_Accur,3,cols,y,Flux,dt,dx,gamma);
+            break;
+        case 6:
+            StegerWarming_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 7:
+            VanLeer_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 8:
+            LiouSteffen_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 9:
+            XJF_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        default:
+            ER_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            // 你可以根据实际需求添加相应的处理逻辑
+            break;
+    }
+
 
     for ( i = 0; i < rows; i++){
         for ( j = 1; j < cols-1; j++){
             z[i][j] = Flux[i][j];
         }
     }
-}
 
-
-
-
-/*……………………………………………………………………………………………………*/
-//精确黎曼求解
-static inline void RS_ER(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-
-    
-    //重构
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-   
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-    
-    ER_Flux(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
-
-
-}
-
-
-/*……………………………………………………………………………………………………*/
-//“The algorithmic description of Marquina’s flux formula is as follows:” ([Donat 和 Marquina, 1996, p. 44]
-static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    double coverl[3][cols],coverr[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double pri[rows][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
-    
-    double eigen_l[3][3][cols],eigen_r[3][3][cols];
-    double w_l[rows][cols], w_r[rows][cols];
-    double phi_fl[rows][cols], phi_fr[rows][cols];
-    double phi_fp[rows][cols], phi_fm[rows][cols];
-    double flux[3][cols];
-    double lamda[3][cols];
-    double alpha[rows][cols];
-
-    //初始化数组
-     for (int k = 0; k < rows; k++){
-        for (int j = 0; j < cols; j++){
-            w_l[k][j] = 0.0;
-            w_r[k][j] = 0.0;
-            phi_fl[k][j] = 0.0;
-            phi_fr[k][j] = 0.0;
-            phi_fp[k][j] = 0.0;
-            phi_fm[k][j] = 0.0;
-            flux[k][j] = 0.0;
-        }
-        
-    }
-
-    Con_to_Pri_1D(3,cols,pri,y,gamma);
-    //计算特征矩阵
-	for(int j=0;  j < cols; j++) {
-			
-        double  q2, c2, b1, b2;
-        double _u, _H, _c;
-        //preparing some interval value
-        _u = pri[1][j];
-        _H = 0.5 * pow(pri[1][j],2) + gamma * pri[2][j] /((gamma-1) * pri[0][j]);
-        q2 = _u*_u ;
-        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
-        _c = sqrt(c2);
-        b1 = (gamma - 1.0)/c2;
-        b2 = 1.0 + b1*q2 - b1*_H;
-        // left eigen vectors 
-        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
-        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
-        eigen_l[0][2][j] = 0.5*b1;
-            
-        eigen_l[1][0][j] = -q2 + _H;
-        eigen_l[1][1][j] = _u;;
-        eigen_l[1][2][j] = -1.0;
-
-        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
-        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
-        eigen_l[2][2][j] = 0.5*b1;
-
-        //right eigen vectors
-        eigen_r[0][0][j] = 1.0;
-        eigen_r[0][1][j] = b1;
-        eigen_r[0][2][j] = 1.0;
-            
-        eigen_r[1][0][j] = _u - _c;
-        eigen_r[1][1][j] = _u*b1;
-        eigen_r[1][2][j] = _u + _c;
-
-        eigen_r[2][0][j] = _H - _u*_c;
-        eigen_r[2][1][j] = _H*b1 - 1.0;
-        eigen_r[2][2][j] = _H + _u*_c;
-
-
-        //计算对应特征值
-        lamda[0][j] = _u - _c ;
-        lamda[1][j] = _u;
-        lamda[2][j] = _u + _c;
-    }
-
-
-    for (int i = 0; i < rows; i++)
-        for (int j = 1; j < cols-1; j++)
-            a[i][j]=(y[i][j] - y[i][j-1])/dx;
-
-    for (int i = 0; i < rows; i++)
-        for (int j = 1; j < cols-1; j++)
-            b[i][j]=(y[i][j+1] - y[i][j])/dx;
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-                              
-
-    
-    //执行计算Marquina flux
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-
-    // 投影到特征空间
-    for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
-            for (int m = 0; m < 3; m++){
-                w_l[k][j] += coverl[m][j]*eigen_l[k][m][j];
-                phi_fl[k][j] += fluxl[m][j]*eigen_l[k][m][j];
-            }
-        }
-        
-    }
-    for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
-            for (int m = 0; m < 3; m++){
-                w_r[k][j] += coverr[m][j]*eigen_l[k][m][j+1];
-                phi_fr[k][j] += fluxr[m][j]*eigen_l[k][m][j+1];
-            }
-        }
-        
-    }
-
-    //计算通量分量
-    for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
-            if (lamda[k][j]  * lamda[k][j+1] > 0){
-                if (lamda[k][j] > 0){
-                    phi_fp[k][j] = phi_fl[k][j];
-                    phi_fm[k][j] = 0.0;
-                }
-                else{
-                    phi_fp[k][j] = 0.0;
-                    phi_fm[k][j] = phi_fr[k][j];
-                }
-            }
-            else{
-                alpha[k][j] = max_of_two(fabs(lamda[k][j]),fabs(lamda[k][j+1]));
-                phi_fp[k][j] = 0.5*(phi_fl[k][j] + alpha[k][j] * w_l[k][j]);
-                phi_fm[k][j] = 0.5*(phi_fr[k][j] - alpha[k][j] * w_r[k][j]);
-            }
-        }
-    }
-
-    //投影到物理空间计算Flux
-    for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
-            for (int m = 0; m < 3; m++){
-               flux[k][j] += phi_fp[m][j]*eigen_r[k][m][j] + phi_fm[m][j] * eigen_r[k][m][j+1];
-            }
-        }  
-    }
-
-    for (int i = 0; i < rows; i++){
-        for (int j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
-
-     // 输出特定网格点的特征值
-    /*printf("\n=== Marquina Riemann Solver - Eigenvalues ===\n");
-    int output_points[] = {199, 200, 201}; // 需要输出的网格点
-    int num_points = sizeof(output_points) / sizeof(output_points[0]);
-    
-    for (int i = 0; i < num_points; i++) {
-        int j = output_points[i];
-        if (j >= 0 && j < cols) {
-            printf("Grid point j=%d:\n", j);
-            printf("  λ1 (u-c) = %f\n", lamda[0][j]);
-            printf("  λ2 (u)   = %f\n", lamda[1][j]);
-            printf("  λ3 (u+c) = %f\n", lamda[2][j]);
-            printf("  Primitive variables: ρ=%f, u=%f, p=%f\n", 
-                   pri[0][j], pri[1][j], pri[2][j]);
-            printf("  Sound speed c = %f\n", sqrt(gamma * pri[2][j] / pri[0][j]));
-            printf("  Mach number M = %f\n", pri[1][j] / sqrt(gamma * pri[2][j] / pri[0][j]));
-            printf("\n");
-        }
-    }*/
-
-    // 输出特定网格点的特征值
-    printf("\n=== Marquina Riemann Solver - Eigenvalues ===\n");
-    int output_points[] = {199, 200, 201}; // 需要输出的网格点
-    int num_points = sizeof(output_points) / sizeof(output_points[0]);
-    
-    for (int i = 0; i < num_points; i++) {
-        int j = output_points[i];
-        if (j >= 0 && j < cols) {
-            double Error = 0.5 * (fluxl[2][j] + fluxr[2][j]) - 0.5 * min_of_two(lamda[2][j],lamda[2][j+1]) * (coverr[2][j] - coverl[2][j]) - z[2][j];
-            printf("Grid point j=%d:\n", j);
-            printf("  Error = %f\n", Error);
-            printf("\n");
-        }
-    }
-
-}
-
-
-
-static inline void RS_StegerWarming(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-
-    
-    //重构
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-    
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-    
-    StegerWarming_Flux(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
-}
-
-
-
-static inline void RS_VanLeer(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-
-    
-    //重构
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-    
-    VanLeer_Flux(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
-}
-
-
-static inline void RS_LiouSteffen(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-
-    
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                    
-                    
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-    
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-    
-    LiouSteffen_Flux(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
-}
-
-
-static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-    double slope[3][cols];
-
-    
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-    
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
-    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
-    
-    XJF_Flux(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
 }
 
 
@@ -744,304 +114,85 @@ static inline void RS_XJF(int Recon_Accur,int rows, int cols,double (*y)[cols],d
                                     /*……………………………………………………*/
 /*……………………………………………………………………………………………………*/
 
-static inline void RS_Rusanov_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
 
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    Rusanov_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-static inline void RS_Lax_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    Lax_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-/*……………………………………………………………………………………………………*/
-//双激波近似黎曼求解
-static inline void RS_HLL_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-    
-    HLL_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma,u_r,dx);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
-}
-
-
-
-/*……………………………………………………………………………………………………*/
-//三波近似黎曼求解
-static inline void RS_HLLC_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma,double u_point) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                case 5:
-                    WENO5_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-
-
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-//    HLLC_Flux(rows, cols, prileft,priright,Flux,gamma);
-    HLLC_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma,u_point);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-}
-
-
-/*……………………………………………………………………………………………………*/
-//Roe近似黎曼求解并且存在两种重构&&作用于守恒变量
-static inline void RS_Roe_HeatConduction(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma,double u_r) {
-    //直接作用守恒变量
+static inline void Flux_Reconstruction_RP_Heat(int Recon_Accur, int AR_scheme, int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma, double u_Refer, double GC) {
     int i,j;
     double coverl[rows][cols],coverr[rows][cols];
     double prileft[rows][cols], priright[rows][cols];
     double Flux[rows][cols];
     
+     switch (Recon_Accur){
+        case 0:
+            Reconstruction_Godunov(rows,cols,GC,y,coverl,coverr,gamma,dx);
+            break;
+        case 1:
+            TVD_Reconstruction(rows,cols,GC,y,coverl,coverr,gamma,dx);
+            break;
+        case 3:
+            WENO3_Reconstruction(rows,cols,GC,y,coverl,coverr,gamma);
+            break;
+        case 5:
+//            WENO5_Reconstruction(rows,cols,GC,y,coverl,coverr);
+            WENO5_Reconstruction_C(rows,cols,GC,y,coverl,coverr,gamma);
+            break;
 
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
+        default:
+            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            exit(1);
     }
-
     
-    
-    //计算Roe平均
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
 
-    Roe_Flux_HeatConduction(rows, cols, prileft,priright,Flux,gamma,u_r);
+
+    //演化过程：
+    //AR_scheme is Approximate Riemann Solver
+    switch (AR_scheme) {
+        case 0:
+            Lax_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,gamma,u_Refer);
+            break;
+        case 1:
+            Rusanov_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,gamma,u_Refer);
+            break;
+        case 2:
+            HLL_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,gamma,u_Refer);
+            break;
+        case 3:
+            HLLC_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,gamma,u_Refer);
+            break;
+        case 4:
+            Roe_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,gamma,u_Refer);
+            break;
+        case 5:
+            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
+            break;
+        case 6:
+            StegerWarming_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 7:
+            VanLeer_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 8:
+            LiouSteffen_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        case 9:
+            XJF_Flux(rows, cols, GC, prileft,priright,Flux,gamma);
+            break;
+        default:
+            ER_Flux_PlusHeat(rows, cols, GC, prileft,priright,Flux,gamma);
+            // 你可以根据实际需求添加相应的处理逻辑
+            break;
+    }
+
 
     for ( i = 0; i < rows; i++){
         for ( j = 1; j < cols-1; j++){
             z[i][j] = Flux[i][j];
         }
     }
-}
-
-
-
-/*……………………………………………………………………………………………………*/
-//精确黎曼求解
-static inline void RS_ER_Heat(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma) {
-    int i,j;
-    double coverl[3][cols],coverr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double flux[3][cols];
-
-    
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
-                    break;
-                case 3:
-                    WENO3_Reconstruction(rows,cols,y,coverl,coverr);
-                    break;
-
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-
-    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
-    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
-
-    ER_Flux_PlusHeat(rows, cols, prileft,priright,flux,gamma);
-    
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = flux[i][j];
-        }
-    }
 
 }
-
-
-
 
 
 /*                                      ******************                                          */
@@ -1054,15 +205,13 @@ static inline void RS_ER_Heat(int Recon_Accur,int rows, int cols,double (*y)[col
 /*……………………………………………………………………………………………………*/
 //双激波近似黎曼求解
 static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
-                                ,double dt,double dx, double gamma, double u_r) {
+                                ,double dt,double dx, double gamma, double u_r, double GC) {
     int i,j;
     double coverl[3][cols],coverr[3][cols];
     double prileft[3][cols], priright[3][cols];
     double Flux[3][cols];
     double slope[3][cols];
 
-
-    
     //重构
     for (int i = 0; i < rows; i++){   
         for (int j = 1; j < cols-1; j++)
@@ -1070,10 +219,10 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
             switch (Recon_Accur)
             {
                 case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
+                    Reconstruction_Godunov(rows,cols,GC,y,coverl,coverr,gamma,dx);
                     break;
                 case 1:
-                    TVD_Reconstruction(rows,cols,y,coverl,coverr,dx);
+                    TVD_Reconstruction(rows,cols,GC,y,coverl,coverr,gamma,dx);
                     break;
                 
                 default:
@@ -1087,7 +236,7 @@ static inline void RS_HLL_XRela(int Recon_Accur,int rows, int cols,double (*y)[c
     Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
     Con_to_Pri_1D(3,cols,priright,coverr,gamma);
     
-    HLL_Flux_XRela(rows, cols, prileft,priright,Flux,gamma,u_r);
+    HLL_Flux_XRela(rows, cols, GC, prileft,priright,Flux,gamma,u_r);
 
     for ( i = 0; i < rows; i++){
         for ( j = 1; j < cols-1; j++){
@@ -1213,7 +362,7 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
             switch (Recon_Accur)
             {
                 case 0:
-                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
+//                    Reconstruction_Godunov(rows,cols,y,coverl,coverr,dx);
                     break;
                 case 1:
                     //vanleer
@@ -1323,19 +472,6 @@ static inline void RS_Marquina_XRela(int Recon_Accur,int rows, int cols,double (
     }
 
 }
-
-
-/*                                      ******************                                          */
-/*                                      重构步：基于原始变量                                          */
-/*                                      ******************                                          */
-
-
-/*                                      ******************                                          */
-/*                                      重构步：基于特征变量                                          */
-/*                                      ******************                                          */
-
-/*……………………………………………………………………………………………………*/
-//Roe近似黎曼求解并且存在两种重构（TVD）&&作用特征变量
 
 
 /*                                      ******************                                          */

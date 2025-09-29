@@ -22,57 +22,20 @@ void OutputConservationErrors_file();
 
 
 //TVD重构配合不同Riemann Solver
-static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
+static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols]\
                                             ,double (*z)[cols],double dt,double dx, double gamma, int k, double u_r) {
     int i,j;
     double Conser_1[3]={0.0}, Conser_2[3]={0.0};
 
 
     //施加边界条件，
-    BC_OutFlow(3,cols,y,0,2);                       //边界条件说明见具体子程序
-//    BC_Reflect(3,cols,y,1,2);
-    BC_OutFlow(3,cols,y,1,2);
-//    BC_In_rho(3,cols,y,1,2);
-//  BC_OutFlow(3,cols,y,1,1);
+    BC_OutFlow(3,cols,y,0,GC);                       //边界条件说明见具体子程序
+//   BC_Reflect(3,cols,y,1,GC);
+    BC_OutFlow(3,cols,y,1,GC);
+//  BC_In_rho(3,cols,y,1,GC);
+//  BC_OutFlow(3,cols,y,1,GC);
 
-    //AR_scheme is Approximate Riemann Solver
-     //数值通量
-    switch (AR_scheme) {
-        case 0:
-            RS_Lax(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 1:
-            RS_Rusanov(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 2:
-            RS_HLL(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 3:
-            RS_HLLC(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 4:
-            RS_Roe(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 5:
-            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 6:
-            RS_StegerWarming(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 7:
-            RS_VanLeer(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 8:
-            RS_LiouSteffen(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        case 9:
-            RS_XJF(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        default:
-            RS_ER(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            // 你可以根据实际需求添加相应的处理逻辑
-            break;
-    }
+    Flux_Reconstruction_RP(Recon_Accur,AR_scheme,rows,cols,GC,y,z,dt,dx,gamma);
 
     // 第一步计算
 /*                                            *********                                          */
@@ -93,8 +56,8 @@ static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols , 
 
 
 //TVD重构配合不同Riemann Solver
-static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
-                                            ,double (*z)[cols],double dt,double dx, double gamma, int k,double u_r) {
+static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols]\
+                                            ,double (*z)[cols],double dt,double dx, double gamma, int k, double u_r) {
     int i,j;
      //施加边界条件，
     BC_OutFlow(3,cols,y,0,2);                       //边界条件说明见具体子程序
@@ -102,31 +65,8 @@ static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int
 //    BC_Reflect(3,cols,y,1,2);
 
     //AR_scheme is Approximate Riemann Solver
-     //数值通量
-    switch (AR_scheme) {
-        case 0:
-            RS_Lax_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 1:
-            RS_Rusanov_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 2:
-            RS_HLL_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 3:
-            RS_HLLC_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 4:
-            RS_Roe_HeatConduction(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
-            break;
-        case 5:
-            RS_Marquina(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            break;
-        default:
-            RS_ER_Heat(Recon_Accur,3,cols,y,z,dt,dx,gamma);
-            // 你可以根据实际需求添加相应的处理逻辑
-            break;
-    }
+    //数值通量
+    Flux_Reconstruction_RP_Heat(Recon_Accur,AR_scheme,rows,cols,y,z,dt,dx,gamma,GC,u_r);
 
     // 第一步计算
 /*                                            *********                                          */
@@ -155,14 +95,14 @@ static inline void RK1_TVD_FluxRela(int Recon_Accur, int Rela_scheme, int rows, 
     //数值通量
     switch (Rela_scheme) {
         case 0:
-            RS_HLL_XRela(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+//            RS_HLL_XRela(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r,GC);
             break;
         case 1:
             printf("代码未完成\n");
             exit(1);
             break;
         default:
-            RS_Marquina_XRela(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r);
+//            RS_Marquina_XRela(Recon_Accur,3,cols,y,z,dt,dx,gamma,u_r,GC);
             break;
     }
 

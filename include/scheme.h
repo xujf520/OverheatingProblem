@@ -89,9 +89,9 @@ static inline void ConS_to_Pri_1D(int rows, int cols, double (*x)[cols], double 
 
 
 //Flux计算方法
-static inline void Rusanov_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void Rusanov_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
 
 
         //读取已知的左右原始变量
@@ -140,10 +140,10 @@ static inline void Rusanov_Flux(int rows, int cols,double (*x)[cols], double (*y
 }
 
 
-static inline void Lax_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void Lax_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     double S_plus = 0;
 
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -158,7 +158,7 @@ static inline void Lax_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
         S_plus = max_of_three(fabs(u_L)+a_L, fabs(u_R)+a_R,S_plus);
     
     }   
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -200,9 +200,9 @@ static inline void Lax_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
 
 
 
-static inline void HLL_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void HLL_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -270,9 +270,9 @@ static inline void HLL_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
 
 
 
-static inline void HLLC_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void HLLC_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j <= cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -370,10 +370,10 @@ static inline void HLLC_Flux(int rows, int cols,double (*x)[cols], double (*y)[c
 
 
 
-static inline void Roe_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void Roe_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     double epsilon = 1e-6;
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -447,9 +447,9 @@ static inline void Roe_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
 
 
 
-static inline void StegerWarming_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void StegerWarming_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_P = x[0][j];
         double rho_N = y[0][j];
@@ -518,9 +518,9 @@ static inline void StegerWarming_Flux(int rows, int cols,double (*x)[cols], doub
 }
 
 
-static inline void VanLeer_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void VanLeer_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_P = x[0][j];
         double rho_N = y[0][j];
@@ -569,9 +569,9 @@ static inline void VanLeer_Flux(int rows, int cols,double (*x)[cols], double (*y
 }
 
 
-static inline void LiouSteffen_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void LiouSteffen_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_P = x[0][j];
         double rho_N = y[0][j];
@@ -630,9 +630,9 @@ static inline void LiouSteffen_Flux(int rows, int cols,double (*x)[cols], double
 
 
 
-static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void XJF_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -710,9 +710,9 @@ static inline void XJF_Flux(int rows, int cols,double (*x)[cols], double (*y)[co
 }
 
 
-static inline void ER_Flux(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void ER_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         double rho_F = 0,u_F=0,p_F=0;
         double rho_l = x[0][j];
         double rho_r = y[0][j];
@@ -959,9 +959,9 @@ double ExactRieamnna_ustar(double p_star, double rhol, double rhor, double ul,do
 /*                                  具有人工热传导的Riemann Solver                                   */
 /*                                      ******************                                          */
 //Flux计算方法
-static inline void Rusanov_Flux_HeatConduction(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void Rusanov_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_Refer) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
 
 
         //读取已知的左右原始变量
@@ -1016,10 +1016,10 @@ static inline void Rusanov_Flux_HeatConduction(int rows, int cols,double (*x)[co
 }
 
 
-static inline void Lax_Flux_HeatConduction(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void Lax_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma,double u_Refer) {
     double S_plus = 0;
 
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1034,7 +1034,7 @@ static inline void Lax_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
         S_plus = max_of_three(fabs(u_L)+a_L, fabs(u_R)+a_R,S_plus);
     
     }   
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1081,9 +1081,9 @@ static inline void Lax_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
 
 
 
-static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma ,double u_point,double dx) {
+static inline void HLL_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma ,double u_point) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1119,6 +1119,8 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
         double rhou_FR = rho_R * u_R*u_R + p_R;
         double rhoe_L = 0.5 * rho_L * pow(u_L, 2) + p_L/(gamma-1);
         double rhoe_R = 0.5 * rho_R * pow(u_R, 2) + p_R/(gamma-1);
+        double rhoe_LL = rhoe_L/rho_L;
+        double rhoe_RR = rhoe_R/rho_R;
         double rhoe_FL = rho_L * H_L * u_L;
         double rhoe_FR = rho_R * H_R * u_R;
     
@@ -1132,6 +1134,9 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
         double sright = ubar + cbar;
         double Splus = max_of_two(fabs(u_L)  + a_L, fabs(u_R) + a_R);
 
+        double s_HLL = 0.5 * (sleft + sright);
+        
+
         //确定HLL数值通量
         double rho_F = 0, rhou_F = 0, rhoe_F = 0;
         if (sleft > 0){
@@ -1142,14 +1147,16 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
         else if(sleft <= 0 && sright >=0){
             double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
             double Error = ((p_R*rho_L-p_L*rho_R) * (rho_L*(sleft-u_L) + rho_R*(sright-u_R)))/((-1+gamma)*rho_L*rho_R*(sleft-sright));
-            rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+            rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft) - 0.0 * (sleft*sright)/(sright-sleft) * (rho_R-rho_L) ;
             rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
-            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
-            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
-//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
-//           rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + 0.5 * (sright + sleft) * Error;
-//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - (1.0/4.0) * rho_HLL * (sright-sleft) * (e_R-e_L);
-//            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - 0.5 * (p_R*(sright-u_R)+p_L*(sleft-u_L) - p_L*rho_R*(sright - u_R)/rho_L - p_R*rho_L*(sleft -u_L)/rho_R)/(gamma-1);
+            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) +  (sleft*sright)/(sright-sleft) * (e_R-e_L) * rho_HLL;
+//            rho_F = 0.5 * (rho_FL + rho_FR) + (sleft*sright)/(sright-sleft) * (rho_R-rho_L);
+//            rhou_F = 0.5 * (rhou_FL + rhou_FR) + (sleft*sright)/(sright-sleft) * (rhou_R-rhou_L);
+//            rhoe_F = 0.5 * (rhoe_FL + rhoe_FR) + (sleft*sright)/(sright-sleft) * (rhoe_R-rhoe_L);
+            rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft) ;
+            rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
+            rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) - (sleft*sright)/(sright-sleft) * (rho_R-rho_L) * min_of_two(e_L,e_R);
+            
         }
         else if (sright < 0){
             rho_F = rho_FR;
@@ -1165,9 +1172,9 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
 
 
 
-static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_point) {
+static inline void HLLC_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_point) {
     
-    for (int j = 1; j <= cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1243,6 +1250,8 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         Splus = fabs(ubar) + cbar;
 
         double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
+        double rhou_HLL = (sright*rhou_R - sleft*rhou_L + rhou_FL - rhou_FR)/(sright-sleft);
+        double rhoe_HLL = (sright*rhoe_R - sleft*rhoe_L + rhoe_FL - rhoe_FR)/(sright-sleft);
 
 
         //HLLC数值通量
@@ -1256,20 +1265,22 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
         else if(sleft < 0 && s_star >=0 ){
             rho_F = rho_FL + sleft * (rho_star_L - rho_L);
             rhou_F = rhou_FL + sleft *(rho_star_L * s_star  - rhou_L);
-            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - (1.0/4.0) * rho_HLL * (sright -sleft) * (e_R-e_L);
-//            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
+//            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - (1.0/4.0) * rho_HLL * (sright-sleft) * (e_R-e_L);
+            rhoe_F = rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L) - 0.5 * (s_star-sleft) * (e_R-e_L) * rho_star_L;
         }
         else if(s_star < 0 && sright > 0){
             rho_F = rho_FR + sright * (rho_star_R - rho_R);
             rhou_F = rhou_FR + sright *(rho_star_R * s_star  - rhou_R);
             rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) - (1.0/4.0) * rho_HLL * (sright-sleft) * (e_R-e_L);
-//            rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) - (1.0/4.0) * (sright-sleft) * (rhoe_R-rhoe_L);
+//            rhoe_F = 0.5*(rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) + rhoe_FL + sleft * (rho_star_L * fe_star_L -  rhoe_L));
+            rhoe_F = rhoe_FR + sright * (rho_star_R * fe_star_R -  rhoe_R) -  0.5 * (sright-s_star) * (e_R-e_L) * rho_star_R;
         }
         else if (sright  <= 0){
             rho_F = rho_FR;
             rhou_F = rhou_FR;
             rhoe_F = rhoe_FR;
         }
+
 
         z[0][j] = rho_F; 
         z[1][j] = rhou_F; 
@@ -1280,10 +1291,10 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols,double (*x)[cols]
 
 
 
-static inline void Roe_Flux_HeatConduction(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma,double u_point) {
+static inline void Roe_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma,double u_point) {
     double epsilon = 1e-6;
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1376,9 +1387,9 @@ static inline void Roe_Flux_HeatConduction(int rows, int cols,double (*x)[cols],
 }
 
 
-static inline void ER_Flux_PlusHeat(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void ER_Flux_PlusHeat(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         double rho_F = 0,u_F=0,p_F=0;
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1522,89 +1533,6 @@ static inline void ER_Flux_PlusHeat(int rows, int cols,double (*x)[cols], double
 }
 
 
-static inline void ER_Flux_Heat(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
-
-    const int h = 40;
-    double Cell_Face_U[rows][h],Cell_Face_FU[rows][h];
-    double CFU_L[rows][h],CFU_R[rows][h];
-    double CFp_L[rows][h],CFp_R[rows][h];
-    double dxi,dtau;
-    
-    for (int j = 1; j < cols-1; j++) {
-        //读取已知的左右原始变量
-        double rho_L = x[0][j];
-        double rho_R = y[0][j];
-        double u_L = x[1][j];
-        double u_R = y[1][j];
-        double p_L = x[2][j];
-        double p_R = y[2][j];
-
-        //使用数值方法计算界面数值通量：
-        for (int k = 0; k < h; k++)
-        {
-            if (k < h/2){
-                Cell_Face_U[0][k] = rho_L;
-                Cell_Face_U[1][k] = rho_L * u_L;
-                Cell_Face_U[2][k] = 0.5 * rho_L * pow(u_L, 2) + p_L/(gamma - 1);
-            }
-            else{
-                Cell_Face_U[0][k] = rho_R;
-                Cell_Face_U[1][k] = rho_R * u_R;
-                Cell_Face_U[2][k] = 0.5 * rho_R * pow(u_R, 2) + p_R/(gamma - 1);
-            }
-            
-        }
-        dxi = 1.0;
-        dtau = 0.3;
-        for (int Ite = 0; Ite < h; Ite++)
-        {
-            //计算数值通量：
-            for (int m = 0; m < rows; m++){
-                for (int n = 0; n < h; n++){
-                    CFU_L[m][n] = Cell_Face_U[m][n];
-                    CFU_R[m][n] = Cell_Face_U[m][n+1];
-                }
-            }
-
-            Con_to_Pri_1D(3,h,CFp_L,CFU_L,gamma);
-            Con_to_Pri_1D(3,h,CFp_R,CFU_R,gamma);
-            HLL_Flux(3, h, CFp_L,CFp_R,Cell_Face_FU,gamma);
-
-            for (int m = 0; m < rows; m++){
-                for (int n = 1; n < h-1; n++){
-                    Cell_Face_U[m][n] = Cell_Face_U[m][n] + dtau / dxi * (Cell_Face_FU[m][n] - Cell_Face_FU[m][n-1]);
-                }
-            }
-
-            //执行边界条件：
-            for (int m = 0; m < rows; m++){
-                Cell_Face_U[m][0] = Cell_Face_U[m][1];
-                Cell_Face_U[m][h-1] = Cell_Face_U[m][h-2];
-            }
-        }
-
-        //提取数值通量
-        double rho_cf =  Cell_Face_U[0][h/2-1] ;  
-        double rhou_cf = Cell_Face_U[1][h/2-1] ;  
-        double rhoe_cf = Cell_Face_U[2][h/2-1] ; 
-        
-        double u_cf = rhou_cf/rho_cf;
-        double p_cf = (gamma-1) *(rhoe_cf - 0.5 * rhou_cf * u_cf); 
-        double rho_F = rhou_cf;
-        double rhou_F = rho_cf * pow(u_cf,2) + p_cf;
-        double rhoe_F = (0.5 * rho_cf * pow(u_cf,2) + p_cf * gamma /(gamma-1))*u_cf;
-        
-        z[0][j] = rho_F; 
-        z[1][j] = rhou_F; 
-        z[2][j] = rhoe_F; 
-
-    }   
-}
-
-
-
-
-
 /*                               ************************************                               */
 /*                               ************************************                               */
 /*                              Riemann Solver：Exact and Approximate                               */
@@ -1615,10 +1543,10 @@ static inline void ER_Flux_Heat(int rows, int cols,double (*x)[cols], double (*y
 /*                                   在相对参考系下的黎曼解法器                                        */
 /*                                      ******************                                          */
 //Flux计算方法
-static inline void HLL_Flux_XRela(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_r) {
+static inline void HLL_Flux_XRela(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma, double u_r) {
     
     int h;
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
 
 
         //读取已知的左右原始变量
@@ -1727,9 +1655,9 @@ static inline void HLL_Flux_XRela(int rows, int cols,double (*x)[cols], double (
 
 
 
-static inline void HLLC_Flux_Rela(int rows, int cols,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
+static inline void HLLC_Flux_Rela(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double gamma) {
     
-    for (int j = 1; j < cols-1; j++) {
+    for (int j = GC-1; j <= cols-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1824,72 +1752,182 @@ static inline void HLLC_Flux_Rela(int rows, int cols,double (*x)[cols], double (
 /*                                      ******************                                          */
 
 
-static inline void Reconstruction_Godunov(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double delta_x) {
+static inline void Reconstruction_Godunov(int rows, int cols, int GC, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double gamma, double delta_x) {
     int i, j;
     double epsilo = 1e-6;
 
-    double slope[rows][cols],slope_a[rows][cols],slope_b[rows][cols];
-
-     for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
-            slope[i][j] = 0.0;
-            slope_a[i][j] = 0.0;
-            slope_b[i][j] = 0.0;
+    double slope[rows][cols];
+    double Pri[rows][cols],Chara_Var[rows][cols];
+    double W_L[rows][cols],W_R[rows][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
+ 
+    //初始化数组
+    for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            Chara_Var[k][j] = 0.0;
+            W_L[k][j] = 0.0;
+            W_R[k][j] = 0.0;
+            coverl[k][j] = 0.0;
+            coverr[k][j] = 0.0;
         }
     }
 
+    Con_to_Pri_1D(3,cols,Pri,y,gamma);
+    //计算特征矩阵
+	for(int j = 0;  j < cols; j++) {
+			
+        double  q2, c2, b1, b2;
+        double _u, _H, _c, _uc;
+        //preparing some interval value
+        _u = Pri[1][j];
+        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
+        q2 = _u*_u ;
+        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
+        _c = sqrt(c2);
+        _uc = _u*_c;
+        b1 = (gamma - 1.0)/(2.0*c2);
+        b2 = 1.0 + b1*q2 - b1*_H;
+        // left eigen vectors 
+        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
+        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
+        eigen_l[0][2][j] = 0.5*b1;
+            
+        eigen_l[1][0][j] = -q2 + _H;
+        eigen_l[1][1][j] = _u;;
+        eigen_l[1][2][j] = -1.0;
+
+        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
+        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
+        eigen_l[2][2][j] = 0.5*b1;
+
+        //right eigen vectors
+        eigen_r[0][0][j] = 1.0;
+        eigen_r[0][1][j] = b1;
+        eigen_r[0][2][j] = 1.0;
+            
+        eigen_r[1][0][j] = _u - _c;
+        eigen_r[1][1][j] = _u*b1;
+        eigen_r[1][2][j] = _u + _c;
+
+        eigen_r[2][0][j] = _H - _u*_c;
+        eigen_r[2][1][j] = _H*b1 - 1.0;
+        eigen_r[2][2][j] = _H + _u*_c;
+
+    }
+
+    //投影到特征空间，计算特征变量：
+    for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            for (int m = 0; m < rows; m++){
+                Chara_Var[k][j] += y[m][j] * eigen_l[k][m][j];
+            }
+        }   
+    }
 
     for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            slope_a[i][j] = (y[i][j] - y[i][j-1])/delta_x;
-            slope_b[i][j] = (y[i][j+1] - y[i][j])/delta_x;
+        for ( j = GC-1; j <= cols-GC; j++){
+            W_L[i][j] = Chara_Var[i][j];
+            W_R[i][j] = Chara_Var[i][j+1];
         }
     }
 
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
-            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
-        }
+    for (int k = 0; k < rows; k++){
+        for (int j = GC-1; j <= cols-GC; j++){
+            for (int m = 0; m < rows; m++){
+                coverl[k][j] += W_L[m][j] * eigen_r[k][m][j];
+                coverr[k][j] += W_R[m][j] * eigen_r[k][m][j+1];
+            }
+        }  
     }
 
-    
-    
 }
 
-static inline void TVD_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double delta_x) {
+static inline void TVD_Reconstruction(int rows, int cols, int GC,double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols], double gamma, double delta_x) {
     int i, j;
     double epsilo = 1e-6;
 
     double slope[rows][cols],slope_a[rows][cols],slope_b[rows][cols];
-
-     for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
+    double Pri[rows][cols],Chara_Var[rows][cols];
+    double W_L[rows][cols],W_R[rows][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
+ 
+    //初始化数组
+    for (int i = 0; i < rows; i++){
+        for (int j = 0; j < cols; j++){
             slope[i][j] = 0.0;
             slope_a[i][j] = 0.0;
             slope_b[i][j] = 0.0;
+            Chara_Var[i][j] = 0.0;
+            W_L[i][j] = 0.0;
+            W_R[i][j] = 0.0;
+            coverl[i][j] = 0.0;
+            coverr[i][j] = 0.0;
         }
     }
 
+    Con_to_Pri_1D(3,cols,Pri,y,gamma);
+    //计算特征矩阵
+	for(int j = 0;  j < cols; j++) {
+			
+        double  q2, c2, b1, b2;
+        double _u, _H, _c, _uc;
+        //preparing some interval value
+        _u = Pri[1][j];
+        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
+        q2 = _u*_u ;
+        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
+        _c = sqrt(c2);
+        _uc = _u*_c;
+        b1 = (gamma - 1.0)/(2.0*c2);
+        b2 = 1.0 + b1*q2 - b1*_H;
+        // left eigen vectors 
+        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
+        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
+        eigen_l[0][2][j] = 0.5*b1;
+            
+        eigen_l[1][0][j] = -q2 + _H;
+        eigen_l[1][1][j] = _u;;
+        eigen_l[1][2][j] = -1.0;
 
+        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
+        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
+        eigen_l[2][2][j] = 0.5*b1;
+
+        //right eigen vectors
+        eigen_r[0][0][j] = 1.0;
+        eigen_r[0][1][j] = b1;
+        eigen_r[0][2][j] = 1.0;
+            
+        eigen_r[1][0][j] = _u - _c;
+        eigen_r[1][1][j] = _u*b1;
+        eigen_r[1][2][j] = _u + _c;
+
+        eigen_r[2][0][j] = _H - _u*_c;
+        eigen_r[2][1][j] = _H*b1 - 1.0;
+        eigen_r[2][2][j] = _H + _u*_c;
+
+    }
+
+    //投影到特征空间，计算特征变量：
+    for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            for (int m = 0; m < rows; m++){
+                Chara_Var[k][j] += y[m][j] * eigen_l[k][m][j];
+            }
+        }   
+    }
+
+    //重构特征变量
     for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            slope_a[i][j] = (y[i][j] - y[i][j-1])/delta_x;
-            slope_b[i][j] = (y[i][j+1] - y[i][j])/delta_x;
+        for ( j = GC-1; j < cols-GC; j++){
+            slope_a[i][j] = (Chara_Var[i][j] - Chara_Var[i][j-1])/delta_x;
+            slope_b[i][j] = (Chara_Var[i][j+1] - Chara_Var[i][j])/delta_x;
         }
     }
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
-            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
-        }
-    }
-
 
     //重构
     for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
+        for (int j = GC-1; j < cols-GC; j++)
         {
             //vanleer
             //slope[i][j]= ((sgn(a[i][j])+sgn(b[i][j]))*a[i][j]*b[i][j])/(fabs(a[i][j])+fabs(b[i][j])+1e-15);
@@ -1900,13 +1938,23 @@ static inline void TVD_Reconstruction(int rows, int cols, double (*y)[cols], dou
         }
     }
 
+
     for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            coverl[i][j] = y[i][j]   + 0.5*slope[i][j] * delta_x;
-            coverr[i][j] = y[i][j+1] - 0.5*slope[i][j+1] * delta_x;
+        for ( j = GC-1; j <= cols-GC; j++){
+            W_L[i][j] = Chara_Var[i][j] + 0.5*slope[i][j] * delta_x;
+            W_R[i][j] = Chara_Var[i][j+1] - 0.5*slope[i][j+1] * delta_x;
         }
     }
-    
+
+    for (int k = 0; k < rows; k++){
+        for (int j = GC-1; j <= cols-GC; j++){
+            for (int m = 0; m < rows; m++){
+                coverl[k][j] += W_L[m][j] * eigen_r[k][m][j];
+                coverr[k][j] += W_R[m][j] * eigen_r[k][m][j+1];
+            }
+        }  
+    }
+
 }
 
 
@@ -1916,7 +1964,7 @@ static inline void TVD_Reconstruction(int rows, int cols, double (*y)[cols], dou
 
 
 // 三阶WENO重构
-static inline void WENO3_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols]) {
+static inline void WENO3_Reconstruction(int rows, int cols, int GC,double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double gamma) {
     int i, j;
     double epsilo = 1e-6;
     
@@ -1926,10 +1974,16 @@ static inline void WENO3_Reconstruction(int rows, int cols, double (*y)[cols], d
     double alphar_0[rows][cols], alphar_1[rows][cols];
     double weightl_0[rows][cols], weightl_1[rows][cols];
     double weightr_0[rows][cols], weightr_1[rows][cols];
-    
-    // 初始化数组
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
+
+    double Pri[rows][cols],Chara_Var[rows][cols];
+    double W_L[rows][cols],W_R[rows][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
+ 
+    //初始化数组
+    for (int i = 0; i < rows; i++){
+        for (int j = 0; j < cols; j++){
+            Chara_Var[i][j] = 0.0;
+            W_L[i][j] = W_R[i][j] = 0.0;
             beta_0[i][j] = beta_1[i][j] = 0.0;
             alphal_0[i][j] = alphal_1[i][j] = 0.0;
             alphar_0[i][j] = alphar_1[i][j] = 0.0;
@@ -1939,12 +1993,65 @@ static inline void WENO3_Reconstruction(int rows, int cols, double (*y)[cols], d
         }
     }
 
+    Con_to_Pri_1D(3,cols,Pri,y,gamma);
+    //计算特征矩阵
+	for(int j = 0;  j < cols; j++) {
+			
+        double  q2, c2, b1, b2;
+        double _u, _H, _c, _uc;
+        //preparing some interval value
+        _u = Pri[1][j];
+        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
+        q2 = _u*_u ;
+        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
+        _c = sqrt(c2);
+        _uc = _u*_c;
+        b1 = (gamma - 1.0)/(2.0*c2);
+        b2 = 1.0 + b1*q2 - b1*_H;
+        // left eigen vectors 
+        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
+        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
+        eigen_l[0][2][j] = 0.5*b1;
+            
+        eigen_l[1][0][j] = -q2 + _H;
+        eigen_l[1][1][j] = _u;;
+        eigen_l[1][2][j] = -1.0;
+
+        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
+        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
+        eigen_l[2][2][j] = 0.5*b1;
+
+        //right eigen vectors
+        eigen_r[0][0][j] = 1.0;
+        eigen_r[0][1][j] = b1;
+        eigen_r[0][2][j] = 1.0;
+            
+        eigen_r[1][0][j] = _u - _c;
+        eigen_r[1][1][j] = _u*b1;
+        eigen_r[1][2][j] = _u + _c;
+
+        eigen_r[2][0][j] = _H - _u*_c;
+        eigen_r[2][1][j] = _H*b1 - 1.0;
+        eigen_r[2][2][j] = _H + _u*_c;
+
+    }
+
+    //投影到特征空间，计算特征变量：
+    for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            for (int m = 0; m < rows; m++){
+                Chara_Var[k][j] += y[m][j] * eigen_l[k][m][j];
+            }
+        }   
+    }
+
+
     for (i = 0; i < rows; i++) {
-        for (j = 1; j <= cols-2; j++) {
+        for (j = GC-1; j <= cols-GC; j++) {
 
             //计算间断因子
-            beta_0[i][j] = pow(y[i][j+1] - y[i][j], 2);
-            beta_1[i][j] = pow(y[i][j] - y[i][j-1], 2);
+            beta_0[i][j] = pow(Chara_Var[i][j+1] - Chara_Var[i][j], 2);
+            beta_1[i][j] = pow(Chara_Var[i][j] - Chara_Var[i][j-1], 2);
             
             //计算非线性的系数
             alphal_0[i][j] = (2.0 / 3.0) * (1.0 / pow(epsilo + beta_0[i][j], 2));
@@ -1959,20 +2066,26 @@ static inline void WENO3_Reconstruction(int rows, int cols, double (*y)[cols], d
             weightr_1[i][j] = alphar_1[i][j] / (alphar_0[i][j] + alphar_1[i][j]);
         }
     
-        for (j = 1; j <= cols-3; j++) {
-            coverl[i][j] = weightl_0[i][j] * (0.5 * y[i][j] + 0.5 * y[i][j+1]) 
-                          + weightl_1[i][j] * (-0.5 * y[i][j-1] + 1.5 * y[i][j]);
-
-            coverr[i][j] = weightr_0[i][j+1] * (1.5 * y[i][j+1] - 0.5 * y[i][j+2])
-                            + weightr_1[i][j+1] * (0.5 * y[i][j] + 0.5 * y[i][j+1]);
+        for (j = GC-1; j <= cols-GC; j++) {
+            W_L[i][j] = weightl_0[i][j] * (0.5 * Chara_Var[i][j] + 0.5 * Chara_Var[i][j+1]) + weightl_1[i][j] * (-0.5 * Chara_Var[i][j-1] + 1.5 * Chara_Var[i][j]);
+            W_R[i][j] = weightr_0[i][j+1] * (1.5 * Chara_Var[i][j+1] - 0.5 * Chara_Var[i][j+2]) + weightr_1[i][j+1] * (0.5 * Chara_Var[i][j] + 0.5 * Chara_Var[i][j+1]);
         }
+    }
+
+    for (int k = 0; k < rows; k++){
+        for (int j = GC-1; j <= cols-GC; j++){
+            for (int m = 0; m < rows; m++){
+                coverl[k][j] += W_L[m][j] * eigen_r[k][m][j];
+                coverr[k][j] += W_R[m][j] * eigen_r[k][m][j+1];
+            }
+        }  
     }
 }
 
 // 五阶WENO重构
-static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols]) {
+static inline void WENO5_Reconstruction(int rows, int cols, int GC, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols]) {
     int i, j;
-    double epsilo = 1e-6;
+    double epsilo = 1e-10;
     
     // 声明局部变量
     double beta_0[rows][cols], beta_1[rows][cols], beta_2[rows][cols];
@@ -1980,10 +2093,16 @@ static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], d
     double alphar_0[rows][cols], alphar_1[rows][cols], alphar_2[rows][cols];
     double weightl_0[rows][cols], weightl_1[rows][cols], weightl_2[rows][cols];
     double weightr_0[rows][cols], weightr_1[rows][cols], weightr_2[rows][cols];
-    
+    double Pri[rows][cols],Chara_Var[rows][cols];
+    double W_L[rows][cols],W_R[rows][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
+ 
+
     // 初始化数组
     for (i = 0; i < rows; i++) {
         for (j = 0; j < cols; j++) {
+            Chara_Var[i][j] = 0.0;
+            W_L[i][j] = W_R[i][j] = 0.0;
             beta_0[i][j] = beta_1[i][j] = beta_2[i][j] = 0.0;
             alphal_0[i][j] = alphal_1[i][j] = alphal_2[i][j] = 0.0;
             alphar_0[i][j] = alphar_1[i][j] = alphar_2[i][j] = 0.0;
@@ -1993,8 +2112,9 @@ static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], d
         }
     }
 
+
     for (i = 0; i < rows; i++) {
-        for (j = 2; j < cols-2; j++) {
+        for (j = GC-1; j <= cols-GC; j++) {
             beta_0[i][j] = (13.0 / 12.0) * pow(y[i][j] - 2.0 * y[i][j+1] + y[i][j+2], 2)
                           + (1.0 / 4.0) * pow(3.0 * y[i][j] - 4.0 * y[i][j+1] + y[i][j+2], 2);
             beta_1[i][j] = (13.0 / 12.0) * pow(y[i][j-1] - 2.0 * y[i][j] + y[i][j+1], 2)
@@ -2005,7 +2125,7 @@ static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], d
     }
     
     for (i = 0; i < rows; i++) {
-        for (j = 2; j < cols-2; j++) {
+        for (j = GC-1; j <= cols-GC; j++) {
             alphal_0[i][j] = 0.3 * (1.0 / pow(epsilo + beta_0[i][j], 2));
             alphal_1[i][j] = 0.6 * (1.0 / pow(epsilo + beta_1[i][j], 2));
             alphal_2[i][j] = 0.1 * (1.0 / pow(epsilo + beta_2[i][j], 2));
@@ -2016,7 +2136,7 @@ static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], d
     }
     
     for (i = 0; i < rows; i++) {
-        for (j = 2; j < cols-2; j++) {
+        for (j = GC-1; j <= cols-GC; j++) {
             weightl_0[i][j] = alphal_0[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
             weightl_1[i][j] = alphal_1[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
             weightl_2[i][j] = alphal_2[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
@@ -2027,19 +2147,322 @@ static inline void WENO5_Reconstruction(int rows, int cols, double (*y)[cols], d
     }
     
     for (i = 0; i < rows; i++) {
-        for (j = 2; j < cols-3; j++) {
+        for (j = GC-1; j <= cols-GC; j++) {
             coverl[i][j] = weightl_0[i][j] * ((1.0/3.0)*y[i][j] + (5.0/6.0)*y[i][j+1] - (1.0/6.0)*y[i][j+2]) 
                           + weightl_1[i][j] * (-(1.0/6.0)*y[i][j-1] + (5.0/6.0)*y[i][j] + (1.0/3.0)*y[i][j+1])
                           + weightl_2[i][j] * ((1.0/3.0)*y[i][j-2] - (7.0/6.0)*y[i][j-1] + (11.0/6.0)*y[i][j]);
 
-            coverr[i][j-1] = weightr_0[i][j] * ((11.0/6.0)*y[i][j] - (7.0/6.0)*y[i][j+1] + (1.0/3.0)*y[i][j+2]) 
-                            + weightr_1[i][j] * ((1.0/3.0)*y[i][j-1] + (5.0/6.0)*y[i][j] - (1.0/6.0)*y[i][j+1])
-                            + weightr_2[i][j] * (-(1.0/6.0)*y[i][j-2] + (5.0/6.0)*y[i][j-1] + (1.0/3.0)*y[i][j]);
+            coverr[i][j] = weightr_0[i][j+1] * ((11.0/6.0)*y[i][j+1] - (7.0/6.0)*y[i][j+2] + (1.0/3.0)*y[i][j+3]) 
+                            + weightr_1[i][j+1] * ((1.0/3.0)*y[i][j] + (5.0/6.0)*y[i][j+1] - (1.0/6.0)*y[i][j+2])
+                            + weightr_2[i][j+1] * (-(1.0/6.0)*y[i][j-1] + (5.0/6.0)*y[i][j] + (1.0/3.0)*y[i][j+1]);
         }
     }
 }
 
 
+// 五阶WENO重构
+static inline void WENO5_Reconstruction_C(int rows, int cols, int GC, double (*y)[cols], double (*coverl)[cols], double (*coverr)[cols],double gamma){
+    int i, j;
+    double epsilo = 1e-6;
+    
+    // 声明局部变量
+   double beta_0[rows][cols], beta_1[rows][cols], beta_2[rows][cols];
+    double alphal_0[rows][cols], alphal_1[rows][cols], alphal_2[rows][cols];
+    double alphar_0[rows][cols], alphar_1[rows][cols], alphar_2[rows][cols];
+    double weightl_0[rows][cols], weightl_1[rows][cols], weightl_2[rows][cols];
+    double weightr_0[rows][cols], weightr_1[rows][cols], weightr_2[rows][cols];
+    double Pri[rows][cols],Chara_Var[rows][cols];
+    double W_L[rows][cols],W_R[rows][cols];
+    double eigen_l[rows][rows][cols],eigen_r[rows][rows][cols];
+ 
+
+    // 初始化数组
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            Chara_Var[i][j] = 0.0;
+            W_L[i][j] = W_R[i][j] = 0.0;
+            beta_0[i][j] = beta_1[i][j] = beta_2[i][j] = 0.0;
+            alphal_0[i][j] = alphal_1[i][j] = alphal_2[i][j] = 0.0;
+            alphar_0[i][j] = alphar_1[i][j] = alphar_2[i][j] = 0.0;
+            weightl_0[i][j] = weightl_1[i][j] = weightl_2[i][j] = 0.0;
+            weightr_0[i][j] = weightr_1[i][j] = weightr_2[i][j] = 0.0;
+            coverl[i][j] = coverr[i][j] = 0.0;
+        }
+    }
+
+    Con_to_Pri_1D(3,cols,Pri,y,gamma);
+    //计算特征矩阵
+	for(int j = 0;  j < cols; j++) {
+			
+        double  q2, c2, b1, b2;
+        double _u, _H, _c, _uc;
+        //preparing some interval value
+        _u = Pri[1][j];
+        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
+        q2 = _u*_u ;
+        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
+        _c = sqrt(c2);
+        _uc = _u*_c;
+        b1 = (gamma - 1.0)/(2.0*c2);
+        b2 = 1.0 + b1*q2 - b1*_H;
+        // left eigen vectors 
+        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
+        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
+        eigen_l[0][2][j] = 0.5*b1;
+            
+        eigen_l[1][0][j] = -q2 + _H;
+        eigen_l[1][1][j] = _u;;
+        eigen_l[1][2][j] = -1.0;
+
+        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
+        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
+        eigen_l[2][2][j] = 0.5*b1;
+
+        //right eigen vectors
+        eigen_r[0][0][j] = 1.0;
+        eigen_r[0][1][j] = b1;
+        eigen_r[0][2][j] = 1.0;
+            
+        eigen_r[1][0][j] = _u - _c;
+        eigen_r[1][1][j] = _u*b1;
+        eigen_r[1][2][j] = _u + _c;
+
+        eigen_r[2][0][j] = _H - _u*_c;
+        eigen_r[2][1][j] = _H*b1 - 1.0;
+        eigen_r[2][2][j] = _H + _u*_c;
+
+    }
+
+    //投影到特征空间，计算特征变量：
+    for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            for (int m = 0; m < rows; m++){
+                Chara_Var[k][j] += y[m][j] * eigen_l[k][m][j];
+            }
+        }   
+    }
+
+    for (i = 0; i < rows; i++) {
+        for (j = GC-1; j <= cols-GC; j++) {
+            beta_0[i][j] = (13.0 / 12.0) * pow(Chara_Var[i][j] - 2.0 * Chara_Var[i][j+1] + Chara_Var[i][j+2], 2)
+                          + (1.0 / 4.0) * pow(3.0 * Chara_Var[i][j] - 4.0 * Chara_Var[i][j+1] + Chara_Var[i][j+2], 2);
+            beta_1[i][j] = (13.0 / 12.0) * pow(Chara_Var[i][j-1] - 2.0 * Chara_Var[i][j] + Chara_Var[i][j+1], 2)
+                          + (1.0 / 4.0) * pow(Chara_Var[i][j-1] - Chara_Var[i][j+1], 2);
+            beta_2[i][j] = (13.0 / 12.0) * pow(Chara_Var[i][j-2] - 2.0 * Chara_Var[i][j-1] + Chara_Var[i][j], 2)
+                          + (1.0 / 4.0) * pow(Chara_Var[i][j-2] - 4.0 * Chara_Var[i][j-1] + 3.0 * Chara_Var[i][j], 2);
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = GC-1; j <= cols-GC; j++) {
+            alphal_0[i][j] = 0.3 * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphal_1[i][j] = 0.6 * (1.0 / pow(epsilo + beta_1[i][j], 2));
+            alphal_2[i][j] = 0.1 * (1.0 / pow(epsilo + beta_2[i][j], 2));
+            alphar_0[i][j] = 0.1 * (1.0 / pow(epsilo + beta_0[i][j], 2));
+            alphar_1[i][j] = 0.6 * (1.0 / pow(epsilo + beta_1[i][j], 2));
+            alphar_2[i][j] = 0.3 * (1.0 / pow(epsilo + beta_2[i][j], 2));
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = GC-1; j <= cols-GC; j++) {
+            weightl_0[i][j] = alphal_0[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightl_1[i][j] = alphal_1[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightl_2[i][j] = alphal_2[i][j] / (alphal_0[i][j] + alphal_1[i][j] + alphal_2[i][j]);
+            weightr_0[i][j] = alphar_0[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+            weightr_1[i][j] = alphar_1[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+            weightr_2[i][j] = alphar_2[i][j] / (alphar_0[i][j] + alphar_1[i][j] + alphar_2[i][j]);
+        }
+    }
+    
+    for (i = 0; i < rows; i++) {
+        for (j = GC-1; j <= cols-GC; j++) {
+            W_L[i][j] = weightl_0[i][j] * ((1.0/3.0)*Chara_Var[i][j] + (5.0/6.0)*Chara_Var[i][j+1] - (1.0/6.0)*Chara_Var[i][j+2]) 
+                          + weightl_1[i][j] * (-(1.0/6.0)*Chara_Var[i][j-1] + (5.0/6.0)*Chara_Var[i][j] + (1.0/3.0)*Chara_Var[i][j+1])
+                          + weightl_2[i][j] * ((1.0/3.0)*Chara_Var[i][j-2] - (7.0/6.0)*Chara_Var[i][j-1] + (11.0/6.0)*Chara_Var[i][j]);
+
+            W_R[i][j] = weightr_0[i][j+1] * ((11.0/6.0)*Chara_Var[i][j+1] - (7.0/6.0)*Chara_Var[i][j+2] + (1.0/3.0)*Chara_Var[i][j+3]) 
+                            + weightr_1[i][j+1] * ((1.0/3.0)*Chara_Var[i][j] + (5.0/6.0)*Chara_Var[i][j+1] - (1.0/6.0)*Chara_Var[i][j+2])
+                            + weightr_2[i][j+1] * (-(1.0/6.0)*Chara_Var[i][j-1] + (5.0/6.0)*Chara_Var[i][j] + (1.0/3.0)*Chara_Var[i][j+1]);
+        }
+    }
+
+    for (int k = 0; k < rows; k++){
+        for (int j = GC-1; j <= cols-GC; j++){
+            for (int m = 0; m < rows; m++){
+                coverl[k][j] += W_L[m][j] * eigen_r[k][m][j];
+                coverr[k][j] += W_R[m][j] * eigen_r[k][m][j+1];
+            }
+        }  
+    }
+}
+
+
+
+/*……………………………………………………………………………………………………*/
+//“The algorithmic description of Marquina’s flux formula is as follows:” ([Donat 和 Marquina, 1996, p. 44]
+static inline void RS_Marquina(int Recon_Accur,int rows, int cols,double (*y)[cols],double (*z)[cols]\
+                                ,double dt,double dx, double gamma) {
+    double coverl[3][cols],coverr[3][cols];
+    double fluxl[3][cols],fluxr[3][cols];
+    double prileft[3][cols], priright[3][cols];
+    double pri[rows][cols];
+    double slope[3][cols],a[3][cols],b[3][cols];
+    
+    double eigen_l[3][3][cols],eigen_r[3][3][cols];
+    double w_l[rows][cols], w_r[rows][cols];
+    double phi_fl[rows][cols], phi_fr[rows][cols];
+    double phi_fp[rows][cols], phi_fm[rows][cols];
+    double flux[3][cols];
+    double lamda[3][cols];
+    double alpha[rows][cols];
+
+    //初始化数组
+     for (int k = 0; k < rows; k++){
+        for (int j = 0; j < cols; j++){
+            w_l[k][j] = 0.0;
+            w_r[k][j] = 0.0;
+            phi_fl[k][j] = 0.0;
+            phi_fr[k][j] = 0.0;
+            phi_fp[k][j] = 0.0;
+            phi_fm[k][j] = 0.0;
+            flux[k][j] = 0.0;
+        }
+        
+    }
+
+    Con_to_Pri_1D(3,cols,pri,y,gamma);
+    //计算特征矩阵
+	for(int j=0;  j < cols; j++) {
+			
+        double  q2, c2, b1, b2;
+        double _u, _H, _c;
+        //preparing some interval value
+        _u = pri[1][j];
+        _H = 0.5 * pow(pri[1][j],2) + gamma * pri[2][j] /((gamma-1) * pri[0][j]);
+        q2 = _u*_u ;
+        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
+        _c = sqrt(c2);
+        b1 = (gamma - 1.0)/c2;
+        b2 = 1.0 + b1*q2 - b1*_H;
+        // left eigen vectors 
+        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
+        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
+        eigen_l[0][2][j] = 0.5*b1;
+            
+        eigen_l[1][0][j] = -q2 + _H;
+        eigen_l[1][1][j] = _u;;
+        eigen_l[1][2][j] = -1.0;
+
+        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
+        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
+        eigen_l[2][2][j] = 0.5*b1;
+
+        //right eigen vectors
+        eigen_r[0][0][j] = 1.0;
+        eigen_r[0][1][j] = b1;
+        eigen_r[0][2][j] = 1.0;
+            
+        eigen_r[1][0][j] = _u - _c;
+        eigen_r[1][1][j] = _u*b1;
+        eigen_r[1][2][j] = _u + _c;
+
+        eigen_r[2][0][j] = _H - _u*_c;
+        eigen_r[2][1][j] = _H*b1 - 1.0;
+        eigen_r[2][2][j] = _H + _u*_c;
+
+
+        //计算对应特征值
+        lamda[0][j] = _u - _c ;
+        lamda[1][j] = _u;
+        lamda[2][j] = _u + _c;
+    }
+
+
+    switch (Recon_Accur){
+        case 0:
+            Reconstruction_Godunov(rows,cols,3,y,coverl,coverr,gamma,dx);
+            break;
+        case 1:
+            TVD_Reconstruction(rows,cols,3,y,coverl,coverr,gamma,dx);
+            break;
+        case 3:
+            WENO3_Reconstruction(rows,cols,3,y,coverl,coverr,gamma);
+            break;
+        case 5:
+            WENO5_Reconstruction_C(rows,cols,3,y,coverl,coverr,gamma);
+            break;
+        default:
+            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            exit(1);
+    }
+                              
+
+    
+    //执行计算Marquina flux
+    Con_to_Pri_1D(3,cols,prileft,coverl,gamma);
+    Con_to_Pri_1D(3,cols,priright,coverr,gamma);
+
+    initEulerflux1D(rows, cols, coverl, fluxl,gamma);
+    initEulerflux1D(rows, cols, coverr, fluxr,gamma);
+
+    // 投影到特征空间
+    for (int k = 0; k < 3; k++){
+        for (int j = 1; j < cols-1; j++){
+            for (int m = 0; m < 3; m++){
+                w_l[k][j] += coverl[m][j]*eigen_l[k][m][j];
+                phi_fl[k][j] += fluxl[m][j]*eigen_l[k][m][j];
+            }
+        }
+        
+    }
+    for (int k = 0; k < 3; k++){
+        for (int j = 1; j < cols-1; j++){
+            for (int m = 0; m < 3; m++){
+                w_r[k][j] += coverr[m][j]*eigen_l[k][m][j+1];
+                phi_fr[k][j] += fluxr[m][j]*eigen_l[k][m][j+1];
+            }
+        }
+        
+    }
+
+    //计算通量分量
+    for (int k = 0; k < 3; k++){
+        for (int j = 1; j < cols-1; j++){
+            if (lamda[k][j]  * lamda[k][j+1] > 0){
+                if (lamda[k][j] > 0){
+                    phi_fp[k][j] = phi_fl[k][j];
+                    phi_fm[k][j] = 0.0;
+                }
+                else{
+                    phi_fp[k][j] = 0.0;
+                    phi_fm[k][j] = phi_fr[k][j];
+                }
+            }
+            else{
+                alpha[k][j] = max_of_two(fabs(lamda[k][j]),fabs(lamda[k][j+1]));
+                phi_fp[k][j] = 0.5*(phi_fl[k][j] + alpha[k][j] * w_l[k][j]);
+                phi_fm[k][j] = 0.5*(phi_fr[k][j] - alpha[k][j] * w_r[k][j]);
+            }
+        }
+    }
+
+    //投影到物理空间计算Flux
+    for (int k = 0; k < 3; k++){
+        for (int j = 1; j < cols-1; j++){
+            for (int m = 0; m < 3; m++){
+               flux[k][j] += phi_fp[m][j]*eigen_r[k][m][j] + phi_fm[m][j] * eigen_r[k][m][j+1];
+            }
+        }  
+    }
+
+    for (int i = 0; i < rows; i++){
+        for (int j = 1; j < cols-1; j++){
+            z[i][j] = flux[i][j];
+        }
+    }
+
+}
 
 
 #endif  

@@ -131,6 +131,14 @@ static inline void BC_OutFlow(int rows, int cols,double (*x)[cols], int Control_
                     }
                        
                     break;
+                case 3:                                                                 //此时填充虚拟网格为3
+                    for (int i = 0; i <= 2; i++){
+                        x[i][Ghost_cell-1] = x[i][Ghost_cell];                           //出口流动的情况
+                        x[i][Ghost_cell-2] = x[i][Ghost_cell];                           //出口流动的情况
+                        x[i][Ghost_cell-3] = x[i][Ghost_cell];                           //出口流动的情况
+                    }
+                       
+                    break;
                 //填充更多的虚拟网格，程序待完成
                 default:
                     break;
@@ -147,6 +155,13 @@ static inline void BC_OutFlow(int rows, int cols,double (*x)[cols], int Control_
                     for (int i = 0; i <= 2; i++){
                         x[i][cols-Ghost_cell] = x[i][cols-Ghost_cell-1];                           //出口流动的情况
                         x[i][cols-Ghost_cell+1] = x[i][cols-Ghost_cell-1];                           //出口流动的情况
+                    }
+                    break;
+                case 3:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][cols-Ghost_cell] = x[i][cols-Ghost_cell-1];                           //出口流动的情况
+                        x[i][cols-Ghost_cell+1] = x[i][cols-Ghost_cell-1];                           //出口流动的情况
+                        x[i][cols-Ghost_cell+2] = x[i][cols-Ghost_cell-1];                           //出口流动的情况
                     }
                     break;
                 default:

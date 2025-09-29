@@ -15,7 +15,7 @@
 /*                                            *********                                          */
 // 控制计算步数子程序
 void StepLoop();
-void OutputData_file();
+void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols], double t);
 //初始条件子程序
 void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Sod_Rare(double pri_Ver1[3], double pri_Ver2[3]);
@@ -28,7 +28,9 @@ void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]);
 void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3],double gamma);
 
 // 读取黎曼问题
+int Get_RP_Method(int argc, char *argv[]);
 int Get_RP_input(int argc, char *argv[]);
+void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme);
 
 //简单的网格代码
 void Mesh(int n, double deltax, double *x);
@@ -42,50 +44,55 @@ void Mesh(int n, double deltax, double *x);
 //网格参数
  
 
-const int n = 400;                                                      //网格数量 
-const int RP_Method = 1;                                                //Riemann Solver的具体方法  
+const int n = 800;                                                      //网格数量 
 const int Recon_Accur = 3;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
                                                                         //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：                                              
 const int Control_Compution = 0;
-const int Control_output = 50;
+const int Control_output = 100;
+const int GhostCell = 3;
 
+
+int RP_Method;                                                //Riemann Solver的具体方法 
 //Riemann Solver
-int scheme;                                                   
+int scheme;                                                  
 int main(int argc, char *argv[]) {
 
-    scheme = Get_RP_input(argc, argv);
+    int N_ngc = n + 2*GhostCell; 
+
+    Get_RP_Parameters(argc, argv, &RP_Method, &scheme);
 
     double t = 0;
     double L = 1.,       Tmax = 0.14;       //计算域参数
-    double CFL = 0.6; 
+    double CFL = 0.1; 
     double gamma = 1.4;                     //物性参数
     double Delta_x;
     double Delta_T;
 
     // 添加声明，2个虚拟网格
+    
     double x[n];
-    double pri[3][n+4];
-    double U[3][n+4];
-    double FU[3][n+4];
+    double pri[3][N_ngc];
+    double U[3][N_ngc];
+    double FU[3][N_ngc];
     double pri_Ver1[3], pri_Ver2[3];
 
     Delta_x = L / n; 
     int Ite = 0;
 
 //初始条件
-    double u_r = 2.0;
+    double u_r = 0.0;
 
     Init_Sod(pri_Ver1,pri_Ver2);                       
 //    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                  //激波对撞 
 //    Init_DRare(pri_Ver1,pri_Ver2,u_r);  
-//    Init_Shock3(pri_Ver1,pri_Ver2);  
+//   Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
   
     //mesh
     Mesh(n,Delta_x,x);
     printf("Mesh successfully!\n");
 
-    Init_Euler(3,n+4,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
+    Init_Euler(3,N_ngc,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
     printf("Euler equation initialization successful!\n");
 
 
@@ -93,19 +100,19 @@ int main(int argc, char *argv[]) {
         case 0:
             //时间推进：时间一阶和时间二阶格式
             for (t = 0; t < Tmax; t = t+Delta_T) {
-                Delta_T = Get_Delta_T(3,n+4,U,Delta_x,CFL,gamma);
+                Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x,CFL,gamma);
                 if (t + Delta_T > Tmax)
                     Delta_T = Tmax - t ;
 
                 switch (RP_Method) {
                     case 0:
-                        RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TVD(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
                         break;
                     case 1:
-                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
+                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
                         break;
                 }
                 Ite++;
@@ -120,13 +127,13 @@ int main(int argc, char *argv[]) {
                 Delta_T = 0.2*Delta_x;
                 switch (RP_Method) {
                     case 0:
-                        RK1_TVD(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TVD(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
                         break;
                     case 1:
-                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,n+4,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
+                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
                         break;
                 }
                 Ite++;
@@ -143,9 +150,9 @@ int main(int argc, char *argv[]) {
     printf("end of calculation!\n");
 
     //实现输出最后的结果
-    Con_to_Pri_1D(3,n+4,pri,U,gamma);
+    Con_to_Pri_1D(3,N_ngc,pri,U,gamma);
     //打开文件并输出结果
-    OutputData_file(0,n+4,x,U,FU,pri,t);
+    OutputData_file(0,N_ngc,GhostCell,x,U,FU,pri,t);
     
     printf("The program has completed its execution.\n");
     return 0;
@@ -153,38 +160,62 @@ int main(int argc, char *argv[]) {
 }
 
 
-// 函数定义：从命令行参数或用户输入获取黎曼求解器方案
-int Get_RP_input(int argc, char *argv[]) {
-    int selected_scheme;
-    
-    if (argc > 1) {
-        selected_scheme = atoi(argv[1]);
-        printf("Using scheme %d from command line argument\n", selected_scheme);
-    } else {
-        // 显示可用的黎曼求解器选项
-        printf("Available Riemann Solvers:\n");
-        printf("0: Lax\n");
-        printf("1: Rusanov\n");
-        printf("2: HLL\n");
-        printf("3: HLLC\n");
-        printf("4: Roe\n");
-        printf("5: Marquina\n");
-        printf("6: StegerWarming\n");
-        printf("7: VanLeer\n");
-        printf("8: LiouSteffen\n");
-        printf("Other: Exact Riemann\n");
+// 函数定义：同时获取RP_Method和scheme两个参数
+// 函数定义：同时获取RP_Method和scheme两个参数
+void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme) {
+    // 先显示所有可选择的内容
+    printf("╔═══════════════════════════════════════════════════╗\n");
+    printf("║               Available Options                   ║\n");
+    printf("╠═══════════════════════════════════════════════════╣\n");
+    printf("║ RP Methods:                                       ║\n");
+    printf("║   0: Origin                                       ║\n");
+    printf("║   1: Heat Conduction                              ║\n");
+    printf("║                                                   ║\n");
+    printf("║ Riemann Solvers:                                  ║\n");
+    printf("║   0: Lax                                          ║\n");
+    printf("║   1: Rusanov                                      ║\n");
+    printf("║   2: HLL                                          ║\n");
+    printf("║   3: HLLC                                         ║\n");
+    printf("║   4: Roe                                          ║\n");
+    printf("║   5: Marquina                                     ║\n");
+    printf("║   6: StegerWarming                                ║\n");
+    printf("║   7: VanLeer                                      ║\n");
+    printf("║   8: LiouSteffen                                  ║\n");
+    printf("║   Other: Exact Riemann                            ║\n");
+    printf("╚═══════════════════════════════════════════════════╝\n\n");
+
+    if (argc > 2) {
+        // 有两个命令行参数
+        *RP_Method = atoi(argv[1]);
+        *scheme = atoi(argv[2]);
+        printf("✓ Using RP_Method %d and scheme %d from command line arguments\n", *RP_Method, *scheme);
+    } else if (argc > 1) {
+        // 只有一个命令行参数，提示用户输入另一个
+        *RP_Method = atoi(argv[1]);
+        printf("✓ Using RP_Method %d from command line argument\n", *RP_Method);
         
         printf("Please enter the scheme value (0-8): ");
-        scanf("%d", &selected_scheme);
-        printf("Using scheme %d from user input\n", selected_scheme);
+        scanf("%d", scheme);
+        printf("✓ Using scheme %d from user input\n", *scheme);
+    } else {
+        // 没有命令行参数，交互式输入两个参数（合并为一行）
+        printf("Please enter RP_Method and scheme values (0-1, 0-8): ");
+        scanf("%d %d", RP_Method, scheme);
+        
+        printf("✓ Using RP_Method %d and scheme %d from user input\n", *RP_Method, *scheme);
     }
 
     // 验证输入的有效性
-    if (selected_scheme < 0 || selected_scheme >= 10) {
-        printf("Warning: Scheme value %d is outside recommended range (0-8)\n", selected_scheme);
+    if (*RP_Method < 0 || *RP_Method > 1) {
+        printf("⚠ Warning: RP_Method value %d is outside recommended range (0-1)\n", *RP_Method);
+    }
+    
+    if (*scheme < 0 || *scheme > 8) {
+        printf("⚠ Warning: Scheme value %d is outside recommended range (0-8)\n", *scheme);
         printf("Using Exact Riemann solver as default\n");
     }
-    return selected_scheme;
+    
+    printf("\n");
 }
 
 
@@ -192,8 +223,8 @@ int Get_RP_input(int argc, char *argv[]) {
 void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
     double rho2 = 0.125;
-    double u1 = 0;
-    double u2 = 0;
+    double u1 = 0.0;
+    double u2 = 0.0;
     double p1 = 1.0;
     double p2 = 0.1;
 
@@ -323,7 +354,7 @@ void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
     double rho1 = 1.0;
     double rho2 = 1.0;
     double u1 = 4.0;
-    double u2 = 4.0;
+    double u2 = -4.0;
     double p1 = 1.0;
     double p2 = 1.0;
 
@@ -345,7 +376,7 @@ void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double
     initEuler1D(3, cols, z);
     //进一步初始化
     initEulerpri1D_Shocktube(3, cols, x,pri_Ver1,pri_Ver2);
-    //initEulerpri1D_Osher(3, cols, pri, x);
+//    initEulerpri1D_Osher(3, cols,6,x, 10.0/(cols-6));
     initEulerconser1D(3, cols,x, y, gamma);
     initEulerflux1D(3, cols, y,z, gamma);
 }
@@ -367,16 +398,16 @@ void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int co
     for (int k = 0; k < l; k++) {
         //计算格式
         //RK1_TVD(vis, scheme, 3, cols, x, U, FU, 1e-10, deltax, CFL, gamma, k+1);
-        //RK_2Roe(vis, scheme, 3, n+4, U, FU, deltat, deltax, CFL);
+        //RK_2Roe(vis, scheme, 3, N_ngc, U, FU, deltat, deltax, CFL);
 
         t += *deltat;
         Con_to_Pri_1D(3, cols, pri, U,gamma);
-        OutputData_file(k+1,cols,x,U,FU,pri,t);
+//        OutputData_file(k+1,cols,x,U,FU,pri,t);
     }
 }
 
 
-void OutputData_file(int k, int cols, double* x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols] , double t) {
+void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols], double t) {
     // 文件输出
     printf("Output result(rho, u, p, T, U_M, U_E)\n");
     if (k == 0)
@@ -389,9 +420,9 @@ void OutputData_file(int k, int cols, double* x, double (*U)[cols], double (*FU)
             return; // 返回错误代码
         }
         fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t rhoE_K\t rhoE_I\t F_rho\t F_rhou\t F_rhoE\n");
-        for (int i = 2; i < cols-2 ; i++) {
+        for (int i = GC; i < cols-GC-1 ; i++) {
             fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",\
-                        x[i-2], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
+                        x[i-GC], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
                         U[1][i], U[2][i], 0.5*pri[1][i]*U[1][i], pri[2][i]/(1.4-1) , \
                         U[1][i], U[1][i] * pri[1][i] + pri[2][i] ,pri[1][i] * (U[2][i] + pri[2][i]));
         }
