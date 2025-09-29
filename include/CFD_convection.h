@@ -43,7 +43,7 @@ static inline void Flux_Reconstruction_RP(int Recon_Accur, int AR_scheme, int ro
             break;
         case 5:
 //            WENO5_Reconstruction(rows,cols,GC,y,coverl,coverr);
-//            WENO5_Reconstruction_C(rows,cols,GC,y,coverl,coverr,gamma);
+            WENO5_Reconstruction_C(rows,cols,GC,y,coverl,coverr,gamma);
             break;
 
         default:

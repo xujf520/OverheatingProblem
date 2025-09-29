@@ -1,8 +1,9 @@
-#ifndef WENO_FLUX_H
-#define WENO_FLUX_H
+#ifndef FLUX_H
+#define FLUX_H
 
 #include <stdio.h>
 #include <math.h>
+#include "Characteriz.h"
 
 // 定义全局变量来累加 p_star - 2.926650
 static int Ite = 0;
@@ -1774,46 +1775,7 @@ static inline void Reconstruction_Godunov(int rows, int cols, int GC, double (*y
 
     Con_to_Pri_1D(3,cols,Pri,y,gamma);
     //计算特征矩阵
-	for(int j = 0;  j < cols; j++) {
-			
-        double  q2, c2, b1, b2;
-        double _u, _H, _c, _uc;
-        //preparing some interval value
-        _u = Pri[1][j];
-        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
-        q2 = _u*_u ;
-        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
-        _c = sqrt(c2);
-        _uc = _u*_c;
-        b1 = (gamma - 1.0)/(2.0*c2);
-        b2 = 1.0 + b1*q2 - b1*_H;
-        // left eigen vectors 
-        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
-        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
-        eigen_l[0][2][j] = 0.5*b1;
-            
-        eigen_l[1][0][j] = -q2 + _H;
-        eigen_l[1][1][j] = _u;;
-        eigen_l[1][2][j] = -1.0;
-
-        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
-        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
-        eigen_l[2][2][j] = 0.5*b1;
-
-        //right eigen vectors
-        eigen_r[0][0][j] = 1.0;
-        eigen_r[0][1][j] = b1;
-        eigen_r[0][2][j] = 1.0;
-            
-        eigen_r[1][0][j] = _u - _c;
-        eigen_r[1][1][j] = _u*b1;
-        eigen_r[1][2][j] = _u + _c;
-
-        eigen_r[2][0][j] = _H - _u*_c;
-        eigen_r[2][1][j] = _H*b1 - 1.0;
-        eigen_r[2][2][j] = _H + _u*_c;
-
-    }
+	Compute_Eigen_Matrix(3, rows, cols, gamma, Pri, eigen_l, eigen_r);
 
     //投影到特征空间，计算特征变量：
     for (int k = 0; k < rows; k++){
@@ -1867,46 +1829,7 @@ static inline void TVD_Reconstruction(int rows, int cols, int GC,double (*y)[col
 
     Con_to_Pri_1D(3,cols,Pri,y,gamma);
     //计算特征矩阵
-	for(int j = 0;  j < cols; j++) {
-			
-        double  q2, c2, b1, b2;
-        double _u, _H, _c, _uc;
-        //preparing some interval value
-        _u = Pri[1][j];
-        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
-        q2 = _u*_u ;
-        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
-        _c = sqrt(c2);
-        _uc = _u*_c;
-        b1 = (gamma - 1.0)/(2.0*c2);
-        b2 = 1.0 + b1*q2 - b1*_H;
-        // left eigen vectors 
-        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
-        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
-        eigen_l[0][2][j] = 0.5*b1;
-            
-        eigen_l[1][0][j] = -q2 + _H;
-        eigen_l[1][1][j] = _u;;
-        eigen_l[1][2][j] = -1.0;
-
-        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
-        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
-        eigen_l[2][2][j] = 0.5*b1;
-
-        //right eigen vectors
-        eigen_r[0][0][j] = 1.0;
-        eigen_r[0][1][j] = b1;
-        eigen_r[0][2][j] = 1.0;
-            
-        eigen_r[1][0][j] = _u - _c;
-        eigen_r[1][1][j] = _u*b1;
-        eigen_r[1][2][j] = _u + _c;
-
-        eigen_r[2][0][j] = _H - _u*_c;
-        eigen_r[2][1][j] = _H*b1 - 1.0;
-        eigen_r[2][2][j] = _H + _u*_c;
-
-    }
+	Compute_Eigen_Matrix(3, rows, cols, gamma, Pri, eigen_l, eigen_r);
 
     //投影到特征空间，计算特征变量：
     for (int k = 0; k < rows; k++){
@@ -1995,47 +1918,7 @@ static inline void WENO3_Reconstruction(int rows, int cols, int GC,double (*y)[c
 
     Con_to_Pri_1D(3,cols,Pri,y,gamma);
     //计算特征矩阵
-	for(int j = 0;  j < cols; j++) {
-			
-        double  q2, c2, b1, b2;
-        double _u, _H, _c, _uc;
-        //preparing some interval value
-        _u = Pri[1][j];
-        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
-        q2 = _u*_u ;
-        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
-        _c = sqrt(c2);
-        _uc = _u*_c;
-        b1 = (gamma - 1.0)/(2.0*c2);
-        b2 = 1.0 + b1*q2 - b1*_H;
-        // left eigen vectors 
-        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
-        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
-        eigen_l[0][2][j] = 0.5*b1;
-            
-        eigen_l[1][0][j] = -q2 + _H;
-        eigen_l[1][1][j] = _u;;
-        eigen_l[1][2][j] = -1.0;
-
-        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
-        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
-        eigen_l[2][2][j] = 0.5*b1;
-
-        //right eigen vectors
-        eigen_r[0][0][j] = 1.0;
-        eigen_r[0][1][j] = b1;
-        eigen_r[0][2][j] = 1.0;
-            
-        eigen_r[1][0][j] = _u - _c;
-        eigen_r[1][1][j] = _u*b1;
-        eigen_r[1][2][j] = _u + _c;
-
-        eigen_r[2][0][j] = _H - _u*_c;
-        eigen_r[2][1][j] = _H*b1 - 1.0;
-        eigen_r[2][2][j] = _H + _u*_c;
-
-    }
-
+	Compute_Eigen_Matrix(3, rows, cols, gamma, Pri, eigen_l, eigen_r);
     //投影到特征空间，计算特征变量：
     for (int k = 0; k < rows; k++){
         for (int j = 0; j < cols; j++){
@@ -2192,47 +2075,7 @@ static inline void WENO5_Reconstruction_C(int rows, int cols, int GC, double (*y
 
     Con_to_Pri_1D(3,cols,Pri,y,gamma);
     //计算特征矩阵
-	for(int j = 0;  j < cols; j++) {
-			
-        double  q2, c2, b1, b2;
-        double _u, _H, _c, _uc;
-        //preparing some interval value
-        _u = Pri[1][j];
-        _H = 0.5 * pow(Pri[1][j],2) + gamma * Pri[2][j] /((gamma-1) * Pri[0][j]);
-        q2 = _u*_u ;
-        c2 = (gamma - 1.0)*(_H - 0.5*q2); 						//sound speed form H
-        _c = sqrt(c2);
-        _uc = _u*_c;
-        b1 = (gamma - 1.0)/(2.0*c2);
-        b2 = 1.0 + b1*q2 - b1*_H;
-        // left eigen vectors 
-        eigen_l[0][0][j] = 0.5*(b2 + _u/_c);
-        eigen_l[0][1][j] = -0.5*(b1*_u + 1/_c);
-        eigen_l[0][2][j] = 0.5*b1;
-            
-        eigen_l[1][0][j] = -q2 + _H;
-        eigen_l[1][1][j] = _u;;
-        eigen_l[1][2][j] = -1.0;
-
-        eigen_l[2][0][j] = 0.5*(b2 - _u/_c);
-        eigen_l[2][1][j] = 0.5*(-b1*_u + 1/_c);
-        eigen_l[2][2][j] = 0.5*b1;
-
-        //right eigen vectors
-        eigen_r[0][0][j] = 1.0;
-        eigen_r[0][1][j] = b1;
-        eigen_r[0][2][j] = 1.0;
-            
-        eigen_r[1][0][j] = _u - _c;
-        eigen_r[1][1][j] = _u*b1;
-        eigen_r[1][2][j] = _u + _c;
-
-        eigen_r[2][0][j] = _H - _u*_c;
-        eigen_r[2][1][j] = _H*b1 - 1.0;
-        eigen_r[2][2][j] = _H + _u*_c;
-
-    }
-
+	Compute_Eigen_Matrix(3, rows, cols, gamma, Pri, eigen_l, eigen_r);
     //投影到特征空间，计算特征变量：
     for (int k = 0; k < rows; k++){
         for (int j = 0; j < cols; j++){
