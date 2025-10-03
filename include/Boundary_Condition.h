@@ -172,6 +172,66 @@ static inline void BC_OutFlow(int rows, int cols,double (*x)[cols], int Control_
 }
 
 
+//出口边界条件设计
+static inline void BC_Periodicity(int rows, int cols,double (*x)[cols], int Control_Pos, int Ghost_cell){
+    switch (Control_Pos){
+
+        //左边界周期性！！！！！
+        case 0:
+            switch (Ghost_cell){
+                case 1:                                                                 //此时填充虚拟网格为1
+                    for (int i = 0; i <= 2; i++)
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];                                      
+                    break;
+                case 2:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];             
+                        x[i][Ghost_cell-2] = x[i][cols-Ghost_cell-2];             
+                    }
+                       
+                    break;
+                case 3:                                                                 //此时填充虚拟网格为3
+                    for (int i = 0; i <= 2; i++){
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];             
+                        x[i][Ghost_cell-2] = x[i][cols-Ghost_cell-2];             
+                        x[i][Ghost_cell-3] = x[i][cols-Ghost_cell-3];             
+                    }
+                       
+                    break;
+                //填充更多的虚拟网格，程序待完成
+                default:
+                    break;
+            }
+            break;
+
+        
+        case 1:
+            switch (Ghost_cell){
+                case 1:                                                                 //此时填充虚拟网格为1
+                    for (int i = 0; i <= 2; i++)
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];       
+                    break;
+                case 2:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];                  
+                        x[i][cols-Ghost_cell+1] = x[i][Ghost_cell+1];                  
+                    }
+                    break;
+                case 3:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];                  
+                        x[i][cols-Ghost_cell+1] = x[i][Ghost_cell+1];                  
+                        x[i][cols-Ghost_cell+2] = x[i][Ghost_cell+2];                  
+                    }
+                    break;
+                default:
+                    break;
+            }
+            break;
+    }
+}
+
+
 
 //指定固定数值给边界条件
 static inline void BC_In_rho(int rows, int cols,double (*x)[cols], int Control_Pos, int Ghost_cell){

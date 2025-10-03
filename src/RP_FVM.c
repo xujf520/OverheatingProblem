@@ -2,30 +2,31 @@
 #include <stdlib.h>
 #include <math.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "initialize.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
 #include "Boundary_Condition.h"
 #include "time_advance.h"
 #include "scheme.h"
-
+#include "Golbal.h"
 
 /*                                            *********                                          */
 /*                                            声明子程序                                          */
 /*                                            *********                                          */
 // 控制计算步数子程序
 void StepLoop();
-void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols], double t);
+void OutputData_file();
 //初始条件子程序
-void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_Sod_Rare(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_Sod_Shock(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r);
-void Init_Shock_Impact(double pri_Ver1[3], double pri_Ver2[3],double u_r);
-void Init_Shock1(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]);
-void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3],double gamma);
+void Init_Sod();
+void Init_Sod_Rare();
+void Init_Sod_Shock();
+void Init_DRare();
+void Init_Shock_Impact();
+void Init_Shock1();
+void Init_Shock2();
+void Init_Shock3();
+void Init_Euler();
 
 // 读取黎曼问题
 int Get_RP_Method(int argc, char *argv[]);
@@ -44,12 +45,10 @@ void Mesh(int n, double deltax, double *x);
 //网格参数
  
 
-const int n = 800;                                                      //网格数量 
-const int Recon_Accur = 3;                                              //重构方式控制变量{0是0阶，1是2阶段TVD格式；3是3阶weno，5是5阶weno重构}
-                                                                        //TVD包括Vanleer Limter，Minmod limter等，具体在CFD_convection.h中修改：                                              
+const int n = 160;                                                      //网格数量                                              
 const int Control_Compution = 0;
 const int Control_output = 100;
-const int GhostCell = 3;
+
 
 
 int RP_Method;                                                //Riemann Solver的具体方法 
@@ -57,14 +56,13 @@ int RP_Method;                                                //Riemann Solver�
 int scheme;                                                  
 int main(int argc, char *argv[]) {
 
-    int N_ngc = n + 2*GhostCell; 
+    int N_ngc = n + 2 * GhostCell; 
 
     Get_RP_Parameters(argc, argv, &RP_Method, &scheme);
 
     double t = 0;
-    double L = 1.,       Tmax = 0.14;       //计算域参数
-    double CFL = 0.1; 
-    double gamma = 1.4;                     //物性参数
+    double L = 1.,       Tmax = 2.0;       //计算域参数
+    double CFL = 0.4; 
     double Delta_x;
     double Delta_T;
 
@@ -92,48 +90,50 @@ int main(int argc, char *argv[]) {
     Mesh(n,Delta_x,x);
     printf("Mesh successfully!\n");
 
-    Init_Euler(3,N_ngc,pri,U,FU,pri_Ver1,pri_Ver2,gamma);            //初始化欧拉方程
+    Init_Euler(3,N_ngc,GhostCell,pri,U,FU,pri_Ver1,pri_Ver2,Delta_x);            //初始化欧拉方程
     printf("Euler equation initialization successful!\n");
 
 
     switch (Control_Compution){
         case 0:
             //时间推进：时间一阶和时间二阶格式
-            for (t = 0; t < Tmax; t = t+Delta_T) {
-                Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x,CFL,gamma);
-                if (t + Delta_T > Tmax)
+            for (t = 0.0; t < Tmax; t = t+Delta_T) {
+                Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x,CFL);
+                if (t + Delta_T >= Tmax)
                     Delta_T = Tmax - t ;
 
                 switch (RP_Method) {
                     case 0:
-                        RK1_TVD(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        //RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x, u_r);
+                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
                         break;
                     case 1:
-                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+//                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
+                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
+                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
                         break;
                 }
                 Ite++;
                 if (Ite % Control_output == 0 )
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
+                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t+Delta_T, Ite);
             }
             break;
         case 1:
             //迭代步数控制
-            t = 0;
-            for (int m = 0; m <= 20; m++) {
-                Delta_T = 0.2*Delta_x;
+            t = 0.0;
+            for (int m = 0; m <= 399; m++) {
+                Delta_T = 0.1*Delta_x;
                 switch (RP_Method) {
                     case 0:
-                        RK1_TVD(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
                         break;
                     case 1:
-                        RK1_TVD_RP_HeatConduction(Recon_Accur,scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);
+                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(Recon_Accur,scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,gamma,1,u_r);     
+                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
                         break;
                 }
                 Ite++;
@@ -146,13 +146,16 @@ int main(int argc, char *argv[]) {
         default:
             break;
     }
+
     printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
     printf("end of calculation!\n");
 
     //实现输出最后的结果
-    Con_to_Pri_1D(3,N_ngc,pri,U,gamma);
+    Con_to_Pri_1D(3,N_ngc,pri,U);
     //打开文件并输出结果
     OutputData_file(0,N_ngc,GhostCell,x,U,FU,pri,t);
+
+    Scheme_Error(3,N_ngc,GhostCell,U,Delta_x);
     
     printf("The program has completed its execution.\n");
     return 0;
@@ -369,16 +372,18 @@ void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
 }
 
 
-void Init_Euler(int rows, int cols ,double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3] ,double gamma){
+void Init_Euler(int rows,int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3], double Deltax){
     //初始化
     initEuler1D(3, cols, x);
     initEuler1D(3, cols, y);
     initEuler1D(3, cols, z);
     //进一步初始化
-    initEulerpri1D_Shocktube(3, cols, x,pri_Ver1,pri_Ver2);
+//    initEulerpri1D_Smooth(3, cols, GC, x, Deltax);
+//    initEulerpri1D_Shocktube(3, cols, x,pri_Ver1,pri_Ver2);
 //    initEulerpri1D_Osher(3, cols,6,x, 10.0/(cols-6));
-    initEulerconser1D(3, cols,x, y, gamma);
-    initEulerflux1D(3, cols, y,z, gamma);
+    initEulerConser_Smooth(3, cols,GC, y, Deltax);
+//    initEulerconser1D(3, cols,x, y);
+    initEulerflux1D(3, cols, y,z);
 }
 
 
@@ -401,7 +406,7 @@ void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int co
         //RK_2Roe(vis, scheme, 3, N_ngc, U, FU, deltat, deltax, CFL);
 
         t += *deltat;
-        Con_to_Pri_1D(3, cols, pri, U,gamma);
+        Con_to_Pri_1D(3, cols, pri, U);
 //        OutputData_file(k+1,cols,x,U,FU,pri,t);
     }
 }
@@ -420,7 +425,7 @@ void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], dou
             return; // 返回错误代码
         }
         fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t rhoE_K\t rhoE_I\t F_rho\t F_rhou\t F_rhoE\n");
-        for (int i = GC; i < cols-GC-1 ; i++) {
+        for (int i = GC; i <= cols-GC-1 ; i++) {
             fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",\
                         x[i-GC], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
                         U[1][i], U[2][i], 0.5*pri[1][i]*U[1][i], pri[2][i]/(1.4-1) , \

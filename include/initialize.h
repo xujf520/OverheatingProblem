@@ -3,8 +3,16 @@
 
 
 #include <stdio.h>
+#include "Golbal.h"
 #include "math.h"
 #include "function.h"
+
+
+// 定义圆周率PI常量
+#ifndef PI
+    #define PI 3.14159265358979323846
+#endif
+
 
 static inline void initialize(double *x,int n){
     int i;
@@ -60,6 +68,17 @@ static inline void initEulerpri1D_Sod(int rows, int cols,double (*x)[cols]) {
 }
 
 
+static inline void initEulerpri1D_Smooth(int rows, int cols, int GC, double (*x)[cols], double Deltax) {
+
+    for (int j = 0; j < cols; j++) {
+        x[0][j] = 2.0 - 1.0/( 4.0 * PI )*(cos(4.0 * PI * (j+1-GC) * Deltax)-cos(4.0 * PI * (j-GC) * Deltax))/Deltax;
+        x[1][j] = 1.0;
+        x[2][j] = 1.0;
+    }
+
+}
+
+
 
 static inline void initEulerpri1D_Osher(int rows, int cols, int GC, double (*pri)[cols], double Deltax) {
     int i, j;
@@ -106,65 +125,44 @@ static inline void initEulerpri1D_Osher(int rows, int cols, int GC, double (*pri
 static inline void initEulerpri1D_Shocktube(int rows, int cols,double (*x)[cols], double pri1[3],double pri2[3]) {
     int i, j;
     for (i = 0; i < rows; i++) {
-        if(i == 0){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = pri1[i];
-                }
-                else{
-                    x[i][j] = pri2[i];
-                }
-            }
-        }
-        if(i == 1){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = pri1[i];
-                }
-                else{
-                    x[i][j] = pri2[i];
-                }
-            }
-        }
-        if(i == 2){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = pri1[i];
-                }
-                else{
-                    x[i][j] = pri2[i];
-                }
-            }
+        for (j = 0; j < cols; j++) {
+            if( j <cols/2)
+                x[i][j] = pri1[i];
+            else
+                x[i][j] = pri2[i];
         }
     }
-
-    /*x[0][200] = 2.07915619758885;
-    x[1][200] =  0.0;
-    x[2][200] =  2.9266499161421597;
-
-    x[0][201] = 2.07915619758885;
-    x[1][201] =  0.0;
-    x[2][201] =  2.9266499161421597;*/
-    
 }
 
 
-static inline void initEulerconser1D(int rows, int cols,double (*x)[cols],double (*y)[cols], double gamma) {
+static inline void initEulerConser_Smooth(int rows, int cols, int GC, double (*y)[cols], double Deltax) {
+
+    for (int j = 0; j < cols; j++) {
+        y[0][j] = 2.0 - 1.0/( 4.0 * PI )*(cos(4.0 * PI * (j+1-GC) * Deltax)-cos(4.0 * PI * (j-GC) * Deltax))/Deltax;
+        y[1][j] = y[0][j] * 1.0;
+        y[2][j] = 0.5*y[0][j] * 1.0 + 1.0/(M_gamma-1);
+    }
+
+}
+
+static inline void initEulerconser1D(int rows, int cols,double (*x)[cols],double (*y)[cols]) {
     int j;
     for (j = 0; j < cols; j++) {
         y[0][j] = x[0][j];
         y[1][j] = x[1][j] * x[0][j];
-        y[2][j] = x[2][j]/(gamma-1) + 0.5 * x[0][j] * x[1][j] * x[1][j];
+        y[2][j] = x[2][j]/(M_gamma-1) + 0.5 * x[0][j] * x[1][j] * x[1][j];
     }
 }
 
 
-static inline void initEulerflux1D(int rows, int cols,double (*y)[cols],double (*z)[cols],double gamma) {
+
+
+static inline void initEulerflux1D(int rows, int cols,double (*y)[cols],double (*z)[cols]) {
     int j;
     for (j = 0; j < cols; j++) {
         z[0][j] = y[1][j];
-        z[1][j] = y[1][j]*y[1][j]/y[0][j] + (gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j]);
-        z[2][j] = (y[2][j] + (gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j])) * y[1][j]/y[0][j];
+        z[1][j] = y[1][j]*y[1][j]/y[0][j] + (M_gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j]);
+        z[2][j] = (y[2][j] + (M_gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j])) * y[1][j]/y[0][j];
     }
 }
 

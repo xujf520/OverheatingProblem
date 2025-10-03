@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "Golbal.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
 #include "initialize.h"
@@ -14,7 +15,6 @@ int Time_Step = 0;
 //static double momentum_error = 0.0;
 //static double energy_error = 0.0;
 
-
 void OutputFluxData_file();
 void OutputConservationErrors_file(); 
 
@@ -22,20 +22,38 @@ void OutputConservationErrors_file();
 
 
 //TVD重构配合不同Riemann Solver
-static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols]\
-                                            ,double (*z)[cols],double dt,double dx, double gamma, int k, double u_r) {
+static inline void RK1_TimeAd(int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols], double dt,double dx, double u_r) {
     int i,j;
     double Conser_1[3]={0.0}, Conser_2[3]={0.0};
 
+    double Test[rows][cols];
+    double Flux[rows][cols];
+    
+    //初始化参数
+    for ( i = 0; i < rows; i++){
+        for ( j = 0; j < cols; j++){
+            Flux[i][j] = y[i][j];
+        }
+        
+    }
+
 
     //施加边界条件，
-    BC_OutFlow(3,cols,y,0,GC);                       //边界条件说明见具体子程序
-//   BC_Reflect(3,cols,y,1,GC);
-    BC_OutFlow(3,cols,y,1,GC);
-//  BC_In_rho(3,cols,y,1,GC);
-//  BC_OutFlow(3,cols,y,1,GC);
+//    BC_OutFlow(rows,cols,y,0,GC);                       //边界条件说明见具体子程序
+//    BC_OutFlow(rows,cols,y,1,GC);
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
+    for ( i = 0; i < rows; i++)
+    {
+        for ( j = 0; j < cols; j++)
+        {
+            Test[i][j] = y[i][j];
+        }
+        
+    }
+    
 
-    Flux_Reconstruction_RP(Recon_Accur,AR_scheme,rows,cols,GC,y,z,dt,dx,gamma);
+    Flux_Reconstruction_RP(AR_scheme,rows,cols,GC,y,Flux,dt,dx);
 
     // 第一步计算
 /*                                            *********                                          */
@@ -45,8 +63,8 @@ static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols, i
 
     Total_Conser(rows,cols,2,y,Conser_1,dx);
     for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            y[i][j] = y[i][j] - dt*(z[i][j]-z[i][j-1])/dx;
+        for ( j = GC; j <= cols-GC; j++){
+            y[i][j] = y[i][j] - dt*(Flux[i][j]-Flux[i][j-1])/dx;
         }
     }
     Total_Conser(rows,cols,2,y,Conser_2,dx);
@@ -56,17 +74,29 @@ static inline void RK1_TVD(int Recon_Accur, int AR_scheme, int rows, int cols, i
 
 
 //TVD重构配合不同Riemann Solver
-static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols]\
-                                            ,double (*z)[cols],double dt,double dx, double gamma, int k, double u_r) {
+static inline void RK1_TimeAd_RPHeat(int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols],double dt,double dx, double u_r) {
     int i,j;
-     //施加边界条件，
-    BC_OutFlow(3,cols,y,0,2);                       //边界条件说明见具体子程序
-    BC_OutFlow(3,cols,y,1,2);
-//    BC_Reflect(3,cols,y,1,2);
+
+    double Flux[rows][cols];
+    
+    //初始化参数
+    for ( i = 0; i < rows; i++){
+        for ( j = 0; j < cols; j++){
+            Flux[i][j] = y[i][j];
+        }
+        
+    }
+
+
+    //施加边界条件，
+//    BC_OutFlow(rows,cols,y,0,GC);                    
+//    BC_OutFlow(rows,cols,y,1,GC);
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
 
     //AR_scheme is Approximate Riemann Solver
     //数值通量
-    Flux_Reconstruction_RP_Heat(Recon_Accur,AR_scheme,rows,cols,y,z,dt,dx,gamma,GC,u_r);
+    Flux_Reconstruction_RP_Heat(AR_scheme,rows,cols,GC,y,Flux,dt,dx,u_r);
 
     // 第一步计算
 /*                                            *********                                          */
@@ -76,7 +106,7 @@ static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int
 
     for ( i = 0; i < rows; i++){
         for ( j = 1; j < cols-1; j++){
-            y[i][j] = y[i][j] - dt*(z[i][j]-z[i][j-1])/dx;
+            y[i][j] = y[i][j] - dt*(Flux[i][j] - Flux[i][j-1])/dx;
         }
     }
     
@@ -84,8 +114,8 @@ static inline void RK1_TVD_RP_HeatConduction(int Recon_Accur, int AR_scheme, int
 
 
 
-static inline void RK1_TVD_FluxRela(int Recon_Accur, int Rela_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
-                                            ,double (*z)[cols],double dt,double dx, double gamma, int k, double u_r) {
+static inline void RK1_TVD_FluxRela(int Rela_scheme, int rows, int cols , double (*x_d), double (*y)[cols]\
+                                            ,double (*z)[cols],double dt,double dx, int k, double u_r) {
     int i,j;
     //计算时间步长
     //*dt =Get_lamdat(cols,y,dx,CFL,gamma);
@@ -131,6 +161,114 @@ static inline void RK1_TVD_FluxRela(int Recon_Accur, int Rela_scheme, int rows, 
         }
         
     }
+}
+
+
+static inline void RK3_TimeAd_RPHeat(int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols], double dt,double dx, double u_r) {
+    int i,j;
+    double Conser_U1[rows][cols],Conser_U2[rows][cols];
+    double Flux[rows][cols];
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 0; j < cols; j++){
+            Conser_U1[i][j] = Conser_U2[i][j] = 0.0;
+            Flux[i][j] = 0.0;
+        }
+       
+    }
+
+ // 第一步计算
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
+//    BC_OutFlow(3,cols,y,0,GC);                       
+//    BC_OutFlow(3,cols,y,1,GC);
+    Flux_Reconstruction_RP_Heat(AR_scheme,rows,cols,GC,y,Flux,dt,dx,u_r);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            Conser_U1[i][j] = y[i][j] - dt*(Flux[i][j]-Flux[i][j-1])/dx;
+        }
+    }
+
+    //第二步计算
+    BC_Periodicity(rows,cols,Conser_U1,0,GC);
+    BC_Periodicity(rows,cols,Conser_U1,1,GC);
+//    BC_OutFlow(3,cols,Conser_U1,0,GC);                       
+//    BC_OutFlow(3,cols,Conser_U1,1,GC);
+    Flux_Reconstruction_RP_Heat(AR_scheme,rows,cols,GC,Conser_U1,Flux,dt,dx,u_r);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            Conser_U2[i][j] = (3.0/4.0) * y[i][j]  + (1.0/4.0)*(Conser_U1[i][j]- dt*(Flux[i][j]-Flux[i][j-1])/dx);
+        }
+    }
+
+    //第三步计算
+    BC_Periodicity(3,cols,Conser_U2,0,GC);                       
+    BC_Periodicity(3,cols,Conser_U2,1,GC);
+//    BC_OutFlow(3,cols,Conser_U2,0,GC);                       
+//    BC_OutFlow(3,cols,Conser_U2,1,GC);
+    Flux_Reconstruction_RP_Heat(AR_scheme,rows,cols,GC,Conser_U2,Flux,dt,dx,u_r);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            y[i][j] = (1.0/3.0) * y[i][j]  + (2.0/3.0)*(Conser_U2[i][j]- dt*(Flux[i][j]-Flux[i][j-1])/dx);
+        }
+    }
+
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
+}
+
+
+static inline void RK3_TimeAd(int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols], double dt,double dx, double u_r) {
+    int i,j;
+    double Conser_U1[rows][cols],Conser_U2[rows][cols];
+    double Flux[rows][cols];
+    
+    for ( i = 0; i < rows; i++){
+        for ( j = 0; j < cols; j++){
+            Conser_U1[i][j] = Conser_U2[i][j] = 0.0;
+            Flux[i][j] = 0.0;
+        }
+       
+    }
+
+ // 第一步计算
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
+//    BC_OutFlow(3,cols,y,0,GC);                       
+//    BC_OutFlow(3,cols,y,1,GC);
+    Flux_Reconstruction_RP(AR_scheme,rows,cols,GC,y,Flux,dt,dx);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            Conser_U1[i][j] = y[i][j] - dt*(Flux[i][j]-Flux[i][j-1])/dx;
+        }
+    }
+
+    //第二步计算
+    BC_Periodicity(rows,cols,Conser_U1,0,GC);
+    BC_Periodicity(rows,cols,Conser_U1,1,GC);
+//    BC_OutFlow(3,cols,Conser_U1,0,GC);                       
+//    BC_OutFlow(3,cols,Conser_U1,1,GC);
+    Flux_Reconstruction_RP(AR_scheme,rows,cols,GC,Conser_U1,Flux,dt,dx);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            Conser_U2[i][j] = (3.0/4.0) * y[i][j]  + (1.0/4.0)*(Conser_U1[i][j]- dt*(Flux[i][j]-Flux[i][j-1])/dx);
+        }
+    }
+
+    //第三步计算
+    BC_Periodicity(3,cols,Conser_U2,0,GC);                       
+    BC_Periodicity(3,cols,Conser_U2,1,GC);
+//    BC_OutFlow(3,cols,Conser_U2,0,GC);                       
+//    BC_OutFlow(3,cols,Conser_U2,1,GC);
+    Flux_Reconstruction_RP(AR_scheme,rows,cols,GC,Conser_U2,Flux,dt,dx);
+    for ( i = 0; i < rows; i++){
+        for ( j = GC; j <= cols-GC-1; j++){
+            y[i][j] = (1.0/3.0) * y[i][j]  + (2.0/3.0)*(Conser_U2[i][j]- dt*(Flux[i][j]-Flux[i][j-1])/dx);
+        }
+    }
+
+    BC_Periodicity(rows,cols,y,0,GC);
+    BC_Periodicity(rows,cols,y,1,GC);
 }
 
 

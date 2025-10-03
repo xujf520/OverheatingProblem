@@ -3,9 +3,10 @@
 
 #include <stdio.h>
 #include <math.h>
+#include "Golbal.h"
 
 
-static inline void Compute_Eigen_Matrix(int rowss, int rows, int cols, double gamma, double (*Pri)[cols], double (*eigen_l)[rows][cols], double (*eigen_r)[rows][cols]) {
+static inline void Compute_Eigen_Matrix(int rowss, int rows, int cols, double (*Pri)[cols], double (*eigen_l)[rows][cols], double (*eigen_r)[rows][cols]) {
     
     for(int j = 0; j < cols; j++) {
         double q2, c2, b1, b2;
@@ -13,12 +14,12 @@ static inline void Compute_Eigen_Matrix(int rowss, int rows, int cols, double ga
         
         // 计算中间变量
         _u = Pri[1][j];
-        _H = 0.5 * pow(Pri[1][j], 2) + gamma * Pri[2][j] / ((gamma - 1) * Pri[0][j]);
+        _H = 0.5 * pow(Pri[1][j], 2) + M_gamma * Pri[2][j] / ((M_gamma - 1) * Pri[0][j]);
         q2 = _u * _u;
-        c2 = (gamma - 1.0) * (_H - 0.5 * q2);  // 从焓计算声速
+        c2 = (M_gamma - 1.0) * (_H - 0.5 * q2);  // 从焓计算声速
         _c = sqrt(c2);
         _uc = _u * _c;
-        b1 = (gamma - 1.0) / (2.0 * c2);
+        b1 = (M_gamma - 1.0) / (2.0 * c2);
         b2 = 1.0 + b1 * q2 - b1 * _H;
         
         // 左特征向量
