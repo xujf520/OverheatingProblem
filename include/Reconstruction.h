@@ -516,19 +516,20 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
 
         // 特征重构代码（暂时注释掉）
         Con_to_Pri_2D(rows,cols,depth,Pri,y);
+
         if (dir == 1){
             Compute_Eigen_2D(1.0, 0.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
             
             for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
+                for ( j = GC-1; j < cols-GC; j++) 
+                    for ( k = GC; k < depth-GC; k++)
                         for (int ii = 0; ii < rows; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
 
             for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
+                for ( j = GC-1; j < cols-GC; j++) 
                     for ( k = GC; k < depth-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
@@ -539,8 +540,8 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
                     }
         
             for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
+                for ( j = GC-1; j < cols-GC; j++) 
+                    for ( k = GC; k < depth-GC; k++)
                         for (int ii = 0; ii < rows; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
@@ -552,8 +553,8 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
             Compute_Eigen_2D(0.0, 1.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
             
             for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
+                for ( j = GC; j < cols-GC; j++) 
+                    for ( k = GC-1; k < depth-GC; k++)
                         for (int ii = 0; ii < rows; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
@@ -563,15 +564,15 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
                     for ( k = GC-1; k < depth-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = y[i][j][k-2+nn];
+                            fu[nn] = Chara_Var[i][j][k-2+nn];
 
                         W_L[i][j][k] = WENO5_L(&fu[2]);
                         W_R[i][j][k] = WENO5_R(&fu[2]);
                     }
 
             for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
+                for ( j = GC; j < cols-GC; j++) 
+                    for ( k = GC-1; k < depth-GC; k++)
                         for (int ii = 0; ii < rows; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];

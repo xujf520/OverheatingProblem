@@ -33,8 +33,8 @@ void Mesh_2D();
 /*                                            *********                                          */
 
 //网格参数
-const int L_nx = 200;                                                      //网格数量
-const int L_ny = 200;                                                      //网格数量      
+const int L_nx = 400;                                                      //网格数量
+const int L_ny = 100;                                                      //网格数量      
 const int var = 4;                                        
 
 int RP_Method;                                                //Riemann Solver的具体方法 

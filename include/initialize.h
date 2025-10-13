@@ -252,7 +252,7 @@ static inline void Con_to_Pri_2D(int rows, int cols, int depth, double (*x)[cols
             rho = y[0][j][k];
             u = y[1][j][k]/y[0][j][k];
             v = y[2][j][k]/y[0][j][k];
-            p = (y[3][j][k] - 0.5 * rho * (pow(u,2) - pow(v,2)))*(M_gamma-1);
+            p = (y[3][j][k] - 0.5 * rho * (pow(u,2) + pow(v,2)))*(M_gamma-1);
             //x dir initilize
             x[0][j][k] = rho;
             x[1][j][k] = u;

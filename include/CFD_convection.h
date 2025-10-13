@@ -72,10 +72,10 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
             HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 3:
-//            HLLC_Flux(rows, cols, GC, prileft,priright,Flux);
+            HLLC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 4:
-//            Roe_Flux(rows, cols, GC, prileft,priright,Flux);
+            Roe_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 5:
 //            RS_Marquina(3,cols,y,Flux,dt,dx);
@@ -123,10 +123,10 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
             HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 3:
-//            HLLC_Flux(rows, cols, GC, prileft,priright,Flux);
+            HLLC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 4:
-//            Roe_Flux(rows, cols, GC, prileft,priright,Flux);
+            Roe_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 5:
 //            RS_Marquina(3,cols,y,Flux,dt,dx);

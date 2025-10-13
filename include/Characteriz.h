@@ -134,7 +134,6 @@ static inline void Compute_Eigen_2D(double AA, double BB, int rows, int cols, in
             eigen_r[3][2][j][k] = -vv;
             eigen_r[3][3][j][k] = _H + uu*_c;
 
-
 		}
 	}
     

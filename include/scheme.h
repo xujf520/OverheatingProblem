@@ -212,181 +212,431 @@ static inline void HLL_Flux(int dir, int rows, int cols, int depth, int GC, doub
 
 
 
-static inline void HLLC_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols]) {
+static inline void HLLC_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth] ,double (*z)[cols][depth]) {
+
+
+    if (dir == 1){
+       for (int j = GC-1; j < cols-GC; j++) {
+            for (int k = GC; k < depth-GC; k++){
+                //读取已知的左右原始变量
+                double rho_L = x[0][j][k];
+                double rho_R = y[0][j][k];
+                double rhou_L = x[1][j][k];
+                double rhou_R = y[1][j][k];
+                double rhov_L = x[2][j][k];
+                double rhov_R = y[2][j][k];
+                double rhoe_L = x[3][j][k];
+                double rhoe_R = y[3][j][k];
+
+
+                double u_L = x[1][j][k]/x[0][j][k];
+                double u_R = y[1][j][k]/y[0][j][k];
+                double v_L = x[2][j][k]/x[0][j][k];
+                double v_R = y[2][j][k]/y[0][j][k];
+                double p_L = (x[3][j][k] - 0.5 * rho_L * (pow(u_L,2) + pow(v_L,2)))*(M_gamma-1);
+                double p_R = (y[3][j][k] - 0.5 * rho_R * (pow(u_R,2) + pow(v_R,2)))*(M_gamma-1);
+                
+                //计算声速
+                double a_L = sqrt(M_gamma * p_L / rho_L);
+                double a_R = sqrt(M_gamma * p_R / rho_R);
+
+                //计算总焓H
+                double H_L = 0.5 * pow(u_L,2) +  0.5 * pow(v_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
+                double H_R = 0.5 * pow(u_R,2) +  0.5 * pow(v_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
+
+                //计算左右守恒变量和通量
+
+                double rho_FL = rho_L * u_L;
+                double rho_FR = rho_R * u_R;
+                double rhou_FL = rho_L * u_L * u_L + p_L;
+                double rhou_FR = rho_R * u_R * u_R + p_R;
+                double rhov_FL = rho_L * v_L * u_L;
+                double rhov_FR = rho_R * v_R * u_R;
+                double rhoe_FL = rho_L * H_L * u_L;
+                double rhoe_FR = rho_R * H_R * u_R;
+            
+                //计算Roe平均
+                double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
+                double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
+                double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+
+                //利用Roe平均的变量计算近似波速
+                double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
+                double sleft = ubar - cbar;
+                double sright = ubar + cbar;
+            
+                double s_star = (p_R - p_L + rho_L*u_L*(sleft - u_L) - rho_R*u_R*(sright - u_R))\
+                                        /(rho_L*(sleft - u_L) - rho_R*(sright - u_R));
+                                        
+                double p_star = p_L + rho_L * (sleft-u_L) * (s_star-u_L);
+                double u_stat_L = rho_L * (sleft-u_L)/(sleft-s_star);
+                double u_stat_R = rho_R * (sright-u_R)/(sright-s_star);
+
+                double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L)));
+                double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
+                //确定HLLC数值通量
+                double rho_F = 0, rhou_F = 0, rhov_F = 0,rhoe_F = 0;
+                if (sleft >= 0 ){
+                    rho_F = rho_FL;
+                    rhou_F = rhou_FL;
+                    rhov_F = rhov_FL;
+                    rhoe_F = rhoe_FL;
+                }
+                else if(sleft < 0 && s_star >=0 ){
+                    rho_F = rho_FL + sleft * (u_stat_L - rho_L);
+                    rhou_F = rhou_FL + sleft * (u_stat_L * s_star  - rhou_L);
+                    rhov_F = rhov_FL + sleft * (u_stat_L * v_L  - rhov_L);
+                    rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L);
+                }
+                else if(s_star < 0 && sright > 0){
+                    rho_F = rho_FR + sright * (u_stat_R - rho_R);
+                    rhou_F = rhou_FR + sright * (u_stat_R * s_star  - rhou_R);
+                    rhov_F = rhov_FR + sright * (u_stat_R * v_R  - rhov_R);
+                    rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R);
     
-    for (int j = GC-1; j <= cols-GC; j++) {
-        //读取已知的左右原始变量
-        double rho_L = x[0][j];
-        double rho_R = y[0][j];
-        double u_L = x[1][j];
-        double u_R = y[1][j];
-        double p_L = x[2][j];
-        double p_R = y[2][j];
+                }
+                else if (sright <= 0){
+                    rho_F = rho_FR;
+                    rhou_F = rhou_FR;
+                    rhov_F = rhov_FR;
+                    rhoe_F = rhoe_FR;
+                }
+                z[0][j][k] = rho_F; 
+                z[1][j][k] = rhou_F; 
+                z[2][j][k] = rhov_F;
+                z[3][j][k] = rhoe_F; 
+            }
+        }   
+    }
 
-        //计算需要使用的参数
+    else if (dir == 2){
+        for (int j = GC; j < cols-GC; j++) {
+            for (int k = GC-1; k < depth-GC; k++){
+               //读取已知的左右原始变量
+                double rho_L = x[0][j][k];
+                double rho_R = y[0][j][k];
+                double rhou_L = x[1][j][k];
+                double rhou_R = y[1][j][k];
+                double rhov_L = x[2][j][k];
+                double rhov_R = y[2][j][k];
+                double rhoe_L = x[3][j][k];
+                double rhoe_R = y[3][j][k];
 
-        //计算总焓H
-        double H_L = 0.5 * pow(u_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
-        double H_R = 0.5 * pow(u_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
 
-        //计算左右守恒变量和通量
-        double rho_FL = rho_L * u_L;
-        double rho_FR = rho_R * u_R;
-        double rhou_L = rho_L * u_L;
-        double rhou_R = rho_R * u_R;
-        double rhou_FL = rho_L * u_L*u_L + p_L;
-        double rhou_FR = rho_R * u_R*u_R + p_R;
-        double rhoe_L = 0.5 * rho_L * pow(u_L, 2) + p_L/(M_gamma-1);
-        double rhoe_R = 0.5 * rho_R * pow(u_R, 2) + p_R/(M_gamma-1);
-        double rhoe_FL = rho_L * H_L * u_L;
-        double rhoe_FR = rho_R * H_R * u_R;
+                double u_L = x[1][j][k]/x[0][j][k];
+                double u_R = y[1][j][k]/y[0][j][k];
+                double v_L = x[2][j][k]/x[0][j][k];
+                double v_R = y[2][j][k]/y[0][j][k];
+                double p_L = (x[3][j][k] - 0.5 * rho_L * (pow(u_L,2) + pow(v_L,2)))*(M_gamma-1);
+                double p_R = (y[3][j][k] - 0.5 * rho_R * (pow(u_R,2) + pow(v_R,2)))*(M_gamma-1);
+
+                //计算总焓H
+                double H_L = 0.5 * pow(u_L,2) +  0.5 * pow(v_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
+                double H_R = 0.5 * pow(u_R,2) +  0.5 * pow(v_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
+
+                //计算左右守恒变量和通量
+                double rho_GL = rho_L * v_L;
+                double rho_GR = rho_R * v_R;
+                double rhou_GL = rho_L * u_L * v_L;
+                double rhou_GR = rho_R * u_R * v_R;
+                double rhov_GL = rho_L * v_L*v_L + p_L;
+                double rhov_GR = rho_R * v_R*v_R + p_R;
+                double rhoe_GL = rho_L * H_L * v_L;
+                double rhoe_GR = rho_R * H_R * v_R;
+            
+                //计算Roe平均
+                double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
+                double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
+                double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+
+                //利用Roe平均的变量计算近似波速
+                double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
+                double sleft = vbar - cbar;
+                double sright = vbar + cbar;
+            
+                double s_star = (p_R - p_L + rho_L*v_L*(sleft - v_L) - rho_R*v_R*(sright - v_R))\
+                                        /(rho_L*(sleft - v_L) - rho_R*(sright - v_R));
+                                        
+                double p_star = p_L + rho_L * (sleft-v_L) * (s_star-v_L);
+                double v_stat_L = rho_L * (sleft-v_L)/(sleft-s_star);
+                double v_stat_R = rho_R * (sright-v_R)/(sright-s_star);
+
+                double fe_star_L = rhoe_L/rho_L + (s_star-v_L)*(s_star + p_L/(rho_L *(sleft-v_L)));
+                double fe_star_R = rhoe_R/rho_R + (s_star-v_R)*(s_star + p_R/(rho_R *(sright-v_R)));
+                //确定HLLC数值通量
+                double rho_G = 0, rhou_G = 0, rhov_G = 0,rhoe_G = 0;
+                if (sleft >= 0 ){
+                    rho_G = rho_GL;
+                    rhou_G = rhou_GL;
+                    rhov_G = rhov_GL;
+                    rhoe_G = rhoe_GL;
+                }
+                else if(sleft < 0 && s_star >=0 ){
+                    rho_G = rho_GL + sleft * (v_stat_L - rho_L);
+                    rhou_G = rhou_GL + sleft * (v_stat_L * u_L  - rhou_L);
+                    rhov_G = rhov_GL + sleft * (v_stat_L * s_star   - rhov_L);
+                    rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L -  rhoe_L);
+                }
+                else if(s_star < 0 && sright > 0){
+                    rho_G = rho_GR + sright * (v_stat_R - rho_R);
+                    rhou_G = rhou_GR + sright * (v_stat_R * u_R  - rhou_R);
+                    rhov_G = rhov_GR + sright * (v_stat_R * s_star  - rhov_R);
+                    rhoe_G = rhoe_GR + sright * (v_stat_R * fe_star_R -  rhoe_R);
     
-        //计算Roe平均
-        double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
-        double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
+                }
+                else if (sright <= 0){
+                    rho_G = rho_GR;
+                    rhou_G = rhou_GR;
+                    rhov_G = rhov_GR;
+                    rhoe_G = rhoe_GR;
+                }
 
-        //利用Roe平均的变量计算近似波速
-        double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
-        double sleft = ubar - cbar;
-        double sright = ubar + cbar;
-        double s_star = (p_R - p_L + rho_L*u_L*(sleft - u_L) - rho_R*u_R*(sright - u_R))\
-                                 /(rho_L*(sleft - u_L) - rho_R*(sright - u_R));
-                                
-        double p_star = p_L + rho_L * (sleft-u_L) * (s_star-u_L);
-        double u_stat_L = rho_L * (sleft-u_L)/(sleft-s_star);
-        double u_stat_R = rho_R * (sright-u_R)/(sright-s_star);
-        //double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L))) + (p_R/rho_R - p_L/rho_L)/(M_gamma-1);
-        //double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R))) - (p_R/rho_R - p_L/rho_L)/(M_gamma-1);
-        double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L)));
-        double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
-        
-        double P_testL = u_stat_L * fe_star_L  - 0.5 * u_stat_L*pow (s_star, 2) - p_star/(M_gamma-1);
-        double P_testR = u_stat_R * fe_star_R  - 0.5 * u_stat_R*pow (s_star, 2) - p_star/(M_gamma-1);
+                z[0][j][k] = rho_G; 
+                z[1][j][k] = rhou_G; 
+                z[2][j][k] = rhov_G;
+                z[3][j][k] = rhoe_G; 
 
-        //UHLL = ((s_star-sleft)*(u_stat_L*fe_star_L) + (sright -s_star)*(u_stat_R*fe_star_R))/(sright-sleft)
-
-        
-        if (P_testL != 0 || P_testR !=0 )
-        {
-            int teste1;
-            teste1=1;
+            }
         }
-        
-        //HLLC数值通量
-        double test_e = 0;
-        double rho_F = 0, rhou_F = 0, rhoe_F = 0;
-
-
-        if (sleft >= 0 ){
-            rho_F = rho_FL;
-            rhou_F = rhou_FL;
-            rhoe_F = rhoe_FL;
-        }
-        else if(sleft < 0 && s_star >=0 ){
-            rho_F = rho_FL + sleft * (u_stat_L - rho_L);
-            rhou_F = rhou_FL + sleft *(u_stat_L * s_star  - rhou_L);
-            rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L);
-            //rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L) - rho_L * (p_R/rho_R - p_L/rho_L)* fabs(sleft)/(M_gamma-1);
-
-        }
-        else if(s_star < 0 && sright > 0){
-            rho_F = rho_FR + sright * (u_stat_R - rho_R);
-            rhou_F = rhou_FR + sright *(u_stat_R * s_star  - rhou_R);
-            rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R);
-            //rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R) - rho_R * (p_R/rho_R - p_L/rho_L) * fabs(sright)/(M_gamma-1);
-            //double test_fe = 0.5 * u_stat_R *pow (s_star, 2) + p_star/(M_gamma-1);
-            //rhoe_F = rhoe_FR + sright *  (test_fe -  rhoe_R);
-        }
-        else if (sright <= 0){
-            rho_F = rho_FR;
-            rhou_F = rhou_FR;
-            rhoe_F = rhoe_FR;
-        }
-
-        z[0][j] = rho_F; 
-        z[1][j] = rhou_F; 
-        z[2][j] = rhoe_F; 
-        
-    }   
+    }    
 }
 
-
-
-static inline void Roe_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols]) {
+static inline void Roe_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth], double (*z)[cols][depth]) {
     double epsilon = 1e-6;
     
-    for (int j = GC-1; j <= cols-GC; j++) {
-        //读取已知的左右原始变量
-        double rho_L = x[0][j];
-        double rho_R = y[0][j];
-        double u_L = x[1][j];
-        double u_R = y[1][j];
-        double p_L = x[2][j];
-        double p_R = y[2][j];
+    if (dir == 1) { // x方向通量
+        for (int j = GC-1; j < cols-GC; j++) {
+            for (int k = GC; k < depth-GC; k++) {
+                // 读取左右原始变量
+                double rho_L = x[0][j][k];
+                double rho_R = y[0][j][k];
+                double rhou_L = x[1][j][k];
+                double rhou_R = y[1][j][k];
+                double rhov_L = x[2][j][k];
+                double rhov_R = y[2][j][k];
+                double rhoe_L = x[3][j][k];
+                double rhoe_R = y[3][j][k];
 
-        //计算需要使用的参数
+                // 计算原始变量
+                double u_L = rhou_L / rho_L;
+                double u_R = rhou_R / rho_R;
+                double v_L = rhov_L / rho_L;
+                double v_R = rhov_R / rho_R;
+                double p_L = (rhoe_L - 0.5 * rho_L * (u_L*u_L + v_L*v_L)) * (M_gamma-1);
+                double p_R = (rhoe_R - 0.5 * rho_R * (u_R*u_R + v_R*v_R)) * (M_gamma-1);
 
-        //计算总焓H
-        double H_L = 0.5 * pow(u_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
-        double H_R = 0.5 * pow(u_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
+                // 计算总焓H
+                double H_L = 0.5 * (u_L*u_L + v_L*v_L) + (M_gamma/(M_gamma-1)) * (p_L/rho_L);
+                double H_R = 0.5 * (u_R*u_R + v_R*v_R) + (M_gamma/(M_gamma-1)) * (p_R/rho_R);
 
-        //计算左右守恒变量和通量
-        double rho_FL = rho_L * u_L;
-        double rho_FR = rho_R * u_R;
-        double rhou_FL = rho_L * u_L*u_L + p_L;
-        double rhou_FR = rho_R * u_R*u_R + p_R;
-        double rhoe_FL = rho_L * H_L * u_L;
-        double rhoe_FR = rho_R * H_R * u_R;
-    
-        //计算Roe平均物理量
-        double rhobar = sqrt(rho_L * rho_R); 
-        double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
-        double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
-        double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2)));
+                // 计算左右通量 (x方向)
+                double rho_FL = rho_L * u_L;
+                double rho_FR = rho_R * u_R;
+                double rhou_FL = rho_L * u_L*u_L + p_L;
+                double rhou_FR = rho_R * u_R*u_R + p_R;
+                double rhov_FL = rho_L * u_L*v_L;
+                double rhov_FR = rho_R * u_R*v_R;
+                double rhoe_FL = rho_L * H_L * u_L;
+                double rhoe_FR = rho_R * H_R * u_R;
 
+                // 计算Roe平均
+                double sqrt_rho_L = sqrt(rho_L);
+                double sqrt_rho_R = sqrt(rho_R);
+                double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
+                
+                double rhobar = sqrt_rho_L * sqrt_rho_R;
+                double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) / sum_sqrt;
+                double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) / sum_sqrt;
+                double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) / sum_sqrt;
+                double q2bar = ubar*ubar + vbar*vbar;
+                double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * q2bar));
 
-        //利用Roe平均计算稳定项
+                // 计算特征值
+                double lambda[4];
+                lambda[0] = ubar - cbar;
+                lambda[1] = ubar;
+                lambda[2] = ubar;
+                lambda[3] = ubar + cbar;
 
-        double lambda1, lambda2, lambda3;
-        double alpha1, alpha2, alpha3;
-        lambda1 = fabs(ubar - cbar);
-        if (lambda1 < epsilon){
-            lambda1 = (fabs(ubar - cbar) + pow(epsilon,2)) / (2 * epsilon);
+                // 熵修正
+                for (int i = 0; i < 4; i++) {
+                    if (fabs(lambda[i]) < epsilon) {
+                        lambda[i] = (lambda[i]*lambda[i] + epsilon*epsilon) / (2*epsilon);
+                    } else {
+                        lambda[i] = fabs(lambda[i]);
+                    }
+                }
+
+                // 计算波强
+                double drho = rho_R - rho_L;
+                double du = u_R - u_L;
+                double dv = v_R - v_L;
+                double dp = p_R - p_L;
+
+                double alpha1 = (dp - rhobar * cbar * du) / (2 * cbar*cbar);
+                double alpha2 = drho - dp / (cbar*cbar);
+                double alpha3 = rhobar * dv;
+                double alpha4 = (dp + rhobar * cbar * du) / (2 * cbar*cbar);
+
+                // 特征向量 (x方向)
+                double K1[4] = {1, ubar-cbar, vbar, Hbar-ubar*cbar};
+                double K2[4] = {1, ubar, vbar, 0.5*q2bar};
+                double K3[4] = {0, 0, 1, vbar};
+                double K4[4] = {1, ubar+cbar, vbar, Hbar+ubar*cbar};
+
+                // Roe数值通量
+                double rho_F = 0.5 * (rho_FL + rho_FR);
+                double rhou_F = 0.5 * (rhou_FL + rhou_FR);
+                double rhov_F = 0.5 * (rhov_FL + rhov_FR);
+                double rhoe_F = 0.5 * (rhoe_FL + rhoe_FR);
+
+                // 添加耗散项
+                for (int i = 0; i < 4; i++) {
+                    rho_F -= 0.5 * lambda[i] * alpha1 * K1[0];
+                    rhou_F -= 0.5 * lambda[i] * alpha1 * K1[1];
+                    rhov_F -= 0.5 * lambda[i] * alpha1 * K1[2];
+                    rhoe_F -= 0.5 * lambda[i] * alpha1 * K1[3];
+                    
+                    rho_F -= 0.5 * lambda[i] * alpha2 * K2[0];
+                    rhou_F -= 0.5 * lambda[i] * alpha2 * K2[1];
+                    rhov_F -= 0.5 * lambda[i] * alpha2 * K2[2];
+                    rhoe_F -= 0.5 * lambda[i] * alpha2 * K2[3];
+                    
+                    rho_F -= 0.5 * lambda[i] * alpha3 * K3[0];
+                    rhou_F -= 0.5 * lambda[i] * alpha3 * K3[1];
+                    rhov_F -= 0.5 * lambda[i] * alpha3 * K3[2];
+                    rhoe_F -= 0.5 * lambda[i] * alpha3 * K3[3];
+                    
+                    rho_F -= 0.5 * lambda[i] * alpha4 * K4[0];
+                    rhou_F -= 0.5 * lambda[i] * alpha4 * K4[1];
+                    rhov_F -= 0.5 * lambda[i] * alpha4 * K4[2];
+                    rhoe_F -= 0.5 * lambda[i] * alpha4 * K4[3];
+                }
+
+                z[0][j][k] = rho_F;
+                z[1][j][k] = rhou_F;
+                z[2][j][k] = rhov_F;
+                z[3][j][k] = rhoe_F;
+            }
         }
-        lambda2 = fabs(ubar);
-        if (lambda2 < epsilon){
-            lambda2 = (fabs(ubar) + pow(epsilon,2)) / (2 * epsilon);
+    }
+    else if (dir == 2) { // y方向通量
+        for (int j = GC; j < cols-GC; j++) {
+            for (int k = GC-1; k < depth-GC; k++) {
+                // 读取上下原始变量
+                double rho_L = x[0][j][k];
+                double rho_R = y[0][j][k];
+                double rhou_L = x[1][j][k];
+                double rhou_R = y[1][j][k];
+                double rhov_L = x[2][j][k];
+                double rhov_R = y[2][j][k];
+                double rhoe_L = x[3][j][k];
+                double rhoe_R = y[3][j][k];
+
+                // 计算原始变量
+                double u_L = rhou_L / rho_L;
+                double u_R = rhou_R / rho_R;
+                double v_L = rhov_L / rho_L;
+                double v_R = rhov_R / rho_R;
+                double p_L = (rhoe_L - 0.5 * rho_L * (u_L*u_L + v_L*v_L)) * (M_gamma-1);
+                double p_R = (rhoe_R - 0.5 * rho_R * (u_R*u_R + v_R*v_R)) * (M_gamma-1);
+
+                // 计算总焓H
+                double H_L = 0.5 * (u_L*u_L + v_L*v_L) + (M_gamma/(M_gamma-1)) * (p_L/rho_L);
+                double H_R = 0.5 * (u_R*u_R + v_R*v_R) + (M_gamma/(M_gamma-1)) * (p_R/rho_R);
+
+                // 计算左右通量 (y方向)
+                double rho_GL = rho_L * v_L;
+                double rho_GR = rho_R * v_R;
+                double rhou_GL = rho_L * u_L*v_L;
+                double rhou_GR = rho_R * u_R*v_R;
+                double rhov_GL = rho_L * v_L*v_L + p_L;
+                double rhov_GR = rho_R * v_R*v_R + p_R;
+                double rhoe_GL = rho_L * H_L * v_L;
+                double rhoe_GR = rho_R * H_R * v_R;
+
+                // 计算Roe平均
+                double sqrt_rho_L = sqrt(rho_L);
+                double sqrt_rho_R = sqrt(rho_R);
+                double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
+                
+                double rhobar = sqrt_rho_L * sqrt_rho_R;
+                double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) / sum_sqrt;
+                double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) / sum_sqrt;
+                double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) / sum_sqrt;
+                double q2bar = ubar*ubar + vbar*vbar;
+                double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * q2bar));
+
+                // 计算特征值 (y方向)
+                double lambda[4];
+                lambda[0] = vbar - cbar;
+                lambda[1] = vbar;
+                lambda[2] = vbar;
+                lambda[3] = vbar + cbar;
+
+                // 熵修正
+                for (int i = 0; i < 4; i++) {
+                    if (fabs(lambda[i]) < epsilon) {
+                        lambda[i] = (lambda[i]*lambda[i] + epsilon*epsilon) / (2*epsilon);
+                    } else {
+                        lambda[i] = fabs(lambda[i]);
+                    }
+                }
+
+                // 计算波强
+                double drho = rho_R - rho_L;
+                double du = u_R - u_L;
+                double dv = v_R - v_L;
+                double dp = p_R - p_L;
+
+                double alpha1 = (dp - rhobar * cbar * dv) / (2 * cbar*cbar);
+                double alpha2 = drho - dp / (cbar*cbar);
+                double alpha3 = rhobar * du;
+                double alpha4 = (dp + rhobar * cbar * dv) / (2 * cbar*cbar);
+
+                // 特征向量 (y方向)
+                double K1[4] = {1, ubar, vbar-cbar, Hbar-vbar*cbar};
+                double K2[4] = {1, ubar, vbar, 0.5*q2bar};
+                double K3[4] = {0, 1, 0, ubar};
+                double K4[4] = {1, ubar, vbar+cbar, Hbar+vbar*cbar};
+
+                // Roe数值通量
+                double rho_G= 0.5 * (rho_GL + rho_GR);
+                double rhou_G = 0.5 * (rhou_GL + rhou_GR);
+                double rhov_G = 0.5 * (rhov_GL + rhov_GR);
+                double rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
+
+                // 添加耗散项
+                for (int i = 0; i < 4; i++) {
+                    rho_G-= 0.5 * lambda[i] * alpha1 * K1[0];
+                    rhou_G -= 0.5 * lambda[i] * alpha1 * K1[1];
+                    rhov_G -= 0.5 * lambda[i] * alpha1 * K1[2];
+                    rhoe_G -= 0.5 * lambda[i] * alpha1 * K1[3];
+                    
+                    rho_G-= 0.5 * lambda[i] * alpha2 * K2[0];
+                    rhou_G -= 0.5 * lambda[i] * alpha2 * K2[1];
+                    rhov_G -= 0.5 * lambda[i] * alpha2 * K2[2];
+                    rhoe_G -= 0.5 * lambda[i] * alpha2 * K2[3];
+                    
+                    rho_G-= 0.5 * lambda[i] * alpha3 * K3[0];
+                    rhou_G -= 0.5 * lambda[i] * alpha3 * K3[1];
+                    rhov_G -= 0.5 * lambda[i] * alpha3 * K3[2];
+                    rhoe_G -= 0.5 * lambda[i] * alpha3 * K3[3];
+                    
+                    rho_G-= 0.5 * lambda[i] * alpha4 * K4[0];
+                    rhou_G -= 0.5 * lambda[i] * alpha4 * K4[1];
+                    rhov_G -= 0.5 * lambda[i] * alpha4 * K4[2];
+                    rhoe_G -= 0.5 * lambda[i] * alpha4 * K4[3];
+                }
+
+                z[0][j][k] = rho_G;
+                z[1][j][k] = rhou_G;
+                z[2][j][k] = rhov_G;
+                z[3][j][k] = rhoe_G;
+            }
         }
-        lambda3 = fabs(ubar + cbar);
-        if (lambda3 < epsilon){
-            lambda3 = (fabs(ubar + cbar) + pow(epsilon,2)) / (2 * epsilon);
-        }
-
-        alpha1 = ((p_R - p_L) - rhobar * cbar * (u_R - u_L)) / (2 * pow(cbar,2));
-        alpha2 = (rho_R - rho_L) - (p_R - p_L) / pow(cbar,2);
-        alpha3 = ((p_R - p_L) + rhobar * cbar * (u_R - u_L)) / (2 * pow(cbar,2));
-
-
-        //Roe数值通量
-        double rho_F = 0, rhou_F = 0, rhoe_F = 0;
-
-        rho_F = 0.5*(rho_FL + rho_FR) - 0.5 *(lambda1*alpha1 + lambda2*alpha2 + lambda3*alpha3);
-        rhou_F = 0.5 * (rhou_FL + rhou_FR)\
-                    - 0.5*(lambda1 * alpha1 * (ubar- cbar)\
-                    + lambda2 * alpha2 * ubar\
-                    + lambda3 * alpha3 * (ubar + cbar));
-        rhoe_F = 0.5*(rhoe_FL + rhoe_FR)\
-                    -0.5*(lambda1 * alpha1 * (Hbar - ubar*cbar)\
-                    +lambda2 * alpha2 * 0.5 * pow(ubar,2)\
-                    +lambda3 * alpha3 * (Hbar + ubar*cbar));
-
-        z[0][j] = rho_F; 
-        z[1][j] = rhou_F; 
-        z[2][j] = rhoe_F; 
-
-    }   
+    }
 }
-
 
 
 static inline void ER_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols]) {
