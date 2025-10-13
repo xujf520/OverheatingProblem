@@ -171,9 +171,120 @@ static inline void BC_OutFlow(int rows, int cols,double (*x)[cols], int Control_
     }
 }
 
+static inline void BC_OutFlow_2D(int rows, int cols, int depth, double (*x)[cols][depth], int Control_Pos, int Ghost_cell){
+    switch (Control_Pos){
+
+        //左边界出口边界条件设计！！！！！
+        case 0:
+            for (int i = 0; i < rows; i++){
+                for (int k = GhostCell; k <= depth-GhostCell; k++){
+                    x[i][GhostCell-1][k] = x[i][GhostCell][k];                         //出口流动的情况
+                    x[i][GhostCell-2][k] = x[i][GhostCell][k];                         //出口流动的情况
+                    x[i][GhostCell-3][k] = x[i][GhostCell][k];                         //出口流动的情况
+                    x[i][GhostCell-4][k] = x[i][GhostCell][k];                         //出口流动的情况
+                }
+            }   
+            break;
+        //右边界无反射边界条件设计！！！！！
+        case 1:
+            for (int i = 0; i < rows; i++){
+                for (int k = GhostCell; k <= depth-GhostCell; k++){
+                    x[i][cols-GhostCell][k] = x[i][cols-GhostCell-1][k];                           //出口流动的情况
+                    x[i][cols-GhostCell+1][k] = x[i][cols-GhostCell-1][k];                           //出口流动的情况
+                    x[i][cols-GhostCell+2][k] = x[i][cols-GhostCell-1][k];                           //出口流动的情况
+                    x[i][cols-GhostCell+3][k] = x[i][cols-GhostCell-1][k];                           //出口流动的情况
+                }                   
+            }
+            break;
+        case 2:
+            for (int i = 0; i < rows; i++){
+                for (int j = GhostCell; j <= cols-GhostCell; j++){
+                    x[i][j][GhostCell-1] = x[i][j][GhostCell];                         //出口流动的情况
+                    x[i][j][GhostCell-2] = x[i][j][GhostCell];                         //出口流动的情况
+                    x[i][j][GhostCell-3] = x[i][j][GhostCell];                         //出口流动的情况
+                    x[i][j][GhostCell-4] = x[i][j][GhostCell];                         //出口流动的情况
+                }                   
+            }
+            break;
+
+        case 3:
+            for (int i = 0; i < rows; i++){
+                for (int j = GhostCell; j <= cols-GhostCell; j++){
+                    x[i][j][depth-GhostCell] = x[i][j][depth-GhostCell-1];                           //出口流动的情况
+                    x[i][j][depth-GhostCell+1] = x[i][j][depth-GhostCell-1];                           //出口流动的情况
+                    x[i][j][depth-GhostCell+2] = x[i][j][depth-GhostCell-1];                           //出口流动的情况
+                    x[i][j][depth-GhostCell+3] = x[i][j][depth-GhostCell-1];                           //出口流动的情况
+                }                   
+            }
+            break;
+        default:
+            break;
+            
+    }
+}
+
 
 //出口边界条件设计
 static inline void BC_Periodicity(int rows, int cols,double (*x)[cols], int Control_Pos, int Ghost_cell){
+    switch (Control_Pos){
+
+        //左边界周期性！！！！！
+        case 0:
+            switch (Ghost_cell){
+                case 1:                                                                 //此时填充虚拟网格为1
+                    for (int i = 0; i <= 2; i++)
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];                                      
+                    break;
+                case 2:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];             
+                        x[i][Ghost_cell-2] = x[i][cols-Ghost_cell-2];             
+                    }
+                       
+                    break;
+                case 3:                                                                 //此时填充虚拟网格为3
+                    for (int i = 0; i <= 2; i++){
+                        x[i][Ghost_cell-1] = x[i][cols-Ghost_cell-1];             
+                        x[i][Ghost_cell-2] = x[i][cols-Ghost_cell-2];             
+                        x[i][Ghost_cell-3] = x[i][cols-Ghost_cell-3];             
+                    }
+                       
+                    break;
+                //填充更多的虚拟网格，程序待完成
+                default:
+                    break;
+            }
+            break;
+
+        
+        case 1:
+            switch (Ghost_cell){
+                case 1:                                                                 //此时填充虚拟网格为1
+                    for (int i = 0; i <= 2; i++)
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];       
+                    break;
+                case 2:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];                  
+                        x[i][cols-Ghost_cell+1] = x[i][Ghost_cell+1];                  
+                    }
+                    break;
+                case 3:                                                                 //此时填充虚拟网格为2
+                    for (int i = 0; i <= 2; i++){
+                        x[i][cols-Ghost_cell] = x[i][Ghost_cell];                  
+                        x[i][cols-Ghost_cell+1] = x[i][Ghost_cell+1];                  
+                        x[i][cols-Ghost_cell+2] = x[i][Ghost_cell+2];                  
+                    }
+                    break;
+                default:
+                    break;
+            }
+            break;
+    }
+}
+
+
+static inline void BC_Periodicity_2D(int rows, int cols,double (*x)[cols], int Control_Pos, int Ghost_cell){
     switch (Control_Pos){
 
         //左边界周期性！！！！！

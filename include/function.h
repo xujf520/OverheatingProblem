@@ -7,6 +7,25 @@
     #define PI 3.14159265358979323846
 #endif
 
+// 函数指针类型，用于传递被积函数
+// 修改函数指针类型，增加 u 参数
+typedef double (*FuncPtrWithU)(double x, double* u);
+
+// 示例测试函数 - 这些也可以设为static inline如果需要在多个文件中使用
+static inline double test_function1(double x) {
+    return x * x;  // f(x) = x²，积分结果应为 b³/3 - a³/3
+}
+
+static inline double test_function2(double x) {
+    return sin(x);  // f(x) = sin(x)，积分结果应为 -cos(b) + cos(a)
+}
+
+static inline double test_function3(double x) {
+    return exp(x);  // f(x) = e^x，积分结果应为 e^b - e^a
+}
+
+
+
 static inline int sgn(double num) {
     if (num > 0) {
         return 1;
@@ -46,54 +65,24 @@ static inline double min_of_two(double a, double b) {
 }
 
 
-static inline void Con_to_Pri_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j <= cols-1; j++) {
-        x[0][j] = y[0][j];
-        x[1][j] = y[1][j]/y[0][j];
-        x[2][j] = (M_gamma-1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j]);
-    }
+
+static inline double min_mod(double a, double b){
+	return 0.5 * (sgn(a) + sgn(b)) * min_of_two(fabs(a), fabs(b));
 }
 
-static inline void Pri_to_Con_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j <= cols-1; j++) {
-        y[0][j] = x[0][j];
-        y[1][j] = x[0][j] * x[1][j];
-        y[2][j] = 0.5 * x[0][j] * pow(x[1][j],2) + x[2][j]/(M_gamma-1);
-    }
-}
-
-static inline void Pri_to_S_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j < cols-1; j++) {
-        y[0][j] = x[2][j] / pow(x[0][j], 1.4);
-        y[1][j] = x[1][j];
-        y[2][j] = x[2][j];
-    }
-}
-
-static inline void S_to_Pri_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j < cols-1; j++) {
-        x[0][j] = pow(y[2][j]/y[0][j],1/1.4);
-        x[1][j] = y[1][j];
-        x[2][j] = y[2][j];
-    }
-}
-
-static inline void ConS_to_Pri_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j < cols-1; j++) {
-        x[0][j] = y[0][j];
-        x[1][j] = y[1][j] / y[0][j];
-        x[2][j] = y[2][j] * pow(y[0][j],0.4);
-    }
+static inline double van_leer(double a, double b){
+    double epsilo = 1e-6;
+	return ((sgn(a)+sgn(b))*a*b)/(fabs(a)+fabs(b)+epsilo);
 }
 
 
+static inline double van_albada(double a, double b){
+    double epsilo = 1e-6;
+	return (fmax(a*b,0) * (a+b))/(pow(a,2)+pow(b,2)+epsilo);
+}
 
-static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx, double CFL) {
+
+static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx) {
     double S_plus = 0;
     for (int j = 1; j < cols-1; j++) {
         //读取已知的左右原始变量
@@ -110,8 +99,36 @@ static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx
     }   
 
 //    return CFL * dx / S_plus;
+    return CFL * dx / S_plus;
+//    return  0.5 * pow(dx, 5.0/3.0);
+}
+
+static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[cols][depth], double dx) {
+    double S_plus_x = 0,S_plus_y = 0;
+    for (int j = GhostCell; j < cols-GhostCell; j++) {
+        for (int k = GhostCell; k < depth-GhostCell; k++){
+             //读取已知的左右原始变量
+            double rho = x[0][j][k];
+            double rhou = x[1][j][k];
+            double rhov = x[2][j][k];
+            double rhoe = x[3][j][k];
+            double u = rhou / rho;
+            double v = rhov / rho;
+            double p = (rhoe - 0.5 * rho * (pow(u, 2) + pow(v,2)))*(M_gamma-1);
+            //计算声速
+            double a= sqrt(M_gamma * p / rho);
+            //计算全局最大波速
+            S_plus_x = max_of_two (fabs(u) + a,S_plus_x);
+            S_plus_y = max_of_two (fabs(v) + a,S_plus_y);
+        }
+        
+      
+    
+    }   
+
 //    return CFL * dx / S_plus;
-    return  pow(dx,5.0/3.0);
+    return CFL * dx / (S_plus_x + S_plus_y);
+//    return  0.5 * pow(dx, 5.0/3.0);
 }
 
 //计算总守恒量
@@ -123,6 +140,116 @@ static inline void Total_Conser(int rows, int cols, double Ghost_Cell , double (
         } 
         
     }
+}
+
+
+
+//数值积分程序
+
+
+// 梯形法则数值积分（修改版本）
+// f: 被积函数; x_up: 积分上限; x_down: 积分下限; k: 积分精度; u: 额外参数
+static inline double trapezoid_rule(FuncPtrWithU f, double x_down, double x_up, int k, double* u) {
+    if (k <= 0) {
+        printf("Error: n must be positive\n");
+        return 0.0;
+    }
+    
+    double h = (x_up - x_down) / k;                             // 步长
+    double sum = 0.5 * (f(x_down, u) + f(x_up, u));            // 端点值，传递 u
+    
+    for (int i = 1; i < k; i++) {
+        double x = x_down + i * h;
+        sum += f(x, u);  // 传递 u
+    }
+    
+    return sum * h;
+}
+
+// 辛普森法则数值积分（修改版本）
+// f: 被积函数; x_up: 积分上限; x_down: 积分下限; k: 积分精度; u: 额外参数
+static inline double simpson_rule(FuncPtrWithU f, double x_down, double x_up, int k, double* u) {
+    if (k <= 0 || k % 2 != 0) {
+        printf("Error: n must be positive and even\n");
+        return 0.0;
+    }
+    
+    double h = (x_up - x_down) / k;                             // 步长
+    double sum = f(x_down, u) + f(x_up, u);                    // 端点值，传递 u
+    
+    // 奇数项系数为4，偶数项系数为2
+    for (int i = 1; i < k; i++) {
+        double x = x_down + i * h;
+        if (i % 2 == 0) {
+            sum += 2.0 * f(x, u);  // 传递 u
+        } else {
+            sum += 4.0 * f(x, u);  // 传递 u
+        }
+    }
+    
+    return sum * h / 3.0;
+}
+
+// 矩形法则数值积分（中点法则，修改版本）
+// f: 被积函数; x_up: 积分上限; x_down: 积分下限; k: 积分精度; u: 额外参数
+static inline double rectangle_rule(FuncPtrWithU f, double x_down, double x_up, int k, double* u) {
+    if (k <= 0) {
+        printf("Error: n must be positive\n");
+        return 0.0;
+    }
+    
+    double h = (x_up - x_down) / k;                             // 步长
+    double sum = 0.0;
+    
+    for (int i = 0; i < k; i++) {
+        double x_mid = x_down + (i + 0.5) * h;                  // 中点
+        sum += f(x_mid, u);  // 传递 u
+    }
+    
+    return sum * h;
+}
+
+// 数值积分主函数（修改版本）
+/* method: 积分方法
+ *         1 - 梯形法则
+ *         2 - 辛普森法则  
+ *         3 - 矩形法则
+ */
+
+ 
+static inline double numerical_integration(FuncPtrWithU f, double a, double b, int n, int method, double* u) {
+    switch (method) {
+        case 1:
+            return trapezoid_rule(f, a, b, n, u);  // 传递 u
+        case 2:
+            return simpson_rule(f, a, b, n, u);    // 传递 u
+        case 3:
+            return rectangle_rule(f, a, b, n, u);  // 传递 u
+        default:
+            printf("Error: Unknown method. Using trapezoid rule.\n");
+            return trapezoid_rule(f, a, b, n, u);  // 传递 u
+    }
+}
+
+// 计算五阶格式的数值误差（保持不变）
+static inline double Smooth_function(double x, double* u) {
+    // 积分平均值
+    double v1 = *(u-2);
+    double v2 = *(u-1);
+    double v3 = *(u);
+    double v4 = *(u+1);
+    double v5 = *(u+2);
+
+    // 计算多项式系数：
+    double a4 = (v1+v5 - 4.0*(v2+v4) + 6.0*v3)/24.0;
+    double a3 = (v5-v1 - 2.0*(v4-v2))/12.0;
+    double a2 = (v4+v2)/2.0 - v3 -3.0*a4/2.0;
+    double a1 = (v4-v2)/2.0 -5.0*a3/4.0;
+    double a0 = v3 - a2/12.0 - a4/80.0;
+
+//    return sin(4.0*PI*x) + 2 - a4*pow(x,4) - a3*pow(x,3) - a2*pow(x,2) - a1*x - a0;  // 简化了 pow(x,1) 和 pow(x,0)
+
+    return sin(4.0*PI*x) + 2 -v3;  // 简化了 pow(x,1) 和 pow(x,0)
 }
 
 

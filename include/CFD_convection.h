@@ -25,27 +25,38 @@
                                     /*……………………………………………………*/
 
 
-static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int GC, \
-                                            double (*y)[cols],double (*z)[cols], double dt, double dx) {
-    int i,j;
-    double Conserl[rows][cols],Conserr[rows][cols];
-    double prileft[rows][cols], priright[rows][cols];
-    double Flux[rows][cols];
+static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int depth, int GC, \
+                                            double (*y)[cols][depth],double (*f)[cols][depth],double (*g)[cols][depth], double dt, double dx) {
+    int i,j,k;
 
+    double (*Flux)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+    double (*Conserl)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+    double (*Conserr)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+    // 检查内存分配是否成功
+    if (Flux == NULL || Conserl == NULL || Conserr == NULL) {
+        fprintf(stderr, "Memory allocation failed in Flux_Reconstruction_RP\n");
+        // 释放已分配的内存
+        free(Flux);
+        free(Conserl);
+        free(Conserr);
+        return;
+    }
 
+    //维度分裂
+    //x方向重构
+    int space_dir = 1;
     switch (Recon_Accur){
         case 1:
-            Reconstruction_Godunov(rows,cols,GC,y,Conserl,Conserr,dx);
+            Reconstruction_Godunov(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
             break;
         case 2:
-            TVD_Reconstruction(rows,cols,GC,y,Conserl,Conserr,dx);
+            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
             break;
         case 3:
-            WENO3_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
+            WENO3_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
             break;
         case 5:
-            WENO5_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
-//            WENO5_Reconstruction_C(rows,cols,GC,y,Conserl,Conserr);
+            WENO5_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
             break;
 
         default:
@@ -54,55 +65,88 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
     }
 
     
-    Con_to_Pri_1D(rows,cols,prileft,Conserl);
-    Con_to_Pri_1D(rows,cols,priright,Conserr);
-
-
     //演化过程：
     //AR_scheme is Approximate Riemann Solver
     switch (AR_scheme) {
-        case 0:
-            Lax_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 1:
-            Rusanov_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
         case 2:
-            HLL_Flux(rows, cols, GC, prileft,priright,Flux);
+            HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 3:
-            HLLC_Flux(rows, cols, GC, prileft,priright,Flux);
+//            HLLC_Flux(rows, cols, GC, prileft,priright,Flux);
             break;
         case 4:
-            Roe_Flux(rows, cols, GC, prileft,priright,Flux);
+//            Roe_Flux(rows, cols, GC, prileft,priright,Flux);
             break;
         case 5:
-            RS_Marquina(3,cols,y,Flux,dt,dx);
-            break;
-        case 6:
-            StegerWarming_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 7:
-            VanLeer_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 8:
-            LiouSteffen_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 9:
-            XJF_Flux(rows, cols, GC, prileft,priright,Flux);
+//            RS_Marquina(3,cols,y,Flux,dt,dx);
             break;
         default:
-            ER_Flux(rows, cols, GC, prileft,priright,Flux);
+//            ER_Flux(rows, cols, GC, prileft,priright,Flux);
             // 你可以根据实际需求添加相应的处理逻辑
             break;
     }
 
 
-    for ( i = 0; i < rows; i++){
-        for ( j = GC-1; j <= cols-GC-1; j++){
-            z[i][j] = Flux[i][j];
-        }
+    for ( i = 0; i < rows; i++)
+        for ( j = GC-1; j <= cols-GC; j++)
+            for ( k = GC-1; k <= cols-GC; k++)
+                f[i][j][k] = Flux[i][j][k];
+
+    
+    //y方向重构
+
+    space_dir = 2;
+    switch (Recon_Accur){
+        case 1:
+            Reconstruction_Godunov(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
+            break;
+        case 2:
+            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
+            break;
+        case 3:
+            WENO3_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
+            break;
+        case 5:
+            WENO5_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
+            break;
+
+        default:
+            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            exit(1);
     }
+
+
+    //演化过程：
+    //AR_scheme is Approximate Riemann Solver
+    switch (AR_scheme) {
+        case 2:
+            HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 3:
+//            HLLC_Flux(rows, cols, GC, prileft,priright,Flux);
+            break;
+        case 4:
+//            Roe_Flux(rows, cols, GC, prileft,priright,Flux);
+            break;
+        case 5:
+//            RS_Marquina(3,cols,y,Flux,dt,dx);
+            break;
+        default:
+//            ER_Flux(rows, cols, GC, prileft,priright,Flux);
+            // 你可以根据实际需求添加相应的处理逻辑
+            break;
+    }
+
+
+    for ( i = 0; i < rows; i++)
+        for ( j = GC-1; j <= cols-GC; j++)
+            for ( k = GC-1; k <= cols-GC; k++)
+                g[i][j][k] = Flux[i][j][k];
+
+
+    free(Conserl);
+    free(Conserr);
+    free(Flux);
 
 }
 
@@ -126,16 +170,16 @@ static inline void Flux_Reconstruction_RP_Heat(int AR_scheme, int rows, int cols
     
      switch (Recon_Accur){
         case 1:
-            Reconstruction_Godunov(rows,cols,GC,y,Conserl,Conserr,dx);
+//            Reconstruction_Godunov(rows,cols,GC,y,Conserl,Conserr,dx);
             break;
         case 2:
-            TVD_Reconstruction(rows,cols,GC,y,Conserl,Conserr,dx);
+//            TVD_Reconstruction(rows,cols,GC,y,Conserl,Conserr,dx);
             break;
         case 3:
-            WENO3_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
+//            WENO3_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
             break;
         case 5:
-            WENO5_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
+//            WENO5_Reconstruction(rows,cols,GC,y,Conserl,Conserr);
 //            WENO5_Reconstruction_C(rows,cols,GC,y,Conserl,Conserr);
             break;
 
@@ -151,12 +195,6 @@ static inline void Flux_Reconstruction_RP_Heat(int AR_scheme, int rows, int cols
     //演化过程：
     //AR_scheme is Approximate Riemann Solver
     switch (AR_scheme) {
-        case 0:
-            Lax_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,u_Refer);
-            break;
-        case 1:
-            Rusanov_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,u_Refer);
-            break;
         case 2:
             HLL_Flux_HeatConduction(rows, cols, GC, prileft,priright,Flux,u_Refer);
             break;
@@ -168,18 +206,6 @@ static inline void Flux_Reconstruction_RP_Heat(int AR_scheme, int rows, int cols
             break;
         case 5:
             RS_Marquina(3,cols,y,z,dt,dx);
-            break;
-        case 6:
-            StegerWarming_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 7:
-            VanLeer_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 8:
-            LiouSteffen_Flux(rows, cols, GC, prileft,priright,Flux);
-            break;
-        case 9:
-            XJF_Flux(rows, cols, GC, prileft,priright,Flux);
             break;
         default:
             ER_Flux_PlusHeat(rows, cols, GC, prileft,priright,Flux);
@@ -193,58 +219,6 @@ static inline void Flux_Reconstruction_RP_Heat(int AR_scheme, int rows, int cols
             z[i][j] = Flux[i][j];
         }
     }
-
-}
-
-
-/*                                      ******************                                          */
-/*                                      重构步：基于守恒变量                                          */
-/*                                      ******************                                          */
-
-                                    /*……………………………………………………*/
-                                /*具有相对速度的近似黎曼求解数值方法*/
-                                    /*……………………………………………………*/
-/*……………………………………………………………………………………………………*/
-//双激波近似黎曼求解
-static inline void RS_HLL_XRela(int rows, int cols,double (*y)[cols],double (*z)[cols], double dt,double dx, double u_r, double GC) {
-    int i,j;
-    double Conserl[3][cols],Conserr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double Flux[3][cols];
-    double slope[3][cols];
-
-    //重构
-    for (int i = 0; i < rows; i++){   
-        for (int j = 1; j < cols-1; j++)
-        {
-            switch (Recon_Accur)
-            {
-                case 0:
-                    Reconstruction_Godunov(rows,cols,GC,y,Conserl,Conserr,dx);
-                    break;
-                case 1:
-                    TVD_Reconstruction(rows,cols,GC,y,Conserl,Conserr,dx);
-                    break;
-                
-                default:
-                    printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
-                    exit(1);
-            }
-        }
-    }
-    
-  
-    Con_to_Pri_1D(3,cols,prileft,Conserl);
-    Con_to_Pri_1D(3,cols,priright,Conserr);
-    
-    HLL_Flux_XRela(rows, cols, GC, prileft,priright,Flux,u_r);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            z[i][j] = Flux[i][j];
-        }
-    }
-
 
 }
 

@@ -10,6 +10,7 @@
 #include "time_advance.h"
 #include "scheme.h"
 #include "Golbal.h"
+#include "Error.h"
 
 /*                                            *********                                          */
 /*                                            声明子程序                                          */
@@ -17,16 +18,7 @@
 // 控制计算步数子程序
 void StepLoop();
 void OutputData_file();
-//初始条件子程序
-void Init_Sod();
-void Init_Sod_Rare();
-void Init_Sod_Shock();
-void Init_DRare();
-void Init_Shock_Impact();
-void Init_Shock1();
-void Init_Shock2();
-void Init_Shock3();
-void Init_Euler();
+void OutputData_file_2D();
 
 // 读取黎曼问题
 int Get_RP_Method(int argc, char *argv[]);
@@ -35,62 +27,70 @@ void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme);
 
 //简单的网格代码
 void Mesh(int n, double deltax, double *x);
-
-
-
+void Mesh_2D();
 /*                                            *********                                          */
 /*                                              主程序                                            */
 /*                                            *********                                          */
 
 //网格参数
- 
-
-const int n = 160;                                                      //网格数量                                              
-const int Control_Compution = 0;
-const int Control_output = 100;
-
-
+const int L_nx = 200;                                                      //网格数量
+const int L_ny = 200;                                                      //网格数量      
+const int var = 4;                                        
 
 int RP_Method;                                                //Riemann Solver的具体方法 
 //Riemann Solver
 int scheme;                                                  
 int main(int argc, char *argv[]) {
 
-    int N_ngc = n + 2 * GhostCell; 
+    int LNX_ngc = L_nx + 2 * GhostCell; 
+    int LNY_ngc = L_ny + 2 * GhostCell; 
 
     Get_RP_Parameters(argc, argv, &RP_Method, &scheme);
 
     double t = 0;
-    double L = 1.,       Tmax = 2.0;       //计算域参数
-    double CFL = 0.4; 
-    double Delta_x;
+    double L = 1.,       Tmax = 0.15;       //计算域参数 
+    double Delta_x, Delta_y;
     double Delta_T;
 
     // 添加声明，2个虚拟网格
     
-    double x[n];
-    double pri[3][N_ngc];
-    double U[3][N_ngc];
-    double FU[3][N_ngc];
-    double pri_Ver1[3], pri_Ver2[3];
+    double mesh_x[L_nx], mesh_y[L_ny];
+    double pri_Ver1[4], pri_Ver2[4];
+    double (*pri)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+    double (*U)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+    double (*FU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+    double (*GU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+    // 检查内存分配是否成功
+    if (pri == NULL || U == NULL || FU == NULL|| GU == NULL) {
+        fprintf(stderr, "Memory allocation failed in Main\n");
+        // 释放已分配的内存
+        free(pri);
+        free(U);
+        free(FU);
+        free(GU);
+    }    
 
-    Delta_x = L / n; 
+
+    Delta_x = L / L_nx;
+    Delta_y = L / L_ny; 
+
     int Ite = 0;
-
 //初始条件
     double u_r = 0.0;
 
-    Init_Sod(pri_Ver1,pri_Ver2);                       
+    Init_Sod_2D(pri_Ver1,pri_Ver2);                       
 //    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                  //激波对撞 
 //    Init_DRare(pri_Ver1,pri_Ver2,u_r);  
 //   Init_Shock3(pri_Ver1,pri_Ver2);  
     printf("Read initial conditions successfully!\n");
   
     //mesh
-    Mesh(n,Delta_x,x);
+//    Mesh(n,Delta_x,x);
+    Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
+
     printf("Mesh successfully!\n");
 
-    Init_Euler(3,N_ngc,GhostCell,pri,U,FU,pri_Ver1,pri_Ver2,Delta_x);            //初始化欧拉方程
+    Init_Euler_2D(var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,pri_Ver1,pri_Ver2,Delta_x);            //初始化欧拉方程
     printf("Euler equation initialization successful!\n");
 
 
@@ -98,21 +98,24 @@ int main(int argc, char *argv[]) {
         case 0:
             //时间推进：时间一阶和时间二阶格式
             for (t = 0.0; t < Tmax; t = t+Delta_T) {
-                Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x,CFL);
+//               Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x);
+                Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x);
                 if (t + Delta_T >= Tmax)
                     Delta_T = Tmax - t ;
 
                 switch (RP_Method) {
                     case 0:
                         //RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x, u_r);
-                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
+//                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
+                        RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
                         break;
                     case 1:
 //                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
-                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
+//                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
+//                        RK3_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
+//                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
                         break;
                 }
                 Ite++;
@@ -127,13 +130,13 @@ int main(int argc, char *argv[]) {
                 Delta_T = 0.1*Delta_x;
                 switch (RP_Method) {
                     case 0:
-                        RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
+//                        RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
                         break;
                     case 1:
-                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
+ //                       RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
                         break;
                     default:
-                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
+ //                       RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
                         break;
                 }
                 Ite++;
@@ -151,13 +154,21 @@ int main(int argc, char *argv[]) {
     printf("end of calculation!\n");
 
     //实现输出最后的结果
-    Con_to_Pri_1D(3,N_ngc,pri,U);
+    Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
     //打开文件并输出结果
-    OutputData_file(0,N_ngc,GhostCell,x,U,FU,pri,t);
+    OutputData_file_2D(0,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,t);
 
-    Scheme_Error(3,N_ngc,GhostCell,U,Delta_x);
+//    Scheme_Error_L1(3,N_ngc,GhostCell,U,Delta_x);
     
     printf("The program has completed its execution.\n");
+
+
+    free(pri);
+    free(U);
+    free(FU);
+    free(GU);
+    printf("Memory Deallocation succesed in Main\n");
+
     return 0;
 
 }
@@ -222,169 +233,6 @@ void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme) {
 }
 
 
-//初始条件
-void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 1.0;
-    double rho2 = 0.125;
-    double u1 = 0.0;
-    double u2 = 0.0;
-    double p1 = 1.0;
-    double p2 = 0.1;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-void Init_Sod_Rare(double pri_Ver1[3], double pri_Ver2[3]) {
-
-
-    double rho1 = 1.0;
-    double rho2 =  0.43757818061324344;
-    //double rho2 =  0.5;
-    double u1 = 0.0;
-    double u2 =  0.9013775087441291 ;
-    double p1 = 1.0;
-    double p2 =  0.31439665844271514;
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-void Init_Sod_Shock(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 0.2655737117053071;
-    double rho2 =  0.125;
-    double u1 = 0.9274526200489499;
-    double u2 =  0.0;
-    double p1 =  0.30313017805064685;
-    double p2 = 0.1;
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = -2.0 + u_r;
-    double u2 = 2.0 + u_r;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-void Init_Shock_Impact(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = 4.0 + u_r;
-    double u2 = -4.0 + u_r;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-void Init_Shock1(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 24.0/11;
-    double rho2 = 1.0;
-    double u1 = 13.0/12;
-    double u2 = 0;
-    double p1 = 19.0/6;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 600.0/107.0;
-    double rho2 = 1.0;
-    double u1 = 493.0/60.0;
-    double u2 = 0.0;
-    double p1 = 499.0/6.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = 4.0;
-    double u2 = -4.0;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-void Init_Euler(int rows,int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3], double Deltax){
-    //初始化
-    initEuler1D(3, cols, x);
-    initEuler1D(3, cols, y);
-    initEuler1D(3, cols, z);
-    //进一步初始化
-//    initEulerpri1D_Smooth(3, cols, GC, x, Deltax);
-//    initEulerpri1D_Shocktube(3, cols, x,pri_Ver1,pri_Ver2);
-//    initEulerpri1D_Osher(3, cols,6,x, 10.0/(cols-6));
-    initEulerConser_Smooth(3, cols,GC, y, Deltax);
-//    initEulerconser1D(3, cols,x, y);
-    initEulerflux1D(3, cols, y,z);
-}
 
 
 //划分网格代码
@@ -393,6 +241,17 @@ void Mesh(int n, double deltax, double *x) {
     for (int i = 0; i < n; i++) {
         x[i] = deltax * i + 0.5 * deltax;
     }
+}
+
+void Mesh_2D(int cols, int depth, double *mesh_x, double *mesh_y, double deltax, double deltay) {
+
+    for (int j = 0; j < cols; j++) 
+            mesh_x[j] = deltax * j + 0.5 * deltax;
+    
+    
+    for (int k = 0; k < depth; k++) 
+        mesh_y[k] = deltay * k + 0.5 * deltay;
+        
 }
 
 
@@ -448,6 +307,100 @@ void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], dou
         for (int i = 2; i < cols-2; i++) {
             fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n", 
             x[i-2], pri[0][i], pri[1][i], pri[2][i], U[1][i]);
+        }
+        fclose(file);
+        printf("The %d th calculation ended at %f\n", k, t);
+    }
+}
+
+
+void OutputData_file_2D(int k, int cols, int depth, int GC, 
+                       double (*mx), double (*my), double (*U)[cols][depth], double (*FU)[cols],
+                       double (*pri)[cols][depth], double t) {
+    
+    printf("Output result(rho, u, v, p, T, U_M, U_E)\n");
+    
+    if (k == 0) {
+        FILE* file = fopen("/mnt/d/Desktop/RP_FVM/data/output_data.dat", "w");
+        if (file == NULL) {
+            printf("File opening failed\n");
+            printf("---------------Error----------------\n");
+            return;
+        }
+        
+        // Tecplot格式头信息
+        fprintf(file, "TITLE = \"2D Fluid Dynamics Data\"\n");
+        fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
+        
+        int output_cols = cols - 2*GC;
+        int output_depth = depth - 2*GC;
+        
+        // 指定ZONE信息 - 关键修复
+        fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
+        fprintf(file, "I=%d, J=%d\n", output_depth, output_cols);  // 注意：Tecplot中J是行数，I是列数
+        fprintf(file, "DATAPACKING=POINT\n");
+        
+        // 输出数据 - 注意循环顺序
+        for (int j = 0; j < output_cols; j++) {
+            for (int kk = 0; kk < output_depth; kk++) {  // 避免变量名冲突
+                int actual_j = j + GC;
+                int actual_kk = kk + GC;
+                
+                double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
+                
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
+                        mx[j], my[kk], 
+                        pri[0][actual_j][actual_kk], 
+                        pri[1][actual_j][actual_kk], 
+                        pri[2][actual_j][actual_kk], 
+                        pri[3][actual_j][actual_kk],
+                        temperature,
+                        U[1][actual_j][actual_kk], 
+                        U[2][actual_j][actual_kk], 
+                        U[3][actual_j][actual_kk]);
+            }
+        }
+        fclose(file);
+        printf("Output calculation result successful\n");
+    }
+    else {
+        char filename[100];
+        sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_%d.dat", k);
+        FILE* file = fopen(filename, "w");
+        if (file == NULL) {
+            printf("无法打开文件 %s\n", filename);
+            return;
+        }
+        
+        // 为后续时间步也添加完整的2D格式
+        fprintf(file, "TITLE = \"2D Fluid Dynamics Data - Step %d\"\n", k);
+        fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
+        
+        int output_cols = cols - 2*GC;
+        int output_depth = depth - 2*GC;
+        
+        fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
+        fprintf(file, "I=%d, J=%d\n", output_depth, output_cols);
+        fprintf(file, "DATAPACKING=POINT\n");
+        
+        for (int j = 0; j < output_cols; j++) {
+            for (int kk = 0; kk < output_depth; kk++) {
+                int actual_j = j + GC;
+                int actual_kk = kk + GC;
+                
+                double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
+                
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
+                        mx[j], my[kk], 
+                        pri[0][actual_j][actual_kk], 
+                        pri[1][actual_j][actual_kk], 
+                        pri[2][actual_j][actual_kk], 
+                        pri[3][actual_j][actual_kk],
+                        temperature,
+                        U[1][actual_j][actual_kk], 
+                        U[2][actual_j][actual_kk], 
+                        U[3][actual_j][actual_kk]);
+            }
         }
         fclose(file);
         printf("The %d th calculation ended at %f\n", k, t);
