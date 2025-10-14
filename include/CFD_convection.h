@@ -25,8 +25,8 @@
                                     /*……………………………………………………*/
 
 
-static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int depth, int GC, \
-                                            double (*y)[cols][depth],double (*f)[cols][depth],double (*g)[cols][depth], double dt, double dx) {
+static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
+                                                double (*f)[cols][depth],double (*g)[cols][depth], double dt, double dx, double dy) {
     int i,j,k;
 
     double (*Flux)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
@@ -50,7 +50,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
             Reconstruction_Godunov(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
             break;
         case 2:
-            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
+            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx,dy);
             break;
         case 3:
             WENO3_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
@@ -68,14 +68,23 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
     //演化过程：
     //AR_scheme is Approximate Riemann Solver
     switch (AR_scheme) {
-        case 2:
+        case 1:
             HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
-        case 3:
+        case 2:
             HLLC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
-        case 4:
+        case 3:
             Roe_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 11:
+            HLLHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 22:
+            HLLCHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 33:
+            RoeHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 5:
 //            RS_Marquina(3,cols,y,Flux,dt,dx);
@@ -101,7 +110,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
             Reconstruction_Godunov(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
             break;
         case 2:
-            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx);
+            TVD_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr,dx,dy);
             break;
         case 3:
             WENO3_Reconstruction(space_dir,rows,cols,depth,GC,y,Conserl,Conserr);
@@ -119,14 +128,23 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
     //演化过程：
     //AR_scheme is Approximate Riemann Solver
     switch (AR_scheme) {
-        case 2:
+        case 1:
             HLL_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
-        case 3:
+        case 2:
             HLLC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
-        case 4:
+        case 3:
             Roe_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 11:
+            HLLHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 22:
+            HLLCHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
+            break;
+        case 33:
+            RoeHC_Flux(space_dir,rows, cols,depth, GC, Conserl,Conserr,Flux);
             break;
         case 5:
 //            RS_Marquina(3,cols,y,Flux,dt,dx);
@@ -136,6 +154,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int rows, int cols, int
             // 你可以根据实际需求添加相应的处理逻辑
             break;
     }
+
 
 
     for ( i = 0; i < rows; i++)

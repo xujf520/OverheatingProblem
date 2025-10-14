@@ -21,9 +21,7 @@ void OutputData_file();
 void OutputData_file_2D();
 
 // 读取黎曼问题
-int Get_RP_Method(int argc, char *argv[]);
-int Get_RP_input(int argc, char *argv[]);
-void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme);
+void Get_RP_Parameters();
 
 //简单的网格代码
 void Mesh(int n, double deltax, double *x);
@@ -37,15 +35,14 @@ const int L_nx = 400;                                                      //网
 const int L_ny = 100;                                                      //网格数量      
 const int var = 4;                                        
 
-int RP_Method;                                                //Riemann Solver的具体方法 
+int Time_ADM;                                                //Riemann Solver的具体方法 
 //Riemann Solver
 int scheme;                                                  
 int main(int argc, char *argv[]) {
-
     int LNX_ngc = L_nx + 2 * GhostCell; 
     int LNY_ngc = L_ny + 2 * GhostCell; 
 
-    Get_RP_Parameters(argc, argv, &RP_Method, &scheme);
+   
 
     double t = 0;
     double L = 1.,       Tmax = 0.15;       //计算域参数 
@@ -75,8 +72,11 @@ int main(int argc, char *argv[]) {
     Delta_y = L / L_ny; 
 
     int Ite = 0;
+
 //初始条件
     double u_r = 0.0;
+
+    
 
     Init_Sod_2D(pri_Ver1,pri_Ver2);                       
 //    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                  //激波对撞 
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     Init_Euler_2D(var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,pri_Ver1,pri_Ver2,Delta_x);            //初始化欧拉方程
     printf("Euler equation initialization successful!\n");
 
-
+    Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
     switch (Control_Compution){
         case 0:
             //时间推进：时间一阶和时间二阶格式
@@ -103,19 +103,15 @@ int main(int argc, char *argv[]) {
                 if (t + Delta_T >= Tmax)
                     Delta_T = Tmax - t ;
 
-                switch (RP_Method) {
-                    case 0:
-                        //RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,FU,Delta_T,Delta_x, u_r);
-//                        RK3_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
+                switch (Time_ADM) {
+                    case 1:
                         RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
                         break;
-                    case 1:
-//                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
-//                        RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
-//                        RK3_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x, u_r);
+                    case 3:
+                        RK3_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
                         break;
                     default:
-//                        RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
+                        //格式     
                         break;
                 }
                 Ite++;
@@ -128,15 +124,15 @@ int main(int argc, char *argv[]) {
             t = 0.0;
             for (int m = 0; m <= 399; m++) {
                 Delta_T = 0.1*Delta_x;
-                switch (RP_Method) {
-                    case 0:
-//                        RK1_TimeAd(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
-                        break;
+                switch (Time_ADM) {
                     case 1:
- //                       RK1_TimeAd_RPHeat(scheme,3,N_ngc,GhostCell,x,U,Delta_T,Delta_x,u_r);
+                        RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
+                        break;
+                    case 3:
+                        RK3_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
                         break;
                     default:
- //                       RK1_TVD_FluxRela(scheme,3,N_ngc,x,U,FU,Delta_T,Delta_x,1,u_r);     
+                        //格式     
                         break;
                 }
                 Ite++;
@@ -176,56 +172,53 @@ int main(int argc, char *argv[]) {
 
 // 函数定义：同时获取RP_Method和scheme两个参数
 // 函数定义：同时获取RP_Method和scheme两个参数
-void Get_RP_Parameters(int argc, char *argv[], int *RP_Method, int *scheme) {
+void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2) {
     // 先显示所有可选择的内容
     printf("╔═══════════════════════════════════════════════════╗\n");
     printf("║               Available Options                   ║\n");
     printf("╠═══════════════════════════════════════════════════╣\n");
-    printf("║ RP Methods:                                       ║\n");
-    printf("║   0: Origin                                       ║\n");
-    printf("║   1: Heat Conduction                              ║\n");
+    printf("║ Time Advance Method:                              ║\n");
+    printf("║   1: RK1                                          ║\n");
+    printf("║   3: RK3                                          ║\n");
     printf("║                                                   ║\n");
     printf("║ Riemann Solvers:                                  ║\n");
-    printf("║   0: Lax                                          ║\n");
-    printf("║   1: Rusanov                                      ║\n");
-    printf("║   2: HLL                                          ║\n");
-    printf("║   3: HLLC                                         ║\n");
-    printf("║   4: Roe                                          ║\n");
-    printf("║   5: Marquina                                     ║\n");
-    printf("║   6: StegerWarming                                ║\n");
-    printf("║   7: VanLeer                                      ║\n");
-    printf("║   8: LiouSteffen                                  ║\n");
+    printf("║   1: HLL                                          ║\n");
+    printf("║   2: HLLC                                         ║\n");
+    printf("║   3: Roe                                          ║\n");
+    printf("║   11: HLL with Heat Conduction    --HLLHC         ║\n");
+    printf("║   22: HLLC with Heat Conduction   --HLLCHC        ║\n");
+    printf("║   33: Roe with Heat Conduction    --RoeHC         ║\n");
     printf("║   Other: Exact Riemann                            ║\n");
     printf("╚═══════════════════════════════════════════════════╝\n\n");
 
     if (argc > 2) {
         // 有两个命令行参数
-        *RP_Method = atoi(argv[1]);
-        *scheme = atoi(argv[2]);
-        printf("✓ Using RP_Method %d and scheme %d from command line arguments\n", *RP_Method, *scheme);
+        *Parameter1 = atoi(argv[1]);
+        *Parameter2 = atoi(argv[2]);
+        printf("✓ Using Parameter1 %d and Parameter2 %d from command line arguments\n", *Parameter1, *Parameter2);
     } else if (argc > 1) {
         // 只有一个命令行参数，提示用户输入另一个
-        *RP_Method = atoi(argv[1]);
-        printf("✓ Using RP_Method %d from command line argument\n", *RP_Method);
+        *Parameter1 = atoi(argv[1]);
+        printf("✓ Using Parameter1 %d from command line argument\n", *Parameter1);
         
-        printf("Please enter the scheme value (0-8): ");
-        scanf("%d", scheme);
-        printf("✓ Using scheme %d from user input\n", *scheme);
+        printf("Please enter the Parameter2 value (0-8): ");
+        scanf("%d", Parameter2);
+        printf("✓ Using Parameter2 %d from user input\n", *Parameter2);
     } else {
         // 没有命令行参数，交互式输入两个参数（合并为一行）
-        printf("Please enter RP_Method and scheme values (0-1, 0-8): ");
-        scanf("%d %d", RP_Method, scheme);
+        printf("Please enter Parameter1 and Parameter2 values (0-1, 0-8): ");
+        scanf("%d %d", Parameter1, Parameter2);
         
-        printf("✓ Using RP_Method %d and scheme %d from user input\n", *RP_Method, *scheme);
+        printf("✓ Using Parameter1 %d and Parameter2 %d from user input\n", *Parameter1, *Parameter2);
     }
 
     // 验证输入的有效性
-    if (*RP_Method < 0 || *RP_Method > 1) {
-        printf("⚠ Warning: RP_Method value %d is outside recommended range (0-1)\n", *RP_Method);
+    if (*Parameter1 < 0 || *Parameter1 > 1) {
+        printf("⚠ Warning: Parameter1 value %d is outside recommended range (1-3)\n", *Parameter1);
     }
     
-    if (*scheme < 0 || *scheme > 8) {
-        printf("⚠ Warning: Scheme value %d is outside recommended range (0-8)\n", *scheme);
+    if (*Parameter2 < 0 || *Parameter2 > 8) {
+        printf("⚠ Warning: Parameter2 value %d is outside recommended range (1-ll)\n", *Parameter2);
         printf("Using Exact Riemann solver as default\n");
     }
     

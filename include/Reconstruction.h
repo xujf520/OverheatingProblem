@@ -170,7 +170,7 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
 
 
 static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
-                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth], double delta_x) {
+                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth], double delta_x, double delta_y) {
     int i, j, k;
  
 
@@ -264,8 +264,8 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];
 
-                        W_L[i][j][k] = TVD_minmod_L(&fu[2],delta_x);
-                        W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_x);
+                        W_L[i][j][k] = TVD_minmod_L(&fu[2],delta_y);
+                        W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_y);
                     }
 
             for (i = 0; i < rows; i++) 
@@ -308,8 +308,8 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];
 
-                        conserl[i][j][k] = TVD_minmod_L(&fu[2],delta_x);
-                        conserr[i][j][k] = TVD_minmod_R(&fu[2],delta_x);
+                        conserl[i][j][k] = TVD_minmod_L(&fu[2],delta_y);
+                        conserr[i][j][k] = TVD_minmod_R(&fu[2],delta_y);
                     }
         }        
 
