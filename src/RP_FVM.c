@@ -31,26 +31,26 @@ void Mesh_2D();
 /*                                            *********                                          */
 
 //网格参数
-const int L_nx = 400;                                                      //网格数量
-const int L_ny = 100;                                                      //网格数量      
+const int L_nx = 200;                                                      //网格数量
+const int L_ny = 200;                                                      //网格数量      
 const int var = 4;                                        
 
 int Time_ADM;                                                //Riemann Solver的具体方法 
 //Riemann Solver
-int scheme;                                                  
+int scheme;
+//边界条件
+BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_REFLECTION, BC_REFLECTION};
+
 int main(int argc, char *argv[]) {
     int LNX_ngc = L_nx + 2 * GhostCell; 
     int LNY_ngc = L_ny + 2 * GhostCell; 
-
-   
-
     double t = 0;
-    double L = 1.,       Tmax = 0.15;       //计算域参数 
+    double Lx,Ly;       
+    double Tmax = 0.0;       //计算域参数 
     double Delta_x, Delta_y;
     double Delta_T;
 
-    // 添加声明，2个虚拟网格
-    
+    //
     double mesh_x[L_nx], mesh_y[L_ny];
     double pri_Ver1[4], pri_Ver2[4];
     double (*pri)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
@@ -65,33 +65,21 @@ int main(int argc, char *argv[]) {
         free(U);
         free(FU);
         free(GU);
-    }    
+    } 
 
-
-    Delta_x = L / L_nx;
-    Delta_y = L / L_ny; 
-
-    int Ite = 0;
-
-//初始条件
-    double u_r = 0.0;
-
-    
-
-    Init_Sod_2D(pri_Ver1,pri_Ver2);                       
-//    Init_Shock_Impact(pri_Ver1,pri_Ver2,u_r);                  //激波对撞 
-//    Init_DRare(pri_Ver1,pri_Ver2,u_r);  
-//   Init_Shock3(pri_Ver1,pri_Ver2);  
+    Init_Euler_2D(var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,&Lx,&Ly,&Tmax);            //初始化欧拉方程
     printf("Read initial conditions successfully!\n");
-  
+    printf("Euler equation initialization successful!\n");
+    //施加边界条件，
+    Delta_x = Lx / L_nx;
+    Delta_y = Ly / L_ny; 
+    int Ite = 0;
+    double u_r = 0.0;
+   
     //mesh
-//    Mesh(n,Delta_x,x);
     Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
-
     printf("Mesh successfully!\n");
 
-    Init_Euler_2D(var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,pri_Ver1,pri_Ver2,Delta_x);            //初始化欧拉方程
-    printf("Euler equation initialization successful!\n");
 
     Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
     switch (Control_Compution){
@@ -102,7 +90,6 @@ int main(int argc, char *argv[]) {
                 Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x);
                 if (t + Delta_T >= Tmax)
                     Delta_T = Tmax - t ;
-
                 switch (Time_ADM) {
                     case 1:
                         RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
@@ -153,12 +140,7 @@ int main(int argc, char *argv[]) {
     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
     //打开文件并输出结果
     OutputData_file_2D(0,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,t);
-
-//    Scheme_Error_L1(3,N_ngc,GhostCell,U,Delta_x);
-    
     printf("The program has completed its execution.\n");
-
-
     free(pri);
     free(U);
     free(FU);
@@ -170,7 +152,6 @@ int main(int argc, char *argv[]) {
 }
 
 
-// 函数定义：同时获取RP_Method和scheme两个参数
 // 函数定义：同时获取RP_Method和scheme两个参数
 void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2) {
     // 先显示所有可选择的内容
@@ -201,12 +182,12 @@ void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2)
         *Parameter1 = atoi(argv[1]);
         printf("✓ Using Parameter1 %d from command line argument\n", *Parameter1);
         
-        printf("Please enter the Parameter2 value (0-8): ");
+        printf("Please enter the Parameter2 value (1-ll): ");
         scanf("%d", Parameter2);
         printf("✓ Using Parameter2 %d from user input\n", *Parameter2);
     } else {
         // 没有命令行参数，交互式输入两个参数（合并为一行）
-        printf("Please enter Parameter1 and Parameter2 values (0-1, 0-8): ");
+        printf("Please enter Parameter1 and Parameter2 values (1-3, 1-ll): ");
         scanf("%d %d", Parameter1, Parameter2);
         
         printf("✓ Using Parameter1 %d and Parameter2 %d from user input\n", *Parameter1, *Parameter2);
@@ -227,22 +208,13 @@ void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2)
 
 
 
+void Mesh_2D(int rows, int cols, double *mesh_x, double *mesh_y, double deltax, double deltay) {
 
-//划分网格代码
-void Mesh(int n, double deltax, double *x) {
-    // 初始化网格节点坐标
-    for (int i = 0; i < n; i++) {
-        x[i] = deltax * i + 0.5 * deltax;
-    }
-}
-
-void Mesh_2D(int cols, int depth, double *mesh_x, double *mesh_y, double deltax, double deltay) {
-
-    for (int j = 0; j < cols; j++) 
+    for (int j = 0; j < rows; j++) 
             mesh_x[j] = deltax * j + 0.5 * deltax;
     
     
-    for (int k = 0; k < depth; k++) 
+    for (int k = 0; k < cols; k++) 
         mesh_y[k] = deltay * k + 0.5 * deltay;
         
 }
@@ -250,21 +222,21 @@ void Mesh_2D(int cols, int depth, double *mesh_x, double *mesh_y, double deltax,
 
 
 // 控制计算步数子程序
-void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int cols, int vis, int scheme, 
-                                            double* x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols],double gamma) {
+void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int rows, int vis, int scheme, 
+                                            double* x, double (*U)[rows], double (*FU)[rows],double (*pri)[rows],double gamma) {
     for (int k = 0; k < l; k++) {
         //计算格式
-        //RK1_TVD(vis, scheme, 3, cols, x, U, FU, 1e-10, deltax, CFL, gamma, k+1);
+        //RK1_TVD(vis, scheme, 3, rows, x, U, FU, 1e-10, deltax, CFL, gamma, k+1);
         //RK_2Roe(vis, scheme, 3, N_ngc, U, FU, deltat, deltax, CFL);
 
         t += *deltat;
-        Con_to_Pri_1D(3, cols, pri, U);
-//        OutputData_file(k+1,cols,x,U,FU,pri,t);
+//        Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
+//        OutputData_file(k+1,rows,x,U,FU,pri,t);
     }
 }
 
 
-void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], double (*FU)[cols],double (*pri)[cols], double t) {
+void OutputData_file(int k, int rows, int GC, double * x, double (*U)[rows], double (*FU)[rows],double (*pri)[rows], double t) {
     // 文件输出
     printf("Output result(rho, u, p, T, U_M, U_E)\n");
     if (k == 0)
@@ -277,7 +249,7 @@ void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], dou
             return; // 返回错误代码
         }
         fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t rhoE_K\t rhoE_I\t F_rho\t F_rhou\t F_rhoE\n");
-        for (int i = GC; i <= cols-GC-1 ; i++) {
+        for (int i = GC; i <= rows-GC-1 ; i++) {
             fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",\
                         x[i-GC], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
                         U[1][i], U[2][i], 0.5*pri[1][i]*U[1][i], pri[2][i]/(1.4-1) , \
@@ -297,7 +269,7 @@ void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], dou
             return;
         }
         fprintf(file, "variables =  'x' 'rho' 'u' 'p' 'rhou' \n");
-        for (int i = 2; i < cols-2; i++) {
+        for (int i = 2; i < rows-2; i++) {
             fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n", 
             x[i-2], pri[0][i], pri[1][i], pri[2][i], U[1][i]);
         }
@@ -307,9 +279,9 @@ void OutputData_file(int k, int cols, int GC, double * x, double (*U)[cols], dou
 }
 
 
-void OutputData_file_2D(int k, int cols, int depth, int GC, 
-                       double (*mx), double (*my), double (*U)[cols][depth], double (*FU)[cols],
-                       double (*pri)[cols][depth], double t) {
+void OutputData_file_2D(int k, int rows, int cols, int GC, 
+                       double (*mx), double (*my), double (*U)[rows][cols], double (*FU)[rows],
+                       double (*pri)[rows][cols], double t) {
     
     printf("Output result(rho, u, v, p, T, U_M, U_E)\n");
     
@@ -325,17 +297,17 @@ void OutputData_file_2D(int k, int cols, int depth, int GC,
         fprintf(file, "TITLE = \"2D Fluid Dynamics Data\"\n");
         fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
         
+        int output_rows = rows - 2*GC;
         int output_cols = cols - 2*GC;
-        int output_depth = depth - 2*GC;
         
         // 指定ZONE信息 - 关键修复
         fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
-        fprintf(file, "I=%d, J=%d\n", output_depth, output_cols);  // 注意：Tecplot中J是行数，I是列数
+        fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);  // 注意：Tecplot中J是行数，I是列数
         fprintf(file, "DATAPACKING=POINT\n");
         
         // 输出数据 - 注意循环顺序
-        for (int j = 0; j < output_cols; j++) {
-            for (int kk = 0; kk < output_depth; kk++) {  // 避免变量名冲突
+        for (int j = 0; j < output_rows; j++) {
+            for (int kk = 0; kk < output_cols; kk++) {  // 避免变量名冲突
                 int actual_j = j + GC;
                 int actual_kk = kk + GC;
                 
@@ -369,15 +341,15 @@ void OutputData_file_2D(int k, int cols, int depth, int GC,
         fprintf(file, "TITLE = \"2D Fluid Dynamics Data - Step %d\"\n", k);
         fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
         
+        int output_rows = rows - 2*GC;
         int output_cols = cols - 2*GC;
-        int output_depth = depth - 2*GC;
         
         fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
-        fprintf(file, "I=%d, J=%d\n", output_depth, output_cols);
+        fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);
         fprintf(file, "DATAPACKING=POINT\n");
         
-        for (int j = 0; j < output_cols; j++) {
-            for (int kk = 0; kk < output_depth; kk++) {
+        for (int j = 0; j < output_rows; j++) {
+            for (int kk = 0; kk < output_cols; kk++) {
                 int actual_j = j + GC;
                 int actual_kk = kk + GC;
                 

@@ -35,19 +35,19 @@ static inline double WENO5_R();
 
 
 
-static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
-                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth], double delta_x) {
+static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
+                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols], double delta_x) {
     int i, j, k;
     double epsilo = 1e-6;
     
     if (Characteriz) {
         // 动态分配内存
-        double (*Pri)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Chara_Var)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Eigen_L)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*Eigen_R)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*W_L)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*W_R)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         // 检查内存分配是否成功
         if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
@@ -62,12 +62,12 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
         }
 
         // 初始化数组
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                for (k = 0; k < depth; k++) {
+        for (i = 0; i < var; i++) {
+            for (j = 0; j < rows; j++) {
+                for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < rows; ii++){
+                    for (int ii = 0; ii < var; ii++){
                         Eigen_L[i][ii][j][k] = 0.0;
                         Eigen_R[i][ii][j][k] = 0.0;
                     }
@@ -80,30 +80,30 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
         }
 
         // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(rows,cols,depth,Pri,y);
+        Con_to_Pri_2D(var,rows,cols,Pri,y);
         if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
         
 
 
-            for (i = 0; i < rows; i++) 
-                 for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++){
+            for (i = 0; i < var; i++) 
+                 for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++){
                         W_L[i][j][k] = Chara_Var[i][j][k];
                         W_R[i][j][k] = Chara_Var[i][j+1][k];
                     }
 
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
@@ -111,27 +111,27 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
         }
 
         else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
         
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++){
                         W_L[i][j][k] = Chara_Var[i][j][k];
                         W_R[i][j][k] = Chara_Var[i][j][k+1];
                     }
 
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
                         }
@@ -148,17 +148,17 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
     } 
     else{
         if (dir == 1 )
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j+1][k];
                     }
                   
         else if (dir == 2)
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j][k+1];
                     }
@@ -169,19 +169,19 @@ static inline void Reconstruction_Godunov(int dir, int rows, int cols, int depth
 
 
 
-static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
-                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth], double delta_x, double delta_y) {
+static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
+                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols], double delta_x, double delta_y) {
     int i, j, k;
  
 
     if (Characteriz) {
         // 动态分配内存
-        double (*Pri)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Chara_Var)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Eigen_L)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*Eigen_R)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*W_L)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*W_R)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         // 检查内存分配是否成功
         if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
@@ -196,12 +196,12 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
         }
 
         // 初始化数组
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                for (k = 0; k < depth; k++) {
+        for (i = 0; i < var; i++) {
+            for (j = 0; j < rows; j++) {
+                for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < rows; ii++){
+                    for (int ii = 0; ii < var; ii++){
                         Eigen_L[i][ii][j][k] = 0.0;
                         Eigen_R[i][ii][j][k] = 0.0;
                     }
@@ -214,21 +214,21 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
         }
 
         // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(rows,cols,depth,Pri,y);
+        Con_to_Pri_2D(var,rows,cols,Pri,y);
         if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = Chara_Var[i][j-2+nn][k];
@@ -237,10 +237,10 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
                         W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_x);
                     }
         
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
@@ -248,18 +248,18 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
         }
 
         else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];
@@ -268,10 +268,10 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
                         W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_y);
                     }
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
                         }
@@ -289,9 +289,9 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
 
     else{
         if (dir == 1){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j-2+nn][k];
@@ -301,9 +301,9 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
                     }
         }
         else if (dir == 2){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];
@@ -322,19 +322,19 @@ static inline void TVD_Reconstruction(int dir, int rows, int cols, int depth, in
 
 
 // 三阶WENO重构
-static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
-                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth]) {
+static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
+                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols]) {
     int i, j, k;
 
    
     if (Characteriz) {
          // 动态分配内存
-        double (*Pri)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Chara_Var)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Eigen_L)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*Eigen_R)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*W_L)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*W_R)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         // 检查内存分配是否成功
         if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
@@ -349,12 +349,12 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         // 初始化数组
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                for (k = 0; k < depth; k++) {
+        for (i = 0; i < var; i++) {
+            for (j = 0; j < rows; j++) {
+                for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < rows; ii++){
+                    for (int ii = 0; ii < var; ii++){
                         Eigen_L[i][ii][j][k] = 0.0;
                         Eigen_R[i][ii][j][k] = 0.0;
                     }
@@ -367,21 +367,20 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(rows,cols,depth,Pri,y);
+        Con_to_Pri_2D(var,rows,cols,Pri,y);
         if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
-            
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = Chara_Var[i][j-2+nn][k];
@@ -390,10 +389,10 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
                         W_R[i][j][k] = WENO3_R(&fu[2]);
                     }
         
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
@@ -401,30 +400,30 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = y[i][j][k-2+nn];
+                            fu[nn] = Chara_Var[i][j][k-2+nn];
 
                         W_L[i][j][k] = WENO3_L(&fu[2]);
                         W_R[i][j][k] = WENO3_R(&fu[2]);
                     }
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j <= cols-GC; j++) 
-                    for ( k = GC-1; k <= depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j <= rows-GC; j++) 
+                    for ( k = GC-1; k <= cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
                         }
@@ -441,9 +440,9 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
     } 
     else{
         if (dir == 1){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j-2+nn][k];
@@ -453,9 +452,9 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
                     }
         }
         else if (dir == 2){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];
@@ -470,19 +469,19 @@ static inline void WENO3_Reconstruction(int dir, int rows, int cols, int depth, 
 
 
 // 五阶WENO重构
-static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, int GC, double (*y)[cols][depth], \
-                                            double (*conserl)[cols][depth], double (*conserr)[cols][depth]) {
+static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
+                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols]) {
     int i, j, k;
 
    
     if (Characteriz) {
          // 动态分配内存
-        double (*Pri)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Chara_Var)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*Eigen_L)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*Eigen_R)[rows][cols][depth] = malloc(rows * sizeof(double[rows][cols][depth]));
-        double (*W_L)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-        double (*W_R)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
+        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         // 检查内存分配是否成功
         if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
@@ -497,12 +496,12 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         // 初始化数组
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                for (k = 0; k < depth; k++) {
+        for (i = 0; i < var; i++) {
+            for (j = 0; j < rows; j++) {
+                for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < rows; ii++){
+                    for (int ii = 0; ii < var; ii++){
                         Eigen_L[i][ii][j][k] = 0.0;
                         Eigen_R[i][ii][j][k] = 0.0;
                     }
@@ -515,22 +514,22 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(rows,cols,depth,Pri,y);
+        Con_to_Pri_2D(var,rows,cols,Pri,y);
 
         if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j < cols-GC; j++) 
-                    for ( k = GC; k < depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j < rows-GC; j++) 
+                    for ( k = GC; k < cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++) 
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++) 
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = Chara_Var[i][j-2+nn][k];
@@ -539,10 +538,10 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
                         W_R[i][j][k] = WENO5_R(&fu[2]);
                     }
         
-            for (i = 0; i < rows; i++) 
-                for ( j = GC-1; j < cols-GC; j++) 
-                    for ( k = GC; k < depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC-1; j < rows-GC; j++) 
+                    for ( k = GC; k < cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
@@ -550,18 +549,18 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
         }
 
         else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, rows, cols,depth ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < rows; i++) 
-                for ( j = GC; j < cols-GC; j++) 
-                    for ( k = GC-1; k < depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++)
+            for (i = 0; i < var; i++) 
+                for ( j = GC; j < rows-GC; j++) 
+                    for ( k = GC-1; k < cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++)
                             Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
 
 
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = Chara_Var[i][j][k-2+nn];
@@ -570,10 +569,10 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
                         W_R[i][j][k] = WENO5_R(&fu[2]);
                     }
 
-            for (i = 0; i < rows; i++) 
-                for ( j = GC; j < cols-GC; j++) 
-                    for ( k = GC-1; k < depth-GC; k++)
-                        for (int ii = 0; ii < rows; ii++){
+            for (i = 0; i < var; i++) 
+                for ( j = GC; j < rows-GC; j++) 
+                    for ( k = GC-1; k < cols-GC; k++)
+                        for (int ii = 0; ii < var; ii++){
                             conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
                             conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
                         }
@@ -590,9 +589,9 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
     } 
     else{
         if (dir == 1){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC-1; j < cols-GC; j++)
-                    for ( k = GC; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC-1; j < rows-GC; j++)
+                    for ( k = GC; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j-2+nn][k];
@@ -602,9 +601,9 @@ static inline void WENO5_Reconstruction(int dir, int rows, int cols, int depth, 
                     }
         }
         else if (dir == 2){
-            for ( i = 0; i < rows; i++)
-                for ( j = GC; j < cols-GC; j++)
-                    for ( k = GC-1; k < depth-GC; k++){
+            for ( i = 0; i < var; i++)
+                for ( j = GC; j < rows-GC; j++)
+                    for ( k = GC-1; k < cols-GC; k++){
                         double fu[10] = {0.0};
                         for (int nn = 0; nn < 6; nn++)
                             fu[nn] = y[i][j][k-2+nn];

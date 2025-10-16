@@ -6,9 +6,9 @@
 #include "Golbal.h"
 
 
-static inline void Compute_Eigen(int rowss, int rows, int cols, double (*Pri)[cols], double (*eigen_l)[rows][cols], double (*eigen_r)[rows][cols]) {
+static inline void Compute_Eigen(int vars, int var, int rows, double (*Pri)[rows], double (*eigen_l)[var][rows], double (*eigen_r)[var][rows]) {
     
-    for(int j = 0; j < cols; j++) {
+    for(int j = 0; j < rows; j++) {
         double q2, c2, b1, b2;
         double _u, _H, _c, _uc;
         
@@ -52,12 +52,12 @@ static inline void Compute_Eigen(int rowss, int rows, int cols, double (*Pri)[co
 
 
 
-static inline void Compute_Eigen_2D(double AA, double BB, int rows, int cols, int depth,\
-                                    double (*Pri)[cols][depth], double (*eigen_l)[rows][cols][depth],\
-                                    double (*eigen_r)[rows][cols][depth]){
+static inline void Compute_Eigen_2D(double AA, double BB, int var, int rows, int cols,\
+                                    double (*Pri)[rows][cols], double (*eigen_l)[var][rows][cols],\
+                                    double (*eigen_r)[var][rows][cols]){
 
     
-    double (*H)[depth] = malloc(cols * sizeof(double[depth]));
+    double (*H)[cols] = malloc(rows * sizeof(double[cols]));
     
     // 检查内存分配是否成功
     if (H == NULL) {
@@ -67,15 +67,15 @@ static inline void Compute_Eigen_2D(double AA, double BB, int rows, int cols, in
         return;
     }
 
-    for (int j = 1; j < cols-1; j++){ 
-        for (int k = 1; k < depth-1; k++){
+    for (int j = 1; j < rows-1; j++){ 
+        for (int k = 1; k < cols-1; k++){
             H[j][k] = 0.5 * (pow(Pri[1][j][k],2) + pow(Pri[2][j][k],2)) + (M_gamma/(M_gamma-1))*(Pri[3][j][k]/Pri[0][j][k]);
         }
     }
 
 
-	for(int j = GhostCell-1; j <= cols-GhostCell; j++) {
-		for(int k = GhostCell-1; k <= depth-GhostCell; k++) {
+	for(int j = GhostCell-1; j <= rows-GhostCell; j++) {
+		for(int k = GhostCell-1; k <= cols-GhostCell; k++) {
 			double D, D1, q2, uu, vv, c2, b1, b2;
 			double _u, _v, _H, _c;
             //preparing some interval value

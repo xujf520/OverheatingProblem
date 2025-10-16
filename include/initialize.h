@@ -6,6 +6,7 @@
 #include "Golbal.h"
 #include "math.h"
 #include "function.h"
+#include "Boundary_Condition.h"
 
 
 // 定义圆周率PI常量
@@ -13,178 +14,562 @@
     #define PI 3.14159265358979323846
 #endif
 
-
-static inline void initialize(double *x,int n){
-    int i;
-    for(i = 0;i < n;i++){
-        x[i]=0.0;
-    }
-}
-
-
-static inline void initEuler1D(int rows, int cols,double (*x)[cols]) {
-    int i, j;
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
-            x[i][j] = 0;
-        }
-    }
-}
-
-static inline void initEuler2D(int rows, int cols, int depth, double (*x)[cols][depth]) {
+static inline void initEuler2D(int var, int rows, int cols, double (*x)[rows][cols]) {
     int i, j, k;
-    for (i = 0; i < rows; i++) 
-        for (j = 0; j < cols; j++) 
-           for (k = 0; k < depth; k++) 
+    for (i = 0; i < var; i++) 
+        for (j = 0; j < rows; j++) 
+           for (k = 0; k < cols; k++) 
                 x[i][j][k] = 0.0;
 
 }
 
-static inline void initEulerpri1D_Sod(int rows, int cols,double (*x)[cols]) {
+//初始条件
+//初始条件
+static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Shock Tube Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_REFLECTION; // Bottom: reflective wall
+    bc_config.top = BC_REFLECTION;    // Top: reflective wall
+
     int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+    
     for (i = 0; i < rows; i++) {
-        if(i == 0){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = 1;
-                }
-                else{
-                    x[i][j] = 0.125;
-                }
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 ){
+                x[0][i][j] = 1.0;
+                x[1][i][j] = 0.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
             }
-        }
-        if(i == 1){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = 0;
-                }
-                else{
-                    x[i][j] = 0;
-                }
-            }
-        }
-        if(i == 2){
-            for (j = 0; j < cols; j++) {
-                if( j <cols/2){
-                    x[i][j] = 1.0;
-                }
-                else{
-                    x[i][j] = 0.1;
-                }
+            else {
+                x[0][i][j] = 0.125;
+                x[1][i][j] = 0.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 0.1;
             }
         }
     }
+
+    *Time = 0.15;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Reflective Wall\n");
+    printf("  Top:    Reflective Wall\n");
 }
 
+// Case 1
+static inline void initEulerpri2D_Shocktube1(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
 
-static inline void initEulerpri1D_Smooth(int rows, int cols, int GC, double (*x)[cols], double Deltax) {
+    printf("=== 2D Shock Tube Case 1 ===\n");
 
-    for (int j = 0; j < cols; j++) {
-        x[0][j] = 2.0 - 1.0/( 4.0 * PI )*(cos(4.0 * PI * (j+1-GC) * Deltax)-cos(4.0 * PI * (j-GC) * Deltax))/Deltax;
-        x[1][j] = 1.0;
-        x[2][j] = 1.0;
-    }
+    // Set boundary conditions for 2D Riemann problem
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
 
-}
-
-
-
-static inline void initEulerpri1D_Osher(int rows, int cols, int GC, double (*pri)[cols], double Deltax) {
     int i, j;
-
-    int NGC= 2*GC;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
 
     for (i = 0; i < rows; i++) {
-        if(i == 0){
-            pri[i][0] = 3.857;
-            pri[i][1] = 3.857;
-            for (j = 0; j < cols; j++) {
-                if( j < (cols - NGC)/10){
-                    pri[i][j] = 3.857;
-                }
-                else{
-                    pri[i][j] = 1. + 0.2 * sin(5*((j-GC)*Deltax-5));
-                }
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 && j < cols/2) {
+                x[0][i][j] = 2;     // ρ
+                x[1][i][j] = -0.75; // u
+                x[2][i][j] = 0.5;   // v
+                x[3][i][j] = 1;     // p
             }
-
-        }
-        if(i == 1){
-            for (j = 0; j < cols; j++) {
-                if( j < (cols-NGC)/10){
-                    pri[i][j] = 2.629;
-                }
-                else{
-                    pri[i][j] = 0;
-                }
+            else if (i < rows/2 && j >= cols/2) {
+                x[0][i][j] = 1;     // ρ
+                x[1][i][j] = -0.75; // u
+                x[2][i][j] = -0.5;  // v
+                x[3][i][j] = 1;     // p
             }
-        }
-        if(i == 2){
-            for (j = 0; j < cols; j++) {
-                if( j < (cols - NGC)/10){
-                    pri[i][j] = 10.333;
-                }
-                else{
-                    pri[i][j] = 1.0;
-                }
+            else if (i >= rows/2 && j < cols/2) {
+                x[0][i][j] = 1;     // ρ
+                x[1][i][j] = 0.75;  // u
+                x[2][i][j] = 0.5;   // v
+                x[3][i][j] = 1;     // p
+            }
+            else if (i >= rows/2 && j >= cols/2) {
+                x[0][i][j] = 3;     // ρ
+                x[1][i][j] = 0.75;  // u
+                x[2][i][j] = -0.5;  // v
+                x[3][i][j] = 1;     // p
             }
         }
     }
+    *Time = 0.23;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
 }
 
-static inline void initEulerpri1D_Shocktube(int rows, int cols,double (*x)[cols], double pri1[3],double pri2[3]) {
+// Case 2
+static inline void initEulerpri2D_Shocktube2(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    
+    printf("=== 2D Shock Tube Case 2 ===\n");
+
+    // Set boundary conditions for 2D Riemann problem
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
+
     int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 && j < cols/2) {
+                x[0][i][j] = 2;       // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = -0.3;    // v
+                x[3][i][j] = 1;       // p
+            }
+            else if (i < rows/2 && j >= cols/2) {
+                x[0][i][j] = 1;       // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = -0.4;    // v
+                x[3][i][j] = 1;       // p
+            }
+            else if (i >= rows/2 && j < cols/2) {
+                x[0][i][j] = 1.0625;  // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = 0.2145;  // v
+                x[3][i][j] = 0.4;     // p
+            }
+            else if (i >= rows/2 && j >= cols/2) {
+                x[0][i][j] = 0.5197;  // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = -1.125;  // v
+                x[3][i][j] = 0.4;     // p
+            }
+        }
+    }
+
+    *Time = 0.30;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+// Case 3
+static inline void initEulerpri2D_Shocktube3(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 2D Shock Tube Case 3 ===\n");
+
+    // Set boundary conditions for 2D Riemann problem
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
+
+    int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 && j < cols/2) {
+                x[0][i][j] = 0.5065;  // ρ
+                x[1][i][j] = 0.8939;  // u
+                x[2][i][j] = 0;       // v
+                x[3][i][j] = 0.35;    // p
+            }
+            else if (i < rows/2 && j >= cols/2) {
+                x[0][i][j] = 1.5;     // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = 0;       // v
+                x[3][i][j] = 1.5;     // p
+            }
+            else if (i >= rows/2 && j < cols/2) {
+                x[0][i][j] = 1.1;     // ρ
+                x[1][i][j] = 0.8939;  // u
+                x[2][i][j] = 0.8939;  // v
+                x[3][i][j] = 1.1;     // p
+            }
+            else if (i >= rows/2 && j >= cols/2) {
+                x[0][i][j] = 0.5065;  // ρ
+                x[1][i][j] = 0;       // u
+                x[2][i][j] = 0.8939;  // v
+                x[3][i][j] = 0.35;    // p
+            }
+        }
+    }
+
+    *Time = 0.25;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+// Case 4
+static inline void initEulerpri2D_Shocktube4(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 2D Shock Tube Case 4 ===\n");
+
+    // Set boundary conditions for 2D Riemann problem
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
+
+    int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 && j < cols/2) {
+                x[0][i][j] = 2;     // ρ
+                x[1][i][j] = 0.75;  // u
+                x[2][i][j] = 0.5;   // v
+                x[3][i][j] = 1;     // p
+            }
+            else if (i < rows/2 && j >= cols/2) {
+                x[0][i][j] = 1;     // ρ
+                x[1][i][j] = 0.75;  // u
+                x[2][i][j] = -0.5;  // v
+                x[3][i][j] = 1;     // p
+            }
+            else if (i >= rows/2 && j < cols/2) {
+                x[0][i][j] = 1;     // ρ
+                x[1][i][j] = -0.75; // u
+                x[2][i][j] = 0.5;   // v
+                x[3][i][j] = 1;     // p
+            }
+            else if (i >= rows/2 && j >= cols/2) {
+                x[0][i][j] = 3;     // ρ
+                x[1][i][j] = -0.75; // u
+                x[2][i][j] = -0.5;  // v
+                x[3][i][j] = 1;     // p
+            }
+        }
+    }
+
+    *Time = 0.30;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+// Case 5
+static inline void initEulerpri2D_Shocktube5(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 2D Shock Tube Case 5 ===\n");
+
+    // Set boundary conditions for 2D Riemann problem
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
+
+    int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 && j < cols/2) {
+                x[0][i][j] = 1;       // ρ
+                x[1][i][j] = -0.6259; // u
+                x[2][i][j] = 0.1;     // v
+                x[3][i][j] = 1;       // p
+            }
+            else if (i < rows/2 && j >= cols/2) {
+                x[0][i][j] = 0.5197;  // ρ
+                x[1][i][j] = 0.1;     // u
+                x[2][i][j] = 0.1;     // v
+                x[3][i][j] = 0.4;     // p
+            }
+            else if (i >= rows/2 && j < cols/2) {
+                x[0][i][j] = 0.8;     // ρ
+                x[1][i][j] = 0.1;     // u
+                x[2][i][j] = 0.1;     // v
+                x[3][i][j] = 1;       // p
+            }
+            else if (i >= rows/2 && j >= cols/2) {
+                x[0][i][j] = 1;       // ρ
+                x[1][i][j] = 0.1;     // u
+                x[2][i][j] = -0.6259; // v
+                x[3][i][j] = 1;       // p
+            }
+        }
+    }
+
+    *Time = 0.25;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+// 泰勒格林涡问题
+static inline void initEulerpri2D_TaylorGreenVortex(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    printf("=== Taylor-Green Vortex Test Case ===\n");
+
+    // Set boundary conditions for periodic flow
+    bc_config.left = BC_PERIODICITY;   // Left: periodic
+    bc_config.right = BC_PERIODICITY;  // Right: periodic  
+    bc_config.bottom = BC_PERIODICITY; // Bottom: periodic
+    bc_config.top = BC_PERIODICITY;    // Top: periodic
+
+    int i, j;
+    *Lx = 2.0 * M_PI;  // x方向周期
+    *Ly = 2.0 * M_PI;  // y方向周期
+    double rho0 = 1.0;       // 参考密度
+    double p0 = 1.0;         // 参考压力
+    double U0 = 1.0;         // 参考速度
+    double x_pos, y_pos;
+    double nx = rows - 2* GhostCell;
+    double ny = cols - 2* GhostCell;
+    
     for (i = 0; i < rows; i++) {
         for (j = 0; j < cols; j++) {
-            if( j <cols/2)
-                x[i][j] = pri1[i];
-            else
-                x[i][j] = pri2[i];
+            // 计算物理坐标位置
+            x_pos = (double)i / nx * (*Lx);
+            y_pos = (double)j / ny * (*Ly);
+            
+            
+            // 泰勒格林涡速度场
+            x[0][i][j] = rho0;  // 密度
+            x[1][i][j] = U0 * sin(x_pos) * cos(y_pos);      // u速度
+            x[2][i][j] = -U0 * cos(x_pos) * sin(y_pos);     // v速度
+            x[3][i][j] = p0 + (rho0 * U0 * U0 / 4.0) * (cos(2.0 * x_pos) + cos(2.0 * y_pos)); // 压力
         }
     }
+
+    *Time = 1.0;
+
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Periodic\n");
+    printf("  Right:  Periodic\n");
+    printf("  Bottom: Periodic\n");
+    printf("  Top:    Periodic\n");
 }
 
-static inline void initEulerpri2D_Shocktube(int rows, int cols, int depth, double (*x)[cols][depth], double pri1[rows],double pri2[rows]) {
-    int i, j, k;
+// 二维高斯密度脉冲问题 - 所有边界都为出口边界
+static inline void initEulerpri2D_GaussianPulse(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    printf("=== 2D Gaussian Density Pulse Test Case ===\n");
+
+    // Set boundary conditions for open domain
+    bc_config.left = BC_OUTFLOW;      // Left: outflow
+    bc_config.right = BC_OUTFLOW;     // Right: outflow  
+    bc_config.bottom = BC_OUTFLOW;    // Bottom: outflow
+    bc_config.top = BC_OUTFLOW;       // Top: outflow
+
+    int i, j;
+    *Lx = 10.0;    // 计算域长度
+    *Ly = 10.0;    // 计算域宽度
+    double x0 = (*Lx)/2.0;  // 脉冲中心x坐标
+    double y0 = (*Ly)/2.0;  // 脉冲中心y坐标
+    double A = 1.0;      // 脉冲幅度
+    double sigma = 1.0;  // 脉冲宽度
+    double rho0 = 1.0;   // 背景密度
+    double p0 = 1.0;     // 背景压力
+    double u0 = 0.5;     // x方向背景速度
+    double v0 = 0.3;     // y方向背景速度
+    double x_pos, y_pos, r2;
+    double nx = rows - 2* GhostCell;
+    double ny = cols - 2* GhostCell;
+    
     for (i = 0; i < rows; i++) {
         for (j = 0; j < cols; j++) {
-            for ( k = 0; k < depth; k++){
-                if( j < cols/2)
-                    x[i][j][k] = pri1[i];
-                else
-                    x[i][j][k] = pri2[i];
-            }
+            // 计算物理坐标位置
+            x_pos = (double)i / nx * (*Lx);
+            y_pos = (double)j / ny * (*Ly);
+            
+            // 计算到脉冲中心的距离平方
+            r2 = (x_pos - x0)*(x_pos - x0) + (y_pos - y0)*(y_pos - y0);
+            
+            // 设置初始条件：高斯密度脉冲 + 均匀背景流动
+            x[0][i][j] = rho0 + A * exp(-r2 / (sigma * sigma));  // 密度：背景 + 高斯脉冲
+            x[1][i][j] = u0;      // x方向速度
+            x[2][i][j] = v0;      // y方向速度
+            x[3][i][j] = p0;      // 压力
         }
     }
+
+    *Time = 4.0;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Gaussian Pulse: Center at (%f, %f), Amplitude = %f\n", x0, y0, A);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
 }
 
 
-static inline void initEulerConser_Smooth(int rows, int cols, int GC, double (*y)[cols], double Deltax) {
+// KH不稳定性测试算例
+static inline void initEulerpri2D_KelvinHelmholtz(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    printf("=== Kelvin-Helmholtz Instability Test Case ===\n");
 
-    double u[10];
-    for (int h = 0; h < 5; h++)
-        u[h] = 0.0;
+    // Set boundary conditions for KH instability
+    bc_config.left = BC_PERIODICITY;   // Left: periodic
+    bc_config.right = BC_PERIODICITY;  // Right: periodic  
+    bc_config.bottom = BC_REFLECTION;  // Bottom: reflective wall
+    bc_config.top = BC_REFLECTION;     // Top: reflective wall
 
-    for (int j = 0; j < cols; j++) {
-        y[0][j] = 2.0 - 1.0/( 4.0 * PI )*(cos(4.0 * PI * (j+1-GC) * Deltax)-cos(4.0 * PI * (j-GC) * Deltax))/Deltax;
-        y[1][j] = y[0][j] * 1.0;
-        y[2][j] = 0.5*y[0][j] * 1.0 + 1.0/(M_gamma-1);
+    int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+    
+    double rho1 = 2.0;    // 下层流体密度
+    double rho2 = 1.0;    // 上层流体密度
+    double u1 = -0.5;     // 下层流体速度
+    double u2 = 0.5;      // 上层流体速度
+    double p0 = 2.5;      // 背景压力
+    double amplitude = 0.01;  // 扰动幅度
+    double width = 0.05;      // 剪切层宽度
+    
+    double y_pos, y_center, perturbation;
+    double nx = rows - 2 * GhostCell;
+    double ny = cols - 2 * GhostCell;
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            // 计算物理坐标位置
+            y_pos = (double)j / ny * (*Ly);
+            y_center = 0.5 * (*Ly);  // 计算域中心
+            
+            // 添加正弦扰动
+            perturbation = amplitude * sin(4.0 * M_PI * (double)i / nx * (*Lx));
+            
+            // 计算平滑的密度和速度过渡
+            double transition = 0.5 * (1.0 + tanh((y_pos - y_center + perturbation) / width));
+            
+            // 设置初始条件
+            x[0][i][j] = rho1 + (rho2 - rho1) * transition;  // 密度
+            x[1][i][j] = u1 + (u2 - u1) * transition;        // x方向速度
+            x[2][i][j] = 0.0;                                // y方向速度（初始为零）
+            x[3][i][j] = p0;                                 // 压力
+        }
     }
 
+    *Time = 1.0;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Fluid Properties:\n");
+    printf("  Lower layer: density = %.1f, velocity = %.1f\n", rho1, u1);
+    printf("  Upper layer: density = %.1f, velocity = %.1f\n", rho2, u2);
+    printf("  Background pressure: %.1f\n", p0);
+    printf("  Perturbation amplitude: %.3f\n", amplitude);
+    printf("  Shear layer width: %.3f\n", width);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Periodic\n");
+    printf("  Right:  Periodic\n");
+    printf("  Bottom: Reflective Wall\n");
+    printf("  Top:    Reflective Wall\n");
 }
 
-static inline void initEulerconser1D(int rows, int cols,double (*x)[cols],double (*y)[cols]) {
-    int j;
-    for (j = 0; j < cols; j++) {
-        y[0][j] = x[0][j];
-        y[1][j] = x[1][j] * x[0][j];
-        y[2][j] = x[2][j]/(M_gamma-1) + 0.5 * x[0][j] * x[1][j] * x[1][j];
+static inline void initEulerpri2D_KelvinHelmholtz_Sharp(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    printf("=== Kelvin-Helmholtz Instability Test Case (Sharp Interface) ===\n");
+
+    // Set boundary conditions for KH instability
+    bc_config.left = BC_PERIODICITY;   // Left: periodic
+    bc_config.right = BC_PERIODICITY;  // Right: periodic  
+    bc_config.bottom = BC_REFLECTION;  // Bottom: reflective wall
+    bc_config.top = BC_REFLECTION;     // Top: reflective wall
+
+    int i, j;
+    *Lx = 1.0;    // 计算域长度
+    *Ly = 1.0;    // 计算域宽度
+    
+    double rho1 = 2.0;    // 下层流体密度
+    double rho2 = 1.0;    // 上层流体密度
+    double u1 = -0.5;     // 下层流体速度
+    double u2 = 0.5;      // 上层流体速度
+    double p0 = 2.5;      // 背景压力
+    double amplitude = 0.01;  // 扰动幅度
+    
+    double y_pos, y_center, interface_position;
+    double nx = rows - 2 * GhostCell;
+    double ny = cols - 2 * GhostCell;
+    
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            // 计算物理坐标位置
+            y_pos = (double)j / ny * (*Ly);
+            y_center = 0.5 * (*Ly);  // 计算域中心
+            
+            // 计算界面位置（带扰动）
+            interface_position = y_center + amplitude * sin(4.0 * M_PI * (double)i / nx * (*Lx));
+            
+            // 锐利界面 - 直接判断位置
+            if (y_pos < interface_position) {
+                // 下层流体
+                x[0][i][j] = rho1;  // 密度
+                x[1][i][j] = u1;    // x方向速度
+            } else {
+                // 上层流体
+                x[0][i][j] = rho2;  // 密度
+                x[1][i][j] = u2;    // x方向速度
+            }
+            
+            x[2][i][j] = 0.0;       // y方向速度（初始为零）
+            x[3][i][j] = p0;        // 压力
+        }
     }
+
+    *Time = 1.0;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Fluid Properties:\n");
+    printf("  Lower layer: density = %.1f, velocity = %.1f\n", rho1, u1);
+    printf("  Upper layer: density = %.1f, velocity = %.1f\n", rho2, u2);
+    printf("  Density ratio: %.1f\n", rho1/rho2);
+    printf("  Velocity difference: %.1f\n", u2 - u1);
+    printf("  Background pressure: %.1f\n", p0);
+    printf("  Perturbation amplitude: %.3f\n", amplitude);
+    printf("  Interface type: Sharp (discontinuous)\n");
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Periodic\n");
+    printf("  Right:  Periodic\n");
+    printf("  Bottom: Reflective Wall\n");
+    printf("  Top:    Reflective Wall\n");
 }
 
-static inline void initEulerconser2D(int rows, int cols, int depth, double (*x)[cols][depth], double (*y)[cols][depth]) {
+
+
+static inline void initEulerconser2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]) {
     int j,k;
-    for (j = 0; j < cols; j++) {
-        for ( k = 0; k < depth; k++){
+    for (j = 0; j < rows; j++) {
+        for ( k = 0; k < cols; k++){
             double rho, u, v, p;
             rho = x[0][j][k];
             u = x[1][j][k];
@@ -200,19 +585,10 @@ static inline void initEulerconser2D(int rows, int cols, int depth, double (*x)[
 
 
 
-static inline void initEulerflux1D(int rows, int cols,double (*y)[cols],double (*z)[cols]) {
-    int j;
-    for (j = 0; j < cols; j++) {
-        z[0][j] = y[1][j];
-        z[1][j] = y[1][j]*y[1][j]/y[0][j] + (M_gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j]);
-        z[2][j] = (y[2][j] + (M_gamma - 1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j])) * y[1][j]/y[0][j];
-    }
-}
-
-static inline void initEulerflux2D(int rows, int cols, int depth, double (*y)[cols][depth], double (*f)[cols][depth],double (*g)[cols][depth]) {
+static inline void initEulerflux2D(int var, int rows, int cols, double (*y)[rows][cols], double (*f)[rows][cols],double (*g)[rows][cols]) {
     int j,k;
-    for (j = 0; j < cols; j++) {
-        for ( k = 0; k < depth; k++){
+    for (j = 0; j < rows; j++) {
+        for ( k = 0; k < cols; k++){
             double rho, u, v, p;
             rho = y[0][j][k];
             u = y[1][j][k]/y[0][j][k];
@@ -233,21 +609,10 @@ static inline void initEulerflux2D(int rows, int cols, int depth, double (*y)[co
     }
 }
 
-
-
-static inline void Con_to_Pri_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j <= cols-1; j++) {
-        x[0][j] = y[0][j];
-        x[1][j] = y[1][j]/y[0][j];
-        x[2][j] = (M_gamma-1)*(y[2][j] - 0.5*y[1][j]*y[1][j]/y[0][j]);
-    }
-}
-
-static inline void Con_to_Pri_2D(int rows, int cols, int depth, double (*x)[cols][depth], double (*y)[cols][depth]){
+static inline void Con_to_Pri_2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]){
    int j,k;
-    for (j = 0; j < cols; j++) {
-        for ( k = 0; k < depth; k++){
+    for (j = 0; j < rows; j++) {
+        for ( k = 0; k < cols; k++){
             double rho, u, v, p;
             rho = y[0][j][k];
             u = y[1][j][k]/y[0][j][k];
@@ -263,221 +628,21 @@ static inline void Con_to_Pri_2D(int rows, int cols, int depth, double (*x)[cols
 }
 
 
-static inline void Pri_to_Con_1D(int rows, int cols, double (*x)[cols], double (*y)[cols]){
-    int j;
-    for (j = 0; j <= cols-1; j++) {
-        y[0][j] = x[0][j];
-        y[1][j] = x[0][j] * x[1][j];
-        y[2][j] = 0.5 * x[0][j] * pow(x[1][j],2) + x[2][j]/(M_gamma-1);
-    }
-}
 
-
-
-
-
-//初始条件
-static inline void Init_Sod(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 1.0;
-    double rho2 = 0.125;
-    double u1 = 0.0;
-    double u2 = 0.0;
-    double p1 = 1.0;
-    double p2 = 0.1;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-static inline void Init_Sod_2D(double pri_Ver1[4], double pri_Ver2[4]) {
-    double rho1 = 1.0;
-    double rho2 = 0.125;
-    double u1 = 0.0;
-    double u2 = 0.0;
-    double v1 = 0.0;
-    double v2 = 0.0;
-    double p1 = 1.0;
-    double p2 = 0.1;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = v1;
-    pri_Ver1[3] = p1;
-
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = v2;
-    pri_Ver2[3] = p2;
-}
-
-static inline void Init_Sod_Rare(double pri_Ver1[3], double pri_Ver2[3]) {
-
-
-    double rho1 = 1.0;
-    double rho2 =  0.43757818061324344;
-    //double rho2 =  0.5;
-    double u1 = 0.0;
-    double u2 =  0.9013775087441291 ;
-    double p1 = 1.0;
-    double p2 =  0.31439665844271514;
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-static inline void Init_Sod_Shock(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 0.2655737117053071;
-    double rho2 =  0.125;
-    double u1 = 0.9274526200489499;
-    double u2 =  0.0;
-    double p1 =  0.30313017805064685;
-    double p2 = 0.1;
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-static inline void Init_DRare(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = -2.0 + u_r;
-    double u2 = 2.0 + u_r;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-static inline void Init_Shock_Impact(double pri_Ver1[3], double pri_Ver2[3],double u_r) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = 4.0 + u_r;
-    double u2 = -4.0 + u_r;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-
-static inline void Init_Shock1(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 24.0/11;
-    double rho2 = 1.0;
-    double u1 = 13.0/12;
-    double u2 = 0;
-    double p1 = 19.0/6;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-static inline void Init_Shock2(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 600.0/107.0;
-    double rho2 = 1.0;
-    double u1 = 493.0/60.0;
-    double u2 = 0.0;
-    double p1 = 499.0/6.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-static inline void Init_Shock3(double pri_Ver1[3], double pri_Ver2[3]) {
-    double rho1 = 1.0;
-    double rho2 = 1.0;
-    double u1 = 4.0;
-    double u2 = -4.0;
-    double p1 = 1.0;
-    double p2 = 1.0;
-
-    // 将变量赋值给数组
-    pri_Ver1[0] = rho1;
-    pri_Ver1[1] = u1;
-    pri_Ver1[2] = p1;
-
-    pri_Ver2[0] = rho2;
-    pri_Ver2[1] = u2;
-    pri_Ver2[2] = p2;
-}
-
-
-static inline void Init_Euler(int rows,int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols],double pri_Ver1[3], double pri_Ver2[3], double Deltax){
+static inline void Init_Euler_2D(int var,int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols], \
+                                    double (*f)[rows][cols], double (*g)[rows][cols], double *Lx, double *Ly, double *Time){
     //初始化
-    initEuler1D(3, cols, x);
-    initEuler1D(3, cols, y);
-    initEuler1D(3, cols, z);
-//    initEulerConser_Smooth(3, cols,GC, y, Deltax);
-    //进一步初始化
-    initEulerpri1D_Shocktube(3, cols, x,pri_Ver1,pri_Ver2);
-//    initEulerpri1D_Osher(3, cols,6,x, 10.0/(cols-6));
-    initEulerconser1D(3, cols,x, y);
-    initEulerflux1D(3, cols, y,z);
-}
-
-static inline void Init_Euler_2D(int rows,int cols, int depth, int GC, double (*x)[cols][depth],double (*y)[cols][depth],\
-                                    double (*f)[cols][depth], double (*g)[cols][depth], double Ver_a[rows], double Ver_b[rows], double Deltax){
-    //初始化
-    initEuler2D(rows, cols, depth,x);
-    initEuler2D(rows, cols, depth,y);
-    initEuler2D(rows, cols, depth,f);
-    initEuler2D(rows, cols, depth,g);
+    initEuler2D(var, rows, cols,x);
+    initEuler2D(var, rows, cols,y);
+    initEuler2D(var, rows, cols,f);
+    initEuler2D(var, rows, cols,g);
    
-//    initEulerConser_Smooth(3, cols,GC, y, Deltax);
-    //进一步初始化
-    initEulerpri2D_Shocktube(rows, cols,depth, x, Ver_a, Ver_b);
-//    initEulerpri1D_Osher(3, cols,6,x, 10.0/(cols-6));
-    initEulerconser2D(rows, cols, depth, x, y);
-    initEulerflux2D(rows, cols, depth, y,f,g);
+//    initEulerpri2D_1DShocktube(var, rows,cols, x, Time);
+//    initEulerpri2D_Shocktube5(var, rows, cols, x, Time);
+    initEulerpri2D_KelvinHelmholtz_Sharp(var, rows, cols, x, Lx, Ly, Time);
+//    initEulerpri2D_GaussianPulse(var, rows, cols, x, Lx, Ly, Time);
+    initEulerconser2D(var, rows, cols, x, y);
+    initEulerflux2D(var, rows, cols, y,f,g);
 }
 
 

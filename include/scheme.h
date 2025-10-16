@@ -48,12 +48,12 @@ static inline void restore2(double*u1,double*u2,double*u3,int n,double*roarr,dou
 
 
 //Flux计算方法
-static inline void HLL_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth] ,double (*z)[cols][depth]) {
+static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols] ,double (*z)[rows][cols]) {
 
 
     if (dir == 1){
-       for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++){
+       for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++){
                 //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -131,8 +131,8 @@ static inline void HLL_Flux(int dir, int rows, int cols, int depth, int GC, doub
     }
 
     else if (dir == 2){
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++){
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++){
                //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -212,12 +212,12 @@ static inline void HLL_Flux(int dir, int rows, int cols, int depth, int GC, doub
 
 
 
-static inline void HLLC_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth] ,double (*z)[cols][depth]) {
+static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols] ,double (*z)[rows][cols]) {
 
 
     if (dir == 1){
-       for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++){
+       for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++){
                 //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -310,8 +310,8 @@ static inline void HLLC_Flux(int dir, int rows, int cols, int depth, int GC, dou
     }
 
     else if (dir == 2){
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++){
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++){
                //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -401,12 +401,12 @@ static inline void HLLC_Flux(int dir, int rows, int cols, int depth, int GC, dou
     }    
 }
 
-static inline void Roe_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth], double (*z)[cols][depth]) {
+static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols], double (*z)[rows][cols]) {
     double epsilon = 1e-6;
     
     if (dir == 1) { // x方向通量
-        for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++) {
+        for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++) {
                 // 读取左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -521,8 +521,8 @@ static inline void Roe_Flux(int dir, int rows, int cols, int depth, int GC, doub
         }
     }
     else if (dir == 2) { // y方向通量
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++) {
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++) {
                 // 读取上下原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -639,9 +639,9 @@ static inline void Roe_Flux(int dir, int rows, int cols, int depth, int GC, doub
 }
 
 
-static inline void ER_Flux(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols]) {
+static inline void ER_Flux(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows]) {
     
-    for (int j = GC-1; j <= cols-GC; j++) {
+    for (int j = GC-1; j <= rows-GC; j++) {
         double rho_F = 0,u_F=0,p_F=0;
         double rho_l = x[0][j];
         double rho_r = y[0][j];
@@ -890,12 +890,12 @@ double ExactRieamnna_ustar(double p_star, double rhol, double rhor, double ul,do
 //Flux计算方法
 
 
-static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth] ,double (*z)[cols][depth]) {
+static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols] ,double (*z)[rows][cols]) {
 
 
     if (dir == 1){
-       for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++){
+       for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++){
                 //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -913,17 +913,13 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
                 double v_R = y[2][j][k]/y[0][j][k];
                 double p_L = (x[3][j][k] - 0.5 * rho_L * (pow(u_L,2) + pow(v_L,2)))*(M_gamma-1);
                 double p_R = (y[3][j][k] - 0.5 * rho_R * (pow(u_R,2) + pow(v_R,2)))*(M_gamma-1);
-                
                 //计算声速
                 double a_L = sqrt(M_gamma * p_L / rho_L);
                 double a_R = sqrt(M_gamma * p_R / rho_R);
-
                 //计算总焓H
                 double H_L = 0.5 * pow(u_L,2) +  0.5 * pow(v_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
                 double H_R = 0.5 * pow(u_R,2) +  0.5 * pow(v_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
-
-                //计算左右守恒变量和通量
-
+                //计算通量
                 double rho_FL = rho_L * u_L;
                 double rho_FR = rho_R * u_R;
                 double rhou_FL = rho_L * u_L * u_L + p_L;
@@ -932,16 +928,17 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
                 double rhov_FR = rho_R * v_R * u_R;
                 double rhoe_FL = rho_L * H_L * u_L;
                 double rhoe_FR = rho_R * H_R * u_R;
-            
                 //计算Roe平均
                 double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
-
                 //利用Roe平均的变量计算近似波速
                 double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
                 double sleft = ubar - cbar;
                 double sright = ubar + cbar;
+                double rho_HLL = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
 
                 //确定HLL数值通量
                 double rho_F = 0, rhou_F = 0, rhov_F = 0,rhoe_F = 0;
@@ -955,7 +952,7 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
                     rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
                     rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
                     rhov_F = (sright*rhov_FL - sleft*rhov_FR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
-                    rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+                    rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft) * (e_R-e_L)* rho_HLL;
                 }
                 else if (sright <= 0){
                     rho_F = rho_FR;
@@ -973,8 +970,8 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
     }
 
     else if (dir == 2){
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++){
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++){
                //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -1017,6 +1014,9 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
                 double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
                 double sleft = vbar - cbar;
                 double sright = vbar + cbar;
+                double rho_HLL = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
 
                 //确定HLL数值通量
                 double rho_G = 0, rhou_G = 0, rhov_G = 0,rhoe_G = 0;
@@ -1030,7 +1030,7 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
                     rho_G = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
                     rhou_G = (sright*rhou_GL - sleft*rhou_GR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
                     rhov_G = (sright*rhov_GL - sleft*rhov_GR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
-                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft);
+                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
                 }
 
                 else if (sright <= 0){
@@ -1054,12 +1054,12 @@ static inline void HLLHC_Flux(int dir, int rows, int cols, int depth, int GC, do
 
 
 
-static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth] ,double (*z)[cols][depth]) {
+static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols] ,double (*z)[rows][cols]) {
 
 
     if (dir == 1){
-       for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++){
+       for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++){
                 //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -1070,24 +1070,19 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                 double rhoe_L = x[3][j][k];
                 double rhoe_R = y[3][j][k];
 
-
                 double u_L = x[1][j][k]/x[0][j][k];
                 double u_R = y[1][j][k]/y[0][j][k];
                 double v_L = x[2][j][k]/x[0][j][k];
                 double v_R = y[2][j][k]/y[0][j][k];
                 double p_L = (x[3][j][k] - 0.5 * rho_L * (pow(u_L,2) + pow(v_L,2)))*(M_gamma-1);
                 double p_R = (y[3][j][k] - 0.5 * rho_R * (pow(u_R,2) + pow(v_R,2)))*(M_gamma-1);
-                
                 //计算声速
                 double a_L = sqrt(M_gamma * p_L / rho_L);
                 double a_R = sqrt(M_gamma * p_R / rho_R);
-
                 //计算总焓H
                 double H_L = 0.5 * pow(u_L,2) +  0.5 * pow(v_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
                 double H_R = 0.5 * pow(u_R,2) +  0.5 * pow(v_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
-
                 //计算左右守恒变量和通量
-
                 double rho_FL = rho_L * u_L;
                 double rho_FR = rho_R * u_R;
                 double rhou_FL = rho_L * u_L * u_L + p_L;
@@ -1096,12 +1091,10 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                 double rhov_FR = rho_R * v_R * u_R;
                 double rhoe_FL = rho_L * H_L * u_L;
                 double rhoe_FR = rho_R * H_R * u_R;
-            
                 //计算Roe平均
                 double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
-
                 //利用Roe平均的变量计算近似波速
                 double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
                 double sleft = ubar - cbar;
@@ -1116,6 +1109,11 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
 
                 double fe_star_L = rhoe_L/rho_L + (s_star-u_L)*(s_star + p_L/(rho_L *(sleft-u_L)));
                 double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
+
+                double rho_HLL = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
+
                 //确定HLLC数值通量
                 double rho_F = 0, rhou_F = 0, rhov_F = 0,rhoe_F = 0;
                 if (sleft >= 0 ){
@@ -1128,13 +1126,13 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                     rho_F = rho_FL + sleft * (u_stat_L - rho_L);
                     rhou_F = rhou_FL + sleft * (u_stat_L * s_star  - rhou_L);
                     rhov_F = rhov_FL + sleft * (u_stat_L * v_L  - rhov_L);
-                    rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L);
+                    rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
                 }
                 else if(s_star < 0 && sright > 0){
                     rho_F = rho_FR + sright * (u_stat_R - rho_R);
                     rhou_F = rhou_FR + sright * (u_stat_R * s_star  - rhou_R);
                     rhov_F = rhov_FR + sright * (u_stat_R * v_R  - rhov_R);
-                    rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R);
+                    rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
     
                 }
                 else if (sright <= 0){
@@ -1152,8 +1150,8 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
     }
 
     else if (dir == 2){
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++){
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++){
                //读取已知的左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -1164,18 +1162,15 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                 double rhoe_L = x[3][j][k];
                 double rhoe_R = y[3][j][k];
 
-
                 double u_L = x[1][j][k]/x[0][j][k];
                 double u_R = y[1][j][k]/y[0][j][k];
                 double v_L = x[2][j][k]/x[0][j][k];
                 double v_R = y[2][j][k]/y[0][j][k];
                 double p_L = (x[3][j][k] - 0.5 * rho_L * (pow(u_L,2) + pow(v_L,2)))*(M_gamma-1);
                 double p_R = (y[3][j][k] - 0.5 * rho_R * (pow(u_R,2) + pow(v_R,2)))*(M_gamma-1);
-
                 //计算总焓H
                 double H_L = 0.5 * pow(u_L,2) +  0.5 * pow(v_L,2) + (M_gamma/(M_gamma-1) ) * (p_L/rho_L);
                 double H_R = 0.5 * pow(u_R,2) +  0.5 * pow(v_R,2) + (M_gamma/(M_gamma-1) ) * (p_R/rho_R);
-
                 //计算左右守恒变量和通量
                 double rho_GL = rho_L * v_L;
                 double rho_GR = rho_R * v_R;
@@ -1185,12 +1180,10 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                 double rhov_GR = rho_R * v_R*v_R + p_R;
                 double rhoe_GL = rho_L * H_L * v_L;
                 double rhoe_GR = rho_R * H_R * v_R;
-            
                 //计算Roe平均
                 double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
-
                 //利用Roe平均的变量计算近似波速
                 double cbar = sqrt((M_gamma-1) * (Hbar - 0.5 * pow(ubar,2) - 0.5 * pow(vbar,2)));
                 double sleft = vbar - cbar;
@@ -1205,6 +1198,9 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
 
                 double fe_star_L = rhoe_L/rho_L + (s_star-v_L)*(s_star + p_L/(rho_L *(sleft-v_L)));
                 double fe_star_R = rhoe_R/rho_R + (s_star-v_R)*(s_star + p_R/(rho_R *(sright-v_R)));
+                double rho_HLL = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
                 //确定HLLC数值通量
                 double rho_G = 0, rhou_G = 0, rhov_G = 0,rhoe_G = 0;
                 if (sleft >= 0 ){
@@ -1217,13 +1213,13 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
                     rho_G = rho_GL + sleft * (v_stat_L - rho_L);
                     rhou_G = rhou_GL + sleft * (v_stat_L * u_L  - rhou_L);
                     rhov_G = rhov_GL + sleft * (v_stat_L * s_star   - rhov_L);
-                    rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L -  rhoe_L);
+                    rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L -  rhoe_L) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
                 }
                 else if(s_star < 0 && sright > 0){
                     rho_G = rho_GR + sright * (v_stat_R - rho_R);
                     rhou_G = rhou_GR + sright * (v_stat_R * u_R  - rhou_R);
                     rhov_G = rhov_GR + sright * (v_stat_R * s_star  - rhov_R);
-                    rhoe_G = rhoe_GR + sright * (v_stat_R * fe_star_R -  rhoe_R);
+                    rhoe_G = rhoe_GR + sright * (v_stat_R * fe_star_R -  rhoe_R) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
     
                 }
                 else if (sright <= 0){
@@ -1243,12 +1239,12 @@ static inline void HLLCHC_Flux(int dir, int rows, int cols, int depth, int GC, d
     }    
 }
 
-static inline void RoeHC_Flux(int dir, int rows, int cols, int depth, int GC, double (*x)[cols][depth], double (*y)[cols][depth], double (*z)[cols][depth]) {
+static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols], double (*z)[rows][cols]) {
     double epsilon = 1e-6;
     
     if (dir == 1) { // x方向通量
-        for (int j = GC-1; j < cols-GC; j++) {
-            for (int k = GC; k < depth-GC; k++) {
+        for (int j = GC-1; j < rows-GC; j++) {
+            for (int k = GC; k < cols-GC; k++) {
                 // 读取左右原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -1363,8 +1359,8 @@ static inline void RoeHC_Flux(int dir, int rows, int cols, int depth, int GC, do
         }
     }
     else if (dir == 2) { // y方向通量
-        for (int j = GC; j < cols-GC; j++) {
-            for (int k = GC-1; k < depth-GC; k++) {
+        for (int j = GC; j < rows-GC; j++) {
+            for (int k = GC-1; k < cols-GC; k++) {
                 // 读取上下原始变量
                 double rho_L = x[0][j][k];
                 double rho_R = y[0][j][k];
@@ -1481,9 +1477,9 @@ static inline void RoeHC_Flux(int dir, int rows, int cols, int depth, int GC, do
 }
 
 
-static inline void HLL_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols], double u_point) {
+static inline void HLL_Flux_HeatConduction(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows], double u_point) {
     
-    for (int j = GC-1; j <= cols-GC; j++) {
+    for (int j = GC-1; j <= rows-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1565,9 +1561,9 @@ static inline void HLL_Flux_HeatConduction(int rows, int cols, int GC, double (*
 
 
 
-static inline void HLLC_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols], double u_point) {
+static inline void HLLC_Flux_HeatConduction(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows], double u_point) {
     
-    for (int j = GC-1; j <= cols-GC; j++) {
+    for (int j = GC-1; j <= rows-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1684,10 +1680,10 @@ static inline void HLLC_Flux_HeatConduction(int rows, int cols, int GC, double (
 
 
 
-static inline void Roe_Flux_HeatConduction(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols], double u_point) {
+static inline void Roe_Flux_HeatConduction(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows], double u_point) {
     double epsilon = 1e-6;
     
-    for (int j = GC-1; j <= cols-GC; j++) {
+    for (int j = GC-1; j <= rows-GC; j++) {
         //读取已知的左右原始变量
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1783,9 +1779,9 @@ static inline void Roe_Flux_HeatConduction(int rows, int cols, int GC, double (*
 }
 
 
-static inline void ER_Flux_PlusHeat(int rows, int cols, int GC, double (*x)[cols], double (*y)[cols] ,double (*z)[cols]) {
+static inline void ER_Flux_PlusHeat(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows]) {
     
-    for (int j = GC-1; j <= cols-GC; j++) {
+    for (int j = GC-1; j <= rows-GC; j++) {
         double rho_F = 0,u_F=0,p_F=0;
         double rho_L = x[0][j];
         double rho_R = y[0][j];
@@ -1930,24 +1926,24 @@ static inline void ER_Flux_PlusHeat(int rows, int cols, int GC, double (*x)[cols
 
 /*……………………………………………………………………………………………………*/
 //“The algorithmic description of Marquina’s flux formula is as follows:” ([Donat 和 Marquina, 1996, p. 44]
-static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[cols], double dt,double dx) {
-    double conserl[3][cols],conserr[3][cols];
-    double fluxl[3][cols],fluxr[3][cols];
-    double prileft[3][cols], priright[3][cols];
-    double pri[rows][cols];
-    double slope[3][cols],a[3][cols],b[3][cols];
+static inline void RS_Marquina(int var, int rows,double (*y)[rows],double (*z)[rows], double dt,double dx) {
+    double conserl[3][rows],conserr[3][rows];
+    double fluxl[3][rows],fluxr[3][rows];
+    double prileft[3][rows], priright[3][rows];
+    double pri[var][rows];
+    double slope[3][rows],a[3][rows],b[3][rows];
     
-    double eigen_l[3][3][cols],eigen_r[3][3][cols];
-    double w_l[rows][cols], w_r[rows][cols];
-    double phi_fl[rows][cols], phi_fr[rows][cols];
-    double phi_fp[rows][cols], phi_fm[rows][cols];
-    double flux[3][cols];
-    double lamda[3][cols];
-    double alpha[rows][cols];
+    double eigen_l[3][3][rows],eigen_r[3][3][rows];
+    double w_l[var][rows], w_r[var][rows];
+    double phi_fl[var][rows], phi_fr[var][rows];
+    double phi_fp[var][rows], phi_fm[var][rows];
+    double flux[3][rows];
+    double lamda[3][rows];
+    double alpha[var][rows];
 
     //初始化数组
-     for (int k = 0; k < rows; k++){
-        for (int j = 0; j < cols; j++){
+     for (int k = 0; k < var; k++){
+        for (int j = 0; j < rows; j++){
             w_l[k][j] = 0.0;
             w_r[k][j] = 0.0;
             phi_fl[k][j] = 0.0;
@@ -1959,9 +1955,9 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
         
     }
 
-    Con_to_Pri_1D(3,cols,pri,y);
+//    Con_to_Pri_1D(3,rows,pri,y);
     //计算特征矩阵
-	for(int j=0;  j < cols; j++) {
+	for(int j=0;  j < rows; j++) {
 			
         double  q2, c2, b1, b2;
         double _u, _H, _c;
@@ -2009,16 +2005,16 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
 
     switch (Recon_Accur){
         case 0:
-//            Reconstruction_Godunov(rows,cols,3,y,conserl,conserr,dx);
+//            Reconstruction_Godunov(var,rows,3,y,conserl,conserr,dx);
             break;
         case 1:
-//            TVD_Reconstruction(rows,cols,3,y,conserl,conserr,dx);
+//            TVD_Reconstruction(var,rows,3,y,conserl,conserr,dx);
             break;
         case 3:
-//            WENO3_Reconstruction(rows,cols,3,y,conserl,conserr);
+//            WENO3_Reconstruction(var,rows,3,y,conserl,conserr);
             break;
         case 5:
-//            WENO5_Reconstruction_C(rows,cols,3,y,conserl,conserr);
+//            WENO5_Reconstruction_C(var,rows,3,y,conserl,conserr);
             break;
         default:
             printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
@@ -2028,15 +2024,15 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
 
     
     //执行计算Marquina flux
-    Con_to_Pri_1D(3,cols,prileft,conserl);
-    Con_to_Pri_1D(3,cols,priright,conserr);
+//    Con_to_Pri_1D(3,rows,prileft,conserl);
+//    Con_to_Pri_1D(3,rows,priright,conserr);
 
-    initEulerflux1D(rows, cols, conserl, fluxl);
-    initEulerflux1D(rows, cols, conserr, fluxr);
+//    initEulerflux1D(var, rows, conserl, fluxl);
+//    initEulerflux1D(var, rows, conserr, fluxr);
 
     // 投影到特征空间
     for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
+        for (int j = 1; j < rows-1; j++){
             for (int m = 0; m < 3; m++){
                 w_l[k][j] += conserl[m][j]*eigen_l[k][m][j];
                 phi_fl[k][j] += fluxl[m][j]*eigen_l[k][m][j];
@@ -2045,7 +2041,7 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
         
     }
     for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
+        for (int j = 1; j < rows-1; j++){
             for (int m = 0; m < 3; m++){
                 w_r[k][j] += conserr[m][j]*eigen_l[k][m][j+1];
                 phi_fr[k][j] += fluxr[m][j]*eigen_l[k][m][j+1];
@@ -2056,7 +2052,7 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
 
     //计算通量分量
     for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
+        for (int j = 1; j < rows-1; j++){
             if (lamda[k][j]  * lamda[k][j+1] > 0){
                 if (lamda[k][j] > 0){
                     phi_fp[k][j] = phi_fl[k][j];
@@ -2077,15 +2073,15 @@ static inline void RS_Marquina(int rows, int cols,double (*y)[cols],double (*z)[
 
     //投影到物理空间计算Flux
     for (int k = 0; k < 3; k++){
-        for (int j = 1; j < cols-1; j++){
+        for (int j = 1; j < rows-1; j++){
             for (int m = 0; m < 3; m++){
                flux[k][j] += phi_fp[m][j]*eigen_r[k][m][j] + phi_fm[m][j] * eigen_r[k][m][j+1];
             }
         }  
     }
 
-    for (int i = 0; i < rows; i++){
-        for (int j = 1; j < cols-1; j++){
+    for (int i = 0; i < var; i++){
+        for (int j = 1; j < rows-1; j++){
             z[i][j] = flux[i][j];
         }
     }

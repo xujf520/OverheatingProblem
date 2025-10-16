@@ -22,12 +22,12 @@ void OutputConservationErrors_file();
 
 
 //TVD重构配合不同Riemann Solver
-static inline void RK1_TimeAd(int AR_scheme, int rows, int cols,int depth, int GC, double (*y)[cols][depth], double dt,double dx, double dy) {
+static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt, double dx, double dy) {
     int i,j,k;
     double Conser_1[3]={0.0}, Conser_2[3]={0.0};
 
-    double (*Flux_F)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-    double (*Flux_G)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+    double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
     // 检查内存分配是否成功
     if (Flux_F == NULL || Flux_G == NULL) {
         fprintf(stderr, "Memory allocation failed in RK1_TimeAd\n");
@@ -37,34 +37,29 @@ static inline void RK1_TimeAd(int AR_scheme, int rows, int cols,int depth, int G
         return;
     }    
     //初始化参数
-    for ( i = 0; i < rows; i++){
-        for ( j = 0; j < cols; j++){
-            for ( k = 0; k < depth; k++){
+    for ( i = 0; i < var; i++){
+        for ( j = 0; j < rows; j++){
+            for ( k = 0; k < cols; k++){
                 Flux_F[i][j][k] = 0.0;
                 Flux_G[i][j][k] = 0.0;
             }
         }
     }
 
-    //施加边界条件，
-    BC_OutFlow_2D(rows,cols,depth,y,2,GC);                       //边界条件说明见具体子程序
-    BC_OutFlow_2D(rows,cols,depth,y,3,GC);
-    BC_OutFlow_2D(rows,cols,depth,y,0,GC);
-    BC_OutFlow_2D(rows,cols,depth,y,1,GC);
-//    BC_Periodicity(rows,cols,y,0,GC);
-//    BC_Periodicity(rows,cols,y,1,GC);
-
-    Flux_Reconstruction_RP(AR_scheme,rows,cols,depth,GC,y,Flux_F,Flux_G,dt,dx,dy);
+    // 施加边界条件
+    Boundary_Conditions(var, rows, cols, y, GC);
+                        
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
 
     // 第一步计算
 /*                                            *********                                          */
 /*                                            输出数值通量                                        */
 /*                                            *********                                          */
-//    OutputFluxData_file(k, cols, dx, x_d, z);
+//    OutputFluxData_file(k, rows, dx, x_d, z);
 
-    for ( i = 0; i < rows; i++)
-        for ( j = GC; j <= cols-GC-1; j++)
-            for ( k = GC; k <= depth-GC-1; k++)
+    for ( i = 0; i < var; i++)
+        for ( j = GC; j <= rows-GC-1; j++)
+            for ( k = GC; k <= cols-GC-1; k++)
                 y[i][j][k] = y[i][j][k] - dt*(Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx - dt*(Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy;
 
     
@@ -74,53 +69,13 @@ static inline void RK1_TimeAd(int AR_scheme, int rows, int cols,int depth, int G
 }
 
 
-//TVD重构配合不同Riemann Solver
-static inline void RK1_TimeAd_RPHeat(int AR_scheme, int rows, int cols, int GC, double (*x_d), double (*y)[cols],double dt,double dx, double u_r) {
-    int i,j;
 
-    double Flux[rows][cols];
-    
-    //初始化参数
-    for ( i = 0; i < rows; i++){
-        for ( j = 0; j < cols; j++){
-            Flux[i][j] = y[i][j];
-        }
-        
-    }
-
-
-    //施加边界条件，
-    BC_OutFlow(rows,cols,y,0,GC);                    
-    BC_OutFlow(rows,cols,y,1,GC);
-//   BC_Periodicity(rows,cols,y,0,GC);
-//    BC_Periodicity(rows,cols,y,1,GC);
-
-    //AR_scheme is Approximate Riemann Solver
-    //数值通量
-    Flux_Reconstruction_RP_Heat(AR_scheme,rows,cols,GC,y,Flux,dt,dx,u_r);
-
-    // 第一步计算
-/*                                            *********                                          */
-/*                                            输出数值通量                                        */
-/*                                            *********                                          */
-//    OutputFluxData_file(k, cols, dx, x_d, z);
-
-    for ( i = 0; i < rows; i++){
-        for ( j = 1; j < cols-1; j++){
-            y[i][j] = y[i][j] - dt*(Flux[i][j] - Flux[i][j-1])/dx;
-        }
-    }
-    
-}
-
-
-
-static inline void RK3_TimeAd(int AR_scheme, int rows, int cols,int depth, int GC, double (*y)[cols][depth], double dt,double dx, double dy) {
+static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
     int i,j,k;
-    double (*Conser_U1)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-    double (*Conser_U2)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-    double (*Flux_F)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
-    double (*Flux_G)[cols][depth] = malloc(rows * sizeof(double[cols][depth]));
+    double (*Conser_U1)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Conser_U2)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
     // 检查内存分配是否成功
     if (Flux_F == NULL || Flux_G == NULL) {
         fprintf(stderr, "Memory allocation failed in RK3_TimeAd\n");
@@ -132,9 +87,9 @@ static inline void RK3_TimeAd(int AR_scheme, int rows, int cols,int depth, int G
         return;
     }    
     //初始化参数
-    for ( i = 0; i < rows; i++){
-        for ( j = 0; j < cols; j++){
-            for ( k = 0; k < depth; k++){
+    for ( i = 0; i < var; i++){
+        for ( j = 0; j < rows; j++){
+            for ( k = 0; k < cols; k++){
                 Conser_U1[i][j][k] = Conser_U2[i][j][k] = 0.0;
                 Flux_F[i][j][k] = Flux_G[i][j][k] = 0.0;
             }
@@ -143,54 +98,33 @@ static inline void RK3_TimeAd(int AR_scheme, int rows, int cols,int depth, int G
 
 
     // 第一步计算
-    BC_OutFlow_2D(rows,cols,depth,y,2,GC);                       //边界条件说明见具体子程序
-    BC_OutFlow_2D(rows,cols,depth,y,3,GC);
-    BC_OutFlow_2D(rows,cols,depth,y,0,GC);
-    BC_OutFlow_2D(rows,cols,depth,y,1,GC);
-    if (Periodicity){
-//        BC_Periodicity(rows,cols,depth,y,0,GC);
-//        BC_Periodicity(rows,cols,depth,y,1,GC);
-    }
-
-    Flux_Reconstruction_RP(AR_scheme,rows,cols,depth,GC,y,Flux_F,Flux_G,dt,dx,dy);
-    for ( i = 0; i < rows; i++)
-        for ( j = GC; j <= cols-GC-1; j++)
-            for ( k = GC; k <= depth-GC-1; k++)
+    // 施加边界条件
+    Boundary_Conditions(var, rows, cols, y, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
+    for ( i = 0; i < var; i++)
+        for ( j = GC; j <= rows-GC-1; j++)
+            for ( k = GC; k <= cols-GC-1; k++)
                 Conser_U1[i][j][k] = y[i][j][k] - dt*(Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx - dt*(Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy;
 
 
     //第二步计算
-    BC_OutFlow_2D(rows,cols,depth,Conser_U1,2,GC);                       //边界条件说明见具体子程序
-    BC_OutFlow_2D(rows,cols,depth,Conser_U1,3,GC);
-    BC_OutFlow_2D(rows,cols,depth,Conser_U1,0,GC);
-    BC_OutFlow_2D(rows,cols,depth,Conser_U1,1,GC);
-    if (Periodicity){
-//        BC_Periodicity(rows,cols,depth,y,0,GC);
-//        BC_Periodicity(rows,cols,depth,y,1,GC);
-    }
-
-    Flux_Reconstruction_RP(AR_scheme,rows,cols,depth,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
-    for ( i = 0; i < rows; i++)
-        for ( j = GC; j <= cols-GC-1; j++)
-            for ( k = GC; k <= depth-GC-1; k++)
+    // 施加边界条件
+    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
+    for ( i = 0; i < var; i++)
+        for ( j = GC; j <= rows-GC-1; j++)
+            for ( k = GC; k <= cols-GC-1; k++)
                 Conser_U2[i][j][k] = (3.0/4.0) * y[i][j][k] + (1.0/4.0) * (Conser_U1[i][j][k] \
                                         - dt*(Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx - dt*(Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy);
     
 
     //第三步计算
-    BC_OutFlow_2D(rows,cols,depth,Conser_U2,2,GC);                       //边界条件说明见具体子程序
-    BC_OutFlow_2D(rows,cols,depth,Conser_U2,3,GC);
-    BC_OutFlow_2D(rows,cols,depth,Conser_U2,0,GC);
-    BC_OutFlow_2D(rows,cols,depth,Conser_U2,1,GC);
-    if (Periodicity){
-//        BC_Periodicity(rows,cols,depth,y,0,GC);
-//        BC_Periodicity(rows,cols,depth,y,1,GC);
-    }
-
-    Flux_Reconstruction_RP(AR_scheme,rows,cols,depth,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
-    for ( i = 0; i < rows; i++)
-        for ( j = GC; j <= cols-GC-1; j++)
-            for ( k = GC; k <= depth-GC-1; k++)
+    // 施加边界条件
+    Boundary_Conditions(var, rows, cols, Conser_U2, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
+    for ( i = 0; i < var; i++)
+        for ( j = GC; j <= rows-GC-1; j++)
+            for ( k = GC; k <= cols-GC-1; k++)
                 y[i][j][k] = (1.0/3.0)*y[i][j][k] + (2.0/3.0) * (Conser_U2[i][j][k]\
                                 - dt*(Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx - dt*(Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy);
 
@@ -245,7 +179,7 @@ void OutputConservationErrors_file(int time_step, double Conser_1[3], double Con
 
 
 
-void OutputFluxData_file(int k, int cols, double dx, double* x,double (*z)[cols]) {
+void OutputFluxData_file(int k, int rows, double dx, double* x,double (*z)[rows]) {
     char filename[100];
     sprintf(filename, "D:/Desktop/Single_Med_data/flux_output_%d.dat", k);
     // 打开文件
@@ -257,7 +191,7 @@ void OutputFluxData_file(int k, int cols, double dx, double* x,double (*z)[cols]
     // 写入文件头部信息
     fprintf(file, "variables =  'x' 'flux_rho' 'flux_rhou' 'flux_E' \n");
     // 写入计算结果
-    for (int i = 2; i < cols-2 ; i++) {
+    for (int i = 2; i < rows-2 ; i++) {
         fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\n",x[i-2]+0.5*dx, z[0][i],z[1][i], z[2][i]);
     }
     fclose(file);
