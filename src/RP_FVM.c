@@ -18,7 +18,8 @@
 // 控制计算步数子程序
 void StepLoop();
 void OutputData_file();
-void OutputData_file_2D();
+void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
+                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols]);
 
 // 读取黎曼问题
 void Get_RP_Parameters();
@@ -31,7 +32,7 @@ void Mesh_2D();
 /*                                            *********                                          */
 
 //网格参数
-const int L_nx = 200;                                                      //网格数量
+const int L_nx = 800;                                                      //网格数量
 const int L_ny = 200;                                                      //网格数量      
 const int var = 4;                                        
 
@@ -44,9 +45,9 @@ BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_REFLECTION, BC_REFLECTION
 int main(int argc, char *argv[]) {
     int LNX_ngc = L_nx + 2 * GhostCell; 
     int LNY_ngc = L_ny + 2 * GhostCell; 
-    double t = 0;
-    double Lx,Ly;       
-    double Tmax = 0.0;       //计算域参数 
+    
+    double Lx,Ly;
+    double Tmax;       
     double Delta_x, Delta_y;
     double Delta_T;
 
@@ -73,23 +74,19 @@ int main(int argc, char *argv[]) {
     //施加边界条件，
     Delta_x = Lx / L_nx;
     Delta_y = Ly / L_ny; 
-    int Ite = 0;
+    
     double u_r = 0.0;
    
     //mesh
     Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
     printf("Mesh successfully!\n");
-
-
     Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
     switch (Control_Compution){
         case 0:
-            //时间推进：时间一阶和时间二阶格式
-            for (t = 0.0; t < Tmax; t = t+Delta_T) {
-//               Delta_T = Get_Delta_T(3,N_ngc,U,Delta_x);
-                Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x);
-                if (t + Delta_T >= Tmax)
-                    Delta_T = Tmax - t ;
+            for (Time = 0.0; Time < Tmax; Time = Time+Delta_T) {
+                Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x,Delta_y);
+                if (Time + Delta_T >= Tmax)
+                    Delta_T = Tmax - Time ;
                 switch (Time_ADM) {
                     case 1:
                         RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
@@ -101,14 +98,20 @@ int main(int argc, char *argv[]) {
                         //格式     
                         break;
                 }
+                if (Ite % Control_output == 0 ){
+                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time+Delta_T, Ite);
+                    Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
+                    //打开文件并输出结果
+                    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri);
+                }
+
                 Ite++;
-                if (Ite % Control_output == 0 )
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t+Delta_T, Ite);
+                
             }
             break;
         case 1:
             //迭代步数控制
-            t = 0.0;
+            Time = 0.0;
             for (int m = 0; m <= 399; m++) {
                 Delta_T = 0.1*Delta_x;
                 switch (Time_ADM) {
@@ -123,9 +126,9 @@ int main(int argc, char *argv[]) {
                         break;
                 }
                 Ite++;
-                t = t+Delta_T;
+                Time = Time+Delta_T;
                 if (Ite % Control_output == 0 ){
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
+                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time, Ite);
                 }
             }
             break;
@@ -133,24 +136,24 @@ int main(int argc, char *argv[]) {
             break;
     }
 
-    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, t, Ite);
+    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time, Ite);
     printf("end of calculation!\n");
 
     //实现输出最后的结果
     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
     //打开文件并输出结果
-    OutputData_file_2D(0,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,t);
+    Control_Out = true;
+    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri);
+
     printf("The program has completed its execution.\n");
     free(pri);
     free(U);
     free(FU);
     free(GU);
     printf("Memory Deallocation succesed in Main\n");
-
     return 0;
 
 }
-
 
 // 函数定义：同时获取RP_Method和scheme两个参数
 void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2) {
@@ -236,138 +239,59 @@ void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int ro
 }
 
 
-void OutputData_file(int k, int rows, int GC, double * x, double (*U)[rows], double (*FU)[rows],double (*pri)[rows], double t) {
-    // 文件输出
-    printf("Output result(rho, u, p, T, U_M, U_E)\n");
-    if (k == 0)
-    {
-        FILE* file = fopen("/mnt/d/Desktop/RP_FVM/data/output_data.dat","w");
-        if (file == NULL) {
-            
-            printf("File opening failed\n");
-            printf("---------------Error----------------\n");
-            return; // 返回错误代码
-        }
-        fprintf(file, "variables=x \t rho \t u\t p\t T\t rhou\t rhoE\t rhoE_K\t rhoE_I\t F_rho\t F_rhou\t F_rhoE\n");
-        for (int i = GC; i <= rows-GC-1 ; i++) {
-            fprintf(file,"%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",\
-                        x[i-GC], pri[0][i], pri[1][i], pri[2][i], pri[2][i]/pri[0][i],\
-                        U[1][i], U[2][i], 0.5*pri[1][i]*U[1][i], pri[2][i]/(1.4-1) , \
-                        U[1][i], U[1][i] * pri[1][i] + pri[2][i] ,pri[1][i] * (U[2][i] + pri[2][i]));
-        }
-        fclose(file);
-        printf("Output calculation result successful\n");
-       // printf("%f\n",t);
-    }
-    else
-    {
-        char filename[100];
-        sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_%d.dat", k);
-        FILE* file = fopen(filename, "w");
-        if (file == NULL) {
-            printf("无法打开文件 %s\n", filename);
-            return;
-        }
-        fprintf(file, "variables =  'x' 'rho' 'u' 'p' 'rhou' \n");
-        for (int i = 2; i < rows-2; i++) {
-            fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n", 
-            x[i-2], pri[0][i], pri[1][i], pri[2][i], U[1][i]);
-        }
-        fclose(file);
-        printf("The %d th calculation ended at %f\n", k, t);
-    }
-}
-
-
-void OutputData_file_2D(int k, int rows, int cols, int GC, 
-                       double (*mx), double (*my), double (*U)[rows][cols], double (*FU)[rows],
-                       double (*pri)[rows][cols], double t) {
-    
+void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
+                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols]) {
     printf("Output result(rho, u, v, p, T, U_M, U_E)\n");
     
-    if (k == 0) {
-        FILE* file = fopen("/mnt/d/Desktop/RP_FVM/data/output_data.dat", "w");
-        if (file == NULL) {
-            printf("File opening failed\n");
-            printf("---------------Error----------------\n");
-            return;
+    
+    // 修复：正确格式化文件名
+    char filename[100];
+    sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_data_%.6f.plt", Time);
+    
+    FILE* file = fopen(filename, "w");  
+    if (file == NULL) {
+        printf("File opening failed\n");
+        printf("---------------Error----------------\n");
+        return;
+    }
+    
+    // Tecplot格式头信息
+    fprintf(file, "TITLE = \"2D Fluid Dynamics Data\"\n");
+    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
+    
+    int output_rows = rows - 2*GC;
+    int output_cols = cols - 2*GC;
+    
+    // 指定ZONE信息
+    fprintf(file, "ZONE T=\"Time=%.6f\"\n", Time);
+    fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);
+    fprintf(file, "DATAPACKING=POINT\n");
+    
+    // 输出数据
+    for (int j = 0; j < output_rows; j++) {
+        for (int kk = 0; kk < output_cols; kk++) {
+            int actual_j = j + GC;
+            int actual_kk = kk + GC;
+            
+            double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
+            
+            fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
+                    mx[j], my[kk], 
+                    pri[0][actual_j][actual_kk], 
+                    pri[1][actual_j][actual_kk], 
+                    pri[2][actual_j][actual_kk], 
+                    pri[3][actual_j][actual_kk],
+                    temperature,
+                    U[1][actual_j][actual_kk], 
+                    U[2][actual_j][actual_kk], 
+                    U[3][actual_j][actual_kk]);
         }
-        
-        // Tecplot格式头信息
-        fprintf(file, "TITLE = \"2D Fluid Dynamics Data\"\n");
-        fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
-        
-        int output_rows = rows - 2*GC;
-        int output_cols = cols - 2*GC;
-        
-        // 指定ZONE信息 - 关键修复
-        fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
-        fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);  // 注意：Tecplot中J是行数，I是列数
-        fprintf(file, "DATAPACKING=POINT\n");
-        
-        // 输出数据 - 注意循环顺序
-        for (int j = 0; j < output_rows; j++) {
-            for (int kk = 0; kk < output_cols; kk++) {  // 避免变量名冲突
-                int actual_j = j + GC;
-                int actual_kk = kk + GC;
-                
-                double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
-                
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
-                        mx[j], my[kk], 
-                        pri[0][actual_j][actual_kk], 
-                        pri[1][actual_j][actual_kk], 
-                        pri[2][actual_j][actual_kk], 
-                        pri[3][actual_j][actual_kk],
-                        temperature,
-                        U[1][actual_j][actual_kk], 
-                        U[2][actual_j][actual_kk], 
-                        U[3][actual_j][actual_kk]);
-            }
-        }
-        fclose(file);
+    }
+    fclose(file);
+    if (Con_out)
         printf("Output calculation result successful\n");
-    }
-    else {
-        char filename[100];
-        sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_%d.dat", k);
-        FILE* file = fopen(filename, "w");
-        if (file == NULL) {
-            printf("无法打开文件 %s\n", filename);
-            return;
-        }
+    else
+        printf("The %d th calculation ended at %f\n", Ite, Time);
+    
         
-        // 为后续时间步也添加完整的2D格式
-        fprintf(file, "TITLE = \"2D Fluid Dynamics Data - Step %d\"\n", k);
-        fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
-        
-        int output_rows = rows - 2*GC;
-        int output_cols = cols - 2*GC;
-        
-        fprintf(file, "ZONE T=\"Time=%.6f\"\n", t);
-        fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);
-        fprintf(file, "DATAPACKING=POINT\n");
-        
-        for (int j = 0; j < output_rows; j++) {
-            for (int kk = 0; kk < output_cols; kk++) {
-                int actual_j = j + GC;
-                int actual_kk = kk + GC;
-                
-                double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
-                
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
-                        mx[j], my[kk], 
-                        pri[0][actual_j][actual_kk], 
-                        pri[1][actual_j][actual_kk], 
-                        pri[2][actual_j][actual_kk], 
-                        pri[3][actual_j][actual_kk],
-                        temperature,
-                        U[1][actual_j][actual_kk], 
-                        U[2][actual_j][actual_kk], 
-                        U[3][actual_j][actual_kk]);
-            }
-        }
-        fclose(file);
-        printf("The %d th calculation ended at %f\n", k, t);
-    }
 }

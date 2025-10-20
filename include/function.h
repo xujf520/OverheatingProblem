@@ -103,7 +103,7 @@ static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx
 //    return  0.5 * pow(dx, 5.0/3.0);
 }
 
-static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[cols][depth], double dx) {
+static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[cols][depth], double dx, double dy) {
     double S_plus_x = 0,S_plus_y = 0;
     for (int j = GhostCell; j < cols-GhostCell; j++) {
         for (int k = GhostCell; k < depth-GhostCell; k++){
@@ -121,13 +121,10 @@ static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[c
             S_plus_x = max_of_two (fabs(u) + a,S_plus_x);
             S_plus_y = max_of_two (fabs(v) + a,S_plus_y);
         }
-        
-      
-    
     }   
 
 //    return CFL * dx / S_plus;
-    return CFL * dx / (S_plus_x + S_plus_y);
+    return CFL * min_of_two(dx,dy) / (S_plus_x + S_plus_y);
 //    return  0.5 * pow(dx, 5.0/3.0);
 }
 

@@ -7,7 +7,6 @@
 #include "Golbal.h"
 
 // 定义全局变量来累加 p_star - 2.926650
-static int Ite = 0;
 static double p_star_accumulator = 0.0;
 static double  Flux_test = 0.0;
 
@@ -400,6 +399,7 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC, doubl
         }
     }    
 }
+
 
 static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double (*x)[rows][cols], double (*y)[rows][cols], double (*z)[rows][cols]) {
     double epsilon = 1e-6;
@@ -937,8 +937,8 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double sleft = ubar - cbar;
                 double sright = ubar + cbar;
                 double rho_HLL = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
-                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
-                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
+                double e_L = 1.0 / (M_gamma-1) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma-1) * p_R / rho_R;
 
                 //确定HLL数值通量
                 double rho_F = 0, rhou_F = 0, rhov_F = 0,rhoe_F = 0;
@@ -1015,8 +1015,8 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double sleft = vbar - cbar;
                 double sright = vbar + cbar;
                 double rho_HLL = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
-                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
-                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
+                double e_L = 1.0 / (M_gamma-1) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma-1) * p_R / rho_R;
 
                 //确定HLL数值通量
                 double rho_G = 0, rhou_G = 0, rhov_G = 0,rhoe_G = 0;
@@ -1111,8 +1111,8 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
                 double fe_star_R = rhoe_R/rho_R + (s_star-u_R)*(s_star + p_R/(rho_R *(sright-u_R)));
 
                 double rho_HLL = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
-                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
-                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
+                double e_L = 1.0 / (M_gamma-1.0) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma-1.0) * p_R / rho_R;
 
                 //确定HLLC数值通量
                 double rho_F = 0, rhou_F = 0, rhov_F = 0,rhoe_F = 0;
@@ -1126,13 +1126,13 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
                     rho_F = rho_FL + sleft * (u_stat_L - rho_L);
                     rhou_F = rhou_FL + sleft * (u_stat_L * s_star  - rhou_L);
                     rhov_F = rhov_FL + sleft * (u_stat_L * v_L  - rhov_L);
-                    rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                    rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L -  rhoe_L) + 1.0*sleft*sright/(sright-sleft)*(e_R-e_L)*u_stat_L;
                 }
                 else if(s_star < 0 && sright > 0){
                     rho_F = rho_FR + sright * (u_stat_R - rho_R);
                     rhou_F = rhou_FR + sright * (u_stat_R * s_star  - rhou_R);
                     rhov_F = rhov_FR + sright * (u_stat_R * v_R  - rhov_R);
-                    rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                    rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R -  rhoe_R) + 1.0*sleft*sright/(sright-sleft)*(e_R-e_L)*u_stat_R;
     
                 }
                 else if (sright <= 0){
@@ -1198,9 +1198,11 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
 
                 double fe_star_L = rhoe_L/rho_L + (s_star-v_L)*(s_star + p_L/(rho_L *(sleft-v_L)));
                 double fe_star_R = rhoe_R/rho_R + (s_star-v_R)*(s_star + p_R/(rho_R *(sright-v_R)));
+
                 double rho_HLL = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
-                double e_L = 1.0 / (M_gamma) * p_L / rho_L;
-                double e_R = 1.0 / (M_gamma) * p_R / rho_R;
+                double e_L = 1.0 / (M_gamma-1) * p_L / rho_L;
+
+                double e_R = 1.0 / (M_gamma-1) * p_R / rho_R;
                 //确定HLLC数值通量
                 double rho_G = 0, rhou_G = 0, rhov_G = 0,rhoe_G = 0;
                 if (sleft >= 0 ){
@@ -1213,13 +1215,13 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
                     rho_G = rho_GL + sleft * (v_stat_L - rho_L);
                     rhou_G = rhou_GL + sleft * (v_stat_L * u_L  - rhou_L);
                     rhov_G = rhov_GL + sleft * (v_stat_L * s_star   - rhov_L);
-                    rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L -  rhoe_L) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                    rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L -  rhoe_L) + sleft*sright/(sright-sleft)*(e_R-e_L)*v_stat_L;
                 }
                 else if(s_star < 0 && sright > 0){
                     rho_G = rho_GR + sright * (v_stat_R - rho_R);
                     rhou_G = rhou_GR + sright * (v_stat_R * u_R  - rhou_R);
                     rhov_G = rhov_GR + sright * (v_stat_R * s_star  - rhov_R);
-                    rhoe_G = rhoe_GR + sright * (v_stat_R * fe_star_R -  rhoe_R) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                    rhoe_G = rhoe_GR + sright * (v_stat_R * fe_star_R -  rhoe_R) + sleft*sright/(sright-sleft)*(e_R-e_L)*v_stat_R;
     
                 }
                 else if (sright <= 0){
@@ -1228,6 +1230,25 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
                     rhov_G = rhov_GR;
                     rhoe_G = rhoe_GR;
                 }
+                /*if (sleft >= 0 ){
+                    rho_G = rho_GL;
+                    rhou_G = rhou_GL;
+                    rhov_G = rhov_GL;
+                    rhoe_G = rhoe_GL;
+                }
+                else if(sleft < 0 && sright >0){
+                    rho_G = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
+                    rhou_G = (sright*rhou_GL - sleft*rhou_GR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
+                    rhov_G = (sright*rhov_GL - sleft*rhov_GR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
+                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + 0.0*sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                }
+
+                else if (sright <= 0){
+                    rho_G = rho_GR;
+                    rhou_G = rhou_GR;
+                    rhov_G = rhov_GR;
+                    rhoe_G = rhoe_GR;
+                }*/
 
                 z[0][j][k] = rho_G; 
                 z[1][j][k] = rhou_G; 
@@ -2088,5 +2109,33 @@ static inline void RS_Marquina(int var, int rows,double (*y)[rows],double (*z)[r
 
 }
 
+
+static inline void Source_Gravity(int var, int rows, int cols, int GC, 
+                                 double (*x)[rows][cols], double (*source)[rows][cols]) {
+    
+    // 初始化源项为零
+    for (int j = GC; j <= rows-GC-1; j++) {
+        for (int k = GC; k <= cols-GC-1; k++) {
+            for (int i = 0; i < var; i++) {
+                source[i][j][k] = 0.0;
+            }
+        }
+    }
+    
+    // 设置重力源项
+    for (int j = GC; j <= rows-GC-1; j++) {
+        for (int k = GC; k <= cols-GC-1; k++) {
+            double rho = x[0][j][k];
+            double rhov = x[2][j][k];  // y方向动量
+            double v = rhov / (rho + 1e-12);  // 避免除零
+            
+            // 欧拉方程的重力源项
+            source[0][j][k] = 0.0;           // 质量方程：无源项
+            source[1][j][k] = 0.0;           // x动量方程：无源项  
+            source[2][j][k] = rho * Gravity; // y动量方程：重力
+            source[3][j][k] = rho * Gravity * v; // 能量方程：重力做功
+        }
+    }
+}
 
 #endif  
