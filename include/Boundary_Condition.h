@@ -15,13 +15,13 @@
 #define T "top"
 #define B "bottom"
 
-
-// 边界配置类型
+//
 typedef enum {
     BC_OUTFLOW = 0,     // 出口边界
     BC_REFLECTION = 1,  // 固壁反射
     BC_PERIODICITY = 2, // 周期性
-    BC_INFLOW = 3       // 入口边界
+    BC_INFLOW = 3,      // 入口边界
+    BC_FIXED_VALUE = 4  // 固定值边界
 } BC_Type;
 
 
@@ -38,6 +38,82 @@ extern BoundaryConfig bc_config;
 
 // 全局入口状态声明（在某个头文件中）
 extern double inflow_state[4]; // [密度, x动量, y动量, 压力]
+
+// 全局固定值状态声明
+extern double L_fixed_value_state[4]; 
+extern double R_fixed_value_state[4]; 
+extern double B_fixed_value_state[4]; 
+extern double T_fixed_value_state[4]; 
+
+// 固定值边界条件函数
+static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[rows][cols], const char* boundary_type, int Ghost_cell) {
+    double *fixed_state = NULL;
+    
+    // 根据边界类型选择对应的固定值状态
+    if (strcmp(boundary_type, L) == 0) {
+        fixed_state = L_fixed_value_state;
+    }
+    else if (strcmp(boundary_type, R) == 0) {
+        fixed_state = R_fixed_value_state;
+    }
+    else if (strcmp(boundary_type, B) == 0) {
+        fixed_state = B_fixed_value_state;
+    }
+    else if (strcmp(boundary_type, T) == 0) {
+        fixed_state = T_fixed_value_state;
+    }
+    else {
+        printf("Warning: Unknown boundary type: %s\n", boundary_type);
+        return;
+    }
+    
+    // 应用固定值边界条件
+    if (strcmp(boundary_type, L) == 0) {
+        // 左边界固定值
+        for (int i = 0; i < var; i++) {
+            for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
+                x[i][Ghost_cell-1][k] = fixed_state[i];
+                x[i][Ghost_cell-2][k] = fixed_state[i];
+                x[i][Ghost_cell-3][k] = fixed_state[i];
+                x[i][Ghost_cell-4][k] = fixed_state[i];
+            }
+        }
+    }
+    else if (strcmp(boundary_type, R) == 0) {
+        // 右边界固定值
+        for (int i = 0; i < var; i++) {
+            for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
+                x[i][rows - Ghost_cell][k] = fixed_state[i];
+                x[i][rows - Ghost_cell + 1][k] = fixed_state[i];
+                x[i][rows - Ghost_cell + 2][k] = fixed_state[i];
+                x[i][rows - Ghost_cell + 3][k] = fixed_state[i];
+            }
+        }
+    }
+    else if (strcmp(boundary_type, B) == 0) {
+        // 下边界固定值
+        for (int i = 0; i < var; i++) {
+            for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
+                x[i][j][Ghost_cell-1] = fixed_state[i];
+                x[i][j][Ghost_cell-2] = fixed_state[i];
+                x[i][j][Ghost_cell-3] = fixed_state[i];
+                x[i][j][Ghost_cell-4] = fixed_state[i];
+            }
+        }
+    }
+    else if (strcmp(boundary_type, T) == 0) {
+        // 上边界固定值
+        for (int i = 0; i < var; i++) {
+            for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
+                x[i][j][cols - Ghost_cell] = fixed_state[i];
+                x[i][j][cols - Ghost_cell + 1] = fixed_state[i];
+                x[i][j][cols - Ghost_cell + 2] = fixed_state[i];
+                x[i][j][cols - Ghost_cell + 3] = fixed_state[i];
+            }
+        }
+    }
+}
+
 
 // 入口边界条件函数
 static inline void BC_Inflow_2D(int var, int rows, int cols, double (*x)[rows][cols], const char* boundary_type, int Ghost_cell) {
@@ -279,6 +355,94 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
 }
 
 
+// Rayleigh-Taylor不稳定性问题的边界条件函数 - 一次调用处理所有边界
+static inline void BC_RayleighTaylor_2D(int var, int rows, int cols, double (*x)[rows][cols], int Ghost_cell, double current_time) {
+    // RT不稳定性问题的物理参数
+    double Lx = 0.25;
+    double Ly = 1.0;
+    double gamma = 5.0/3.0;  // 比热比
+    
+    // 边界固定值状态（守恒变量形式）
+    // 下边界固定值（y=0处的状态）
+    double bottom_rho = 2.0;
+    double bottom_u = 0.0;
+    double bottom_v = 0.0;
+    double bottom_p = 1.0;  // p = 2*0 + 1 = 1.0
+    
+    double bottom_cons[4];
+    bottom_cons[0] = bottom_rho;
+    bottom_cons[1] = bottom_rho * bottom_u;
+    bottom_cons[2] = bottom_rho * bottom_v;
+    bottom_cons[3] = bottom_p/(gamma-1.0) + 0.5 * bottom_rho * (bottom_u*bottom_u + bottom_v*bottom_v);
+    
+    // 上边界固定值（y=1处的状态）
+    double top_rho = 1.0;
+    double top_u = 0.0;
+    double top_v = 0.0;
+    double top_p = 2.5;  // p = 1 + 1.5 = 2.5
+    
+    double top_cons[4];
+    top_cons[0] = top_rho;
+    top_cons[1] = top_rho * top_u;
+    top_cons[2] = top_rho * top_v;
+    top_cons[3] = top_p/(gamma-1.0) + 0.5 * top_rho * (top_u*top_u + top_v*top_v);
+    
+    // ========== 1. 左边界：反射边界 ==========
+    for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
+        for (int i = 0; i < var; i++) {
+            if (i == 1) { // x方向动量（速度反向）
+                x[i][Ghost_cell-1][k] = -x[i][Ghost_cell][k];
+                x[i][Ghost_cell-2][k] = -x[i][Ghost_cell+1][k];
+                x[i][Ghost_cell-3][k] = -x[i][Ghost_cell+2][k];
+                x[i][Ghost_cell-4][k] = -x[i][Ghost_cell+3][k];
+            } else { // 密度、y方向动量、能量等保持不变
+                x[i][Ghost_cell-1][k] = x[i][Ghost_cell][k];
+                x[i][Ghost_cell-2][k] = x[i][Ghost_cell+1][k];
+                x[i][Ghost_cell-3][k] = x[i][Ghost_cell+2][k];
+                x[i][Ghost_cell-4][k] = x[i][Ghost_cell+3][k];
+            }
+        }
+    }
+    
+    // ========== 2. 右边界：反射边界 ==========
+    for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
+        for (int i = 0; i < var; i++) {
+            if (i == 1) { // x方向动量（速度反向）
+                x[i][rows - Ghost_cell][k] = -x[i][rows - Ghost_cell - 1][k];
+                x[i][rows - Ghost_cell + 1][k] = -x[i][rows - Ghost_cell - 2][k];
+                x[i][rows - Ghost_cell + 2][k] = -x[i][rows - Ghost_cell - 3][k];
+                x[i][rows - Ghost_cell + 3][k] = -x[i][rows - Ghost_cell - 4][k];
+            } else { // 密度、y方向动量、能量等保持不变
+                x[i][rows - Ghost_cell][k] = x[i][rows - Ghost_cell - 1][k];
+                x[i][rows - Ghost_cell + 1][k] = x[i][rows - Ghost_cell - 2][k];
+                x[i][rows - Ghost_cell + 2][k] = x[i][rows - Ghost_cell - 3][k];
+                x[i][rows - Ghost_cell + 3][k] = x[i][rows - Ghost_cell - 4][k];
+            }
+        }
+    }
+    
+    // ========== 3. 下边界：固定值边界 ==========
+    for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
+        for (int i = 0; i < var; i++) {
+            x[i][j][Ghost_cell-1] = bottom_cons[i];
+            x[i][j][Ghost_cell-2] = bottom_cons[i];
+            x[i][j][Ghost_cell-3] = bottom_cons[i];
+            x[i][j][Ghost_cell-4] = bottom_cons[i];
+        }
+    }
+    
+    // ========== 4. 上边界：固定值边界 ==========
+    for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
+        for (int i = 0; i < var; i++) {
+            x[i][j][cols - Ghost_cell] = top_cons[i];
+            x[i][j][cols - Ghost_cell + 1] = top_cons[i];
+            x[i][j][cols - Ghost_cell + 2] = top_cons[i];
+            x[i][j][cols - Ghost_cell + 3] = top_cons[i];
+        }
+    }
+}
+
+
 // 双马赫反射问题的边界条件函数 - 一次调用处理所有边界
 static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[rows][cols], int Ghost_cell, double current_time) {
     // 双马赫反射问题的物理参数
@@ -477,14 +641,15 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
 
 
 
-
+// 更新边界条件函数指针数组
 static inline void Boundary_Conditions(int var, int rows, int cols, double (*y)[rows][cols], int GC) {
-    // 边界条件函数指针数组（添加入口边界条件）
+    // 边界条件函数指针数组（添加固定值边界条件）
     void (*bc_funcs[])(int, int, int, double (*)[*][*], const char*, int) = {
         BC_OutFlow_2D,      // 0: BC_OUTFLOW
         BC_Reflection_2D,   // 1: BC_REFLECTION
         BC_Periodicity_2D,  // 2: BC_PERIODICITY
-        BC_Inflow_2D        // 3: BC_INFLOW
+        BC_Inflow_2D,       // 3: BC_INFLOW
+        BC_FixedValue_2D    // 4: BC_FIXED_VALUE
     };
     
     const char* sides[] = {L, R, B, T};

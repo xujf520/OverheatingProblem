@@ -98,7 +98,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
 
     for ( i = 0; i < var; i++)
         for ( j = GC-1; j <= rows-GC; j++)
-            for ( k = GC-1; k <= rows-GC; k++)
+            for ( k = GC-1; k <= cols-GC; k++)
                 f[i][j][k] = Flux[i][j][k];
 
     
@@ -159,7 +159,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
 
     for ( i = 0; i < var; i++)
         for ( j = GC-1; j <= rows-GC; j++)
-            for ( k = GC-1; k <= rows-GC; k++)
+            for ( k = GC-1; k <= cols-GC; k++)
                 g[i][j][k] = Flux[i][j][k];
 
 

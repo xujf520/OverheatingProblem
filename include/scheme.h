@@ -202,7 +202,6 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC, double
                 z[2][j][k] = rhov_G;
                 z[3][j][k] = rhoe_G; 
 
-
             }
         }
     }
@@ -473,10 +472,10 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double
                 double dv = v_R - v_L;
                 double dp = p_R - p_L;
 
-                double alpha1 = (dp - rhobar * cbar * du) / (2 * cbar*cbar);
+                double alpha1 = (dp - rhobar * cbar * du) / (2.0 * cbar*cbar);
                 double alpha2 = drho - dp / (cbar*cbar);
                 double alpha3 = rhobar * dv;
-                double alpha4 = (dp + rhobar * cbar * du) / (2 * cbar*cbar);
+                double alpha4 = (dp + rhobar * cbar * du) / (2.0 * cbar*cbar);
 
                 // 特征向量 (x方向)
                 double K1[4] = {1, ubar-cbar, vbar, Hbar-ubar*cbar};
@@ -484,7 +483,10 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double
                 double K3[4] = {0, 0, 1, vbar};
                 double K4[4] = {1, ubar+cbar, vbar, Hbar+ubar*cbar};
 
-                // Roe数值通量
+                double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                double* eigenvectors[4] = {K1, K2, K3, K4};
+
+                // 首先计算中心项
                 double rho_F = 0.5 * (rho_FL + rho_FR);
                 double rhou_F = 0.5 * (rhou_FL + rhou_FR);
                 double rhov_F = 0.5 * (rhov_FL + rhov_FR);
@@ -492,25 +494,10 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double
 
                 // 添加耗散项
                 for (int i = 0; i < 4; i++) {
-                    rho_F -= 0.5 * lambda[i] * alpha1 * K1[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha1 * K1[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha1 * K1[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha1 * K1[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha2 * K2[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha2 * K2[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha2 * K2[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha2 * K2[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha3 * K3[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha3 * K3[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha3 * K3[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha3 * K3[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha4 * K4[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha4 * K4[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha4 * K4[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha4 * K4[3];
+                    rho_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][0];
+                    rhou_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][1];
+                    rhov_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][2];
+                    rhoe_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][3];
                 }
 
                 z[0][j][k] = rho_F;
@@ -606,27 +593,15 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, double
                 double rhov_G = 0.5 * (rhov_GL + rhov_GR);
                 double rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
 
+                double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                double* eigenvectors[4] = {K1, K2, K3, K4};
+
                 // 添加耗散项
                 for (int i = 0; i < 4; i++) {
-                    rho_G-= 0.5 * lambda[i] * alpha1 * K1[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha1 * K1[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha1 * K1[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha1 * K1[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha2 * K2[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha2 * K2[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha2 * K2[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha2 * K2[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha3 * K3[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha3 * K3[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha3 * K3[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha3 * K3[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha4 * K4[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha4 * K4[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha4 * K4[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha4 * K4[3];
+                    rho_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][0];
+                    rhou_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][1];
+                    rhov_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][2];
+                    rhoe_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][3];
                 }
 
                 z[0][j][k] = rho_G;
@@ -929,6 +904,7 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double rhoe_FL = rho_L * H_L * u_L;
                 double rhoe_FR = rho_R * H_R * u_R;
                 //计算Roe平均
+                double rhobar = sqrt(rho_L * rho_R);
                 double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
@@ -952,7 +928,7 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                     rho_F = (sright*rho_FL - sleft*rho_FR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
                     rhou_F = (sright*rhou_FL - sleft*rhou_FR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
                     rhov_F = (sright*rhov_FL - sleft*rhov_FR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
-                    rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft) * (e_R-e_L)* rho_HLL;
+                    rhoe_F = (sright*rhoe_FL - sleft*rhoe_FR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft) * (e_R-e_L)* rhobar;
                 }
                 else if (sright <= 0){
                     rho_F = rho_FR;
@@ -1006,6 +982,7 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double rhoe_GR = rho_R * H_R * v_R;
             
                 //计算Roe平均
+                double rhobar = sqrt(rho_L * rho_R);
                 double ubar = (sqrt(rho_L) * u_L + sqrt(rho_R) * u_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double vbar = (sqrt(rho_L) * v_L + sqrt(rho_R) * v_R)/(sqrt(rho_L)+sqrt(rho_R));
                 double Hbar = (sqrt(rho_L) * H_L + sqrt(rho_R) * H_R)/(sqrt(rho_L)+sqrt(rho_R));
@@ -1030,7 +1007,7 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                     rho_G = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
                     rhou_G = (sright*rhou_GL - sleft*rhou_GR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
                     rhov_G = (sright*rhov_GL - sleft*rhov_GR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
-                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
+                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + sleft*sright/(sright-sleft)*(e_R-e_L)*rhobar;
                 }
 
                 else if (sright <= 0){
@@ -1230,26 +1207,6 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, dou
                     rhov_G = rhov_GR;
                     rhoe_G = rhoe_GR;
                 }
-                /*if (sleft >= 0 ){
-                    rho_G = rho_GL;
-                    rhou_G = rhou_GL;
-                    rhov_G = rhov_GL;
-                    rhoe_G = rhoe_GL;
-                }
-                else if(sleft < 0 && sright >0){
-                    rho_G = (sright*rho_GL - sleft*rho_GR + sleft*sright * (rho_R - rho_L))/(sright-sleft);
-                    rhou_G = (sright*rhou_GL - sleft*rhou_GR + sleft*sright * (rhou_R - rhou_L))/(sright-sleft);
-                    rhov_G = (sright*rhov_GL - sleft*rhov_GR + sleft*sright * (rhov_R - rhov_L))/(sright-sleft);
-                    rhoe_G = (sright*rhoe_GL - sleft*rhoe_GR + sleft*sright * (rhoe_R - rhoe_L))/(sright-sleft) + 0.0*sleft*sright/(sright-sleft)*(e_R-e_L)*rho_HLL;
-                }
-
-                else if (sright <= 0){
-                    rho_G = rho_GR;
-                    rhou_G = rhou_GR;
-                    rhov_G = rhov_GR;
-                    rhoe_G = rhoe_GR;
-                }*/
-
                 z[0][j][k] = rho_G; 
                 z[1][j][k] = rhou_G; 
                 z[2][j][k] = rhov_G;
@@ -1284,6 +1241,9 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double p_L = (rhoe_L - 0.5 * rho_L * (u_L*u_L + v_L*v_L)) * (M_gamma-1);
                 double p_R = (rhoe_R - 0.5 * rho_R * (u_R*u_R + v_R*v_R)) * (M_gamma-1);
 
+                double e_L = 1.0 / (M_gamma-1) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma-1) * p_R / rho_R;
+
                 // 计算总焓H
                 double H_L = 0.5 * (u_L*u_L + v_L*v_L) + (M_gamma/(M_gamma-1)) * (p_L/rho_L);
                 double H_R = 0.5 * (u_R*u_R + v_R*v_R) + (M_gamma/(M_gamma-1)) * (p_R/rho_R);
@@ -1317,6 +1277,8 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 lambda[2] = ubar;
                 lambda[3] = ubar + cbar;
 
+                double rho_HLL = (lambda[3]*rho_FL - lambda[0]*rho_FR + lambda[3]*lambda[0] * (rho_R - rho_L))/(lambda[3]-lambda[0]);
+
                 // 熵修正
                 for (int i = 0; i < 4; i++) {
                     if (fabs(lambda[i]) < epsilon) {
@@ -1332,10 +1294,10 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double dv = v_R - v_L;
                 double dp = p_R - p_L;
 
-                double alpha1 = (dp - rhobar * cbar * du) / (2 * cbar*cbar);
+                double alpha1 = (dp - rhobar * cbar * du) / (2.0 * cbar*cbar);
                 double alpha2 = drho - dp / (cbar*cbar);
                 double alpha3 = rhobar * dv;
-                double alpha4 = (dp + rhobar * cbar * du) / (2 * cbar*cbar);
+                double alpha4 = (dp + rhobar * cbar * du) / (2.0 * cbar*cbar);
 
                 // 特征向量 (x方向)
                 double K1[4] = {1, ubar-cbar, vbar, Hbar-ubar*cbar};
@@ -1343,7 +1305,10 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double K3[4] = {0, 0, 1, vbar};
                 double K4[4] = {1, ubar+cbar, vbar, Hbar+ubar*cbar};
 
-                // Roe数值通量
+                double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                double* eigenvectors[4] = {K1, K2, K3, K4};
+
+                // 首先计算中心项
                 double rho_F = 0.5 * (rho_FL + rho_FR);
                 double rhou_F = 0.5 * (rhou_FL + rhou_FR);
                 double rhov_F = 0.5 * (rhov_FL + rhov_FR);
@@ -1351,31 +1316,17 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
 
                 // 添加耗散项
                 for (int i = 0; i < 4; i++) {
-                    rho_F -= 0.5 * lambda[i] * alpha1 * K1[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha1 * K1[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha1 * K1[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha1 * K1[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha2 * K2[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha2 * K2[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha2 * K2[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha2 * K2[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha3 * K3[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha3 * K3[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha3 * K3[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha3 * K3[3];
-                    
-                    rho_F -= 0.5 * lambda[i] * alpha4 * K4[0];
-                    rhou_F -= 0.5 * lambda[i] * alpha4 * K4[1];
-                    rhov_F -= 0.5 * lambda[i] * alpha4 * K4[2];
-                    rhoe_F -= 0.5 * lambda[i] * alpha4 * K4[3];
+                    rho_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][0];
+                    rhou_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][1];
+                    rhov_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][2];
+                    rhoe_F -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][3];
                 }
 
                 z[0][j][k] = rho_F;
                 z[1][j][k] = rhou_F;
                 z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F;
+                z[3][j][k] = rhoe_F - 0.5 * lambda[3] * (e_R - e_L) * rhobar;
+                
             }
         }
     }
@@ -1399,6 +1350,8 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double v_R = rhov_R / rho_R;
                 double p_L = (rhoe_L - 0.5 * rho_L * (u_L*u_L + v_L*v_L)) * (M_gamma-1);
                 double p_R = (rhoe_R - 0.5 * rho_R * (u_R*u_R + v_R*v_R)) * (M_gamma-1);
+                double e_L = 1.0 / (M_gamma-1) * p_L / rho_L;
+                double e_R = 1.0 / (M_gamma-1) * p_R / rho_R;
 
                 // 计算总焓H
                 double H_L = 0.5 * (u_L*u_L + v_L*v_L) + (M_gamma/(M_gamma-1)) * (p_L/rho_L);
@@ -1432,6 +1385,7 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 lambda[1] = vbar;
                 lambda[2] = vbar;
                 lambda[3] = vbar + cbar;
+                double rho_HLL = (lambda[3]*rho_GL - lambda[0]*rho_GR + lambda[3]*lambda[0] * (rho_R - rho_L))/(lambda[3]-lambda[0]);
 
                 // 熵修正
                 for (int i = 0; i < 4; i++) {
@@ -1465,33 +1419,21 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, doub
                 double rhov_G = 0.5 * (rhov_GL + rhov_GR);
                 double rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
 
+                double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                double* eigenvectors[4] = {K1, K2, K3, K4};
+
                 // 添加耗散项
                 for (int i = 0; i < 4; i++) {
-                    rho_G-= 0.5 * lambda[i] * alpha1 * K1[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha1 * K1[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha1 * K1[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha1 * K1[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha2 * K2[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha2 * K2[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha2 * K2[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha2 * K2[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha3 * K3[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha3 * K3[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha3 * K3[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha3 * K3[3];
-                    
-                    rho_G-= 0.5 * lambda[i] * alpha4 * K4[0];
-                    rhou_G -= 0.5 * lambda[i] * alpha4 * K4[1];
-                    rhov_G -= 0.5 * lambda[i] * alpha4 * K4[2];
-                    rhoe_G -= 0.5 * lambda[i] * alpha4 * K4[3];
+                    rho_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][0];
+                    rhou_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][1];
+                    rhov_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][2];
+                    rhoe_G -= 0.5 * lambda[i] * alphas[i] * eigenvectors[i][3];
                 }
 
                 z[0][j][k] = rho_G;
                 z[1][j][k] = rhou_G;
                 z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G;
+                z[3][j][k] = rhoe_G - 0.5 * lambda[3] * (e_R - e_L) * rhobar;
             }
         }
     }
@@ -2114,28 +2056,40 @@ static inline void Source_Gravity(int var, int rows, int cols, int GC,
                                  double (*x)[rows][cols], double (*source)[rows][cols]) {
     
     // 初始化源项为零
-    for (int j = GC; j <= rows-GC-1; j++) {
-        for (int k = GC; k <= cols-GC-1; k++) {
-            for (int i = 0; i < var; i++) {
-                source[i][j][k] = 0.0;
+    for (int i = GC; i <= rows-GC-1; i++) {
+        for (int j = GC; j <= cols-GC-1; j++) {
+            for (int k = 0; k < var; k++) {
+                source[k][i][j] = 0.0;
             }
         }
     }
     
     // 设置重力源项
-    for (int j = GC; j <= rows-GC-1; j++) {
-        for (int k = GC; k <= cols-GC-1; k++) {
-            double rho = x[0][j][k];
-            double rhov = x[2][j][k];  // y方向动量
-            double v = rhov / (rho + 1e-12);  // 避免除零
+    for (int i = GC; i <= rows-GC-1; i++) {
+        for (int j = GC; j <= cols-GC-1; j++) {
+            double rho = x[0][i][j];
+            double rhov = x[2][i][j];  // y方向动量
+            double v = rhov / rho;  // 避免除零
             
             // 欧拉方程的重力源项
-            source[0][j][k] = 0.0;           // 质量方程：无源项
-            source[1][j][k] = 0.0;           // x动量方程：无源项  
-            source[2][j][k] = rho * Gravity; // y动量方程：重力
-            source[3][j][k] = rho * Gravity * v; // 能量方程：重力做功
+            source[0][i][j] = 0.0;           // 质量方程：无源项
+            source[1][i][j] = 0.0;           // x动量方程：无源项  
+            source[2][i][j] = rho * Gravity; // y动量方程：重力
+            source[3][i][j] = rho * Gravity * v; // 能量方程：重力做功
         }
     }
 }
+
+
+static inline void Space_Discrete_Item(int var, int rows, int cols, int GC, double delta_x, double delta_y,\
+                                        double (*f)[rows][cols], double (*g)[rows][cols], double (*s)[rows][cols],double (*L)[rows][cols]) {
+    
+    for (int i = GC; i <= rows-GC-1; i++) 
+        for (int j = GC; j <= cols-GC-1; j++)
+            for (int k = 0; k < var; k++) 
+                L[k][i][j] = - (f[k][i][j] - f[k][i-1][j])/delta_x - (g[k][i][j] - g[k][i][j-1])/delta_y + s[k][i][j];
+            
+}
+
 
 #endif  

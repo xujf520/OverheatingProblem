@@ -634,139 +634,70 @@ static inline void initEulerpri2D_KelvinHelmholtz_VelocityPerturbation(int var, 
 }
 
 
-// 验证函数
-static inline void verifyRTSinInitialCondition(int rows, int cols, int GC, double (*x)[rows][cols], double Lx, double Ly) {
-    printf("\n=== Initial Condition Verification ===\n");
-    
-    int nx = rows - 2 * GC;
-    int ny = cols - 2 * GC;
-    
-    // 检查几个关键点
-    printf("Key points verification:\n");
-    printf("x_pos   y_pos   density   vy\n");
-    printf("-----------------------------\n");
-    
-    // 检查不同x位置的界面点
-    for (int i = GC; i < rows - GC; i += nx/4) {
-        int j_interface = GC + ny/2;  // 界面中心
-        double x_pos = (double)(i - GC) / (nx - 1) * Lx;
-        double y_pos = 0.5 * Ly;
-        double vy = x[2][i][j_interface] / (x[0][i][j_interface] + 1e-12);
-        
-        printf("%.3f   %.3f   %.1f      %.6f\n", x_pos, y_pos, x[0][i][j_interface], vy);
-    }
-    
-    // 检查最大速度扰动
-    double max_vy = 0.0;
-    for (int i = GC; i < rows - GC; i++) {
-        for (int j = GC; j < cols - GC; j++) {
-            double vy = fabs(x[2][i][j] / (x[0][i][j] + 1e-12));
-            if (vy > max_vy) max_vy = vy;
-        }
-    }
-    printf("Maximum velocity perturbation: %.6f\n", max_vy);
-    
-    // 检查压力连续性
-    int j_interface = GC + ny/2;
-    double p_above = x[3][GC][j_interface+1];  // 界面上方
-    double p_below = x[3][GC][j_interface-1];  // 界面下方
-    printf("Pressure continuity check: p_above=%.6f, p_below=%.6f, diff=%.6f\n", 
-           p_above, p_below, fabs(p_above - p_below));
-}
+double L_fixed_value_state[4] = {0};
+double R_fixed_value_state[4] = {0};
+double B_fixed_value_state[4] = {2.0,0,0,1.5};
+double T_fixed_value_state[4] = {1.0,0,0,15.0/4};
+static inline void initEulerpri2D_RayleighTaylor(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+    printf("=== Rayleigh-Taylor Instability Test Case ===\n");
 
+     // 设置边界条件
+    bc_config.left = BC_REFLECTION;      // 左右边界：反射
+    bc_config.right = BC_REFLECTION;
+    bc_config.bottom = BC_FIXED_VALUE;  // 上下边界：固定值
+    bc_config.top = BC_FIXED_VALUE;
 
-static inline void initEulerpri2D_RayleighTaylor_SinPerturb(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
-    printf("=== Rayleigh-Taylor Instability (Sine Velocity Perturbation) ===\n");
+    // 设置计算域
+    *Lx = 0.25;
+    *Ly = 1.0;
+    *Time = 1.95;
 
-    // 边界条件：左右周期性，上下反射壁
-    bc_config.left = BC_PERIODICITY;
-    bc_config.right = BC_PERIODICITY;
-    bc_config.bottom = BC_REFLECTION;
-    bc_config.top = BC_REFLECTION;
-
-    int i, j;
-    *Lx = 0.5;    // 计算域宽度
-    *Ly = 1.0;    // 计算域高度
+    // 初始化流场
+    double nx = rows - 2 * GhostCell;
+    double ny = cols - 2 * GhostCell;
     
-    // 物理参数
-    double rho_heavy = 2.0;    // 重流体密度（上层）
-    double rho_light = 1.0;    // 轻流体密度（下层）
-    double p_top = 1.0;        // 顶部压力
-    double v_amplitude = 0.05; // 速度扰动幅度
-    
-    int nx = rows - 2 * GhostCell;
-    int ny = cols - 2 * GhostCell;
-    double g = Gravity;
-    double interface_center = 0.5 * (*Ly);
-    
-    printf("Physical Parameters:\n");
-    printf("  Domain: Lx=%.2f, Ly=%.2f\n", *Lx, *Ly);
-    printf("  Gravity: g=%.2f\n", g);
-    printf("  Density: heavy=%.1f (top), light=%.1f (bottom)\n", rho_heavy, rho_light);
-    printf("  Velocity perturbation amplitude: %.4f\n", v_amplitude);
-    printf("  Grid: %dx%d active cells\n", nx, ny);
-    
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
+    for (int i = GhostCell; i < rows - GhostCell; i++) {
+        for (int j = GhostCell; j < cols - GhostCell; j++) {
             // 计算物理坐标
-            double x_pos = (i >= GhostCell && i < rows - GhostCell) ? 
-                          (double)(i - GhostCell) / (nx - 1) * (*Lx) : 0;
-            double y_pos = (j >= GhostCell && j < cols - GhostCell) ? 
-                          (double)(j - GhostCell) / (ny - 1) * (*Ly) : 0;
+            double x_pos = (double)(i + 0.5 - GhostCell) / nx * (*Lx);
+            double y_pos = (double)(j + 0.5 - GhostCell) / ny * (*Ly);
             
-            // 设置密度 - 锐利界面（重流体在上，不稳定配置）
-            if (y_pos > interface_center) {
-                x[0][i][j] = rho_heavy;  // 上层重流体
+            // 根据y坐标位置设置不同的初始状态
+            if (y_pos < 0.5) {
+                // 下层流体: 0 < y < 1/2
+                x[0][i][j] = 2.0;                           // 密度 ρ = 2
+                x[1][i][j] = 0.0;                           // x动量 ρu = 0
+                x[2][i][j] = -0.025 *sqrt((2.0 * y_pos + 1.0)*M_gamma/2.0) * cos(8.0 * M_PI * x_pos); // y动量 ρv = ρ * (-0.025 cos(8πx))
+                //x[2][i][j] = 0.0; // y动量 ρv = ρ * (-0.025 cos(8πx))
+                x[3][i][j] = 2.0 * y_pos + 1.0;             // 压力 p = 2y + 1
             } else {
-                x[0][i][j] = rho_light;  // 下层轻流体
-            }
-            
-            // 设置速度场
-            x[1][i][j] = 0.0;  // x方向速度为零
-            
-            // 正弦速度扰动 - 在界面附近
-            double interface_thickness = 0.01;  // 扰动层厚度
-            double y_dist = fabs(y_pos - interface_center);
-            
-            if (y_dist < interface_thickness) {
-                // 在界面附近添加正弦速度扰动
-                double envelope = 1.0 - pow(y_dist / interface_thickness, 2);  // 包络函数
-                x[2][i][j] = v_amplitude * cos(2.0 * M_PI * x_pos / (*Lx)) * envelope * x[0][i][j];
-            } else {
-                x[2][i][j] = 0.0;  // 远离界面处速度为零
-            }
-            
-            if (y_pos > interface_center) {
-                // 上层重流体区域
-                x[3][i][j] = p_top;
-            } else {
-                // 下层轻流体区域
-                double p_interface = p_top + rho_heavy * g * (interface_center - *Ly);
-                x[3][i][j] = p_top;
+                // 上层流体: 1/2 < y ≤ 1
+                x[0][i][j] = 1.0;                           // 密度 ρ = 1
+                x[1][i][j] = 0.0;                           // x动量 ρu = 0
+                x[2][i][j] = -0.025 *sqrt((y_pos + 1.5)*M_gamma/1.0) * cos(8.0 * M_PI * x_pos); // y动量 ρv = ρ * (-0.025 cos(8πx))
+                //x[2][i][j] = 0.0; // y动量 ρv = ρ * (-0.025 cos(8πx))
+                x[3][i][j] = y_pos + 1.5;                   // 压力 p = y + 3/2
             }
         }
     }
 
-    *Time = 0.2;  // 模拟时间
-    
-    // 验证初始条件
-    verifyRTSinInitialCondition(rows, cols, GhostCell, x, *Lx, *Ly);
-}
+    printf("Computational domain: [0, %f] x [0, %f]\n", *Lx, *Ly);
+    printf("Final time: t = %f\n", *Time);
+    printf("Density ratio: 2:1 (heavy fluid below, light fluid above)\n");
+    printf("Initial perturbation: v = -0.025 cos(8πx)\n");
+    printf("Gravity direction: -y (implied by pressure gradient)\n");
 
+}
 
 // 二维双马赫反射问题
-
 // 全局入口状态定义（在某个源文件中）
 double inflow_state[4] = {1.4, 0.0, 0.0, 1.0}; // 默认值
-
 // 双马赫反射初始化函数
-// 全局变量定义（在某个源文件中）
 double post_shock_state[4] = {8.0, 7.145, -4.125, 116.83333};
 double pre_shock_state[4] = {1.4, 0.0, 0.0, 1.0};
 double shock_slope = 1.732;  // tan(60°)
 double shock_start_x = 1.0/6.0;
 double current_time = 0.0;   // 当前时间，需要在主循环中更新
-
 // 双马赫反射问题初始化
 
 static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
@@ -781,17 +712,17 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
     // 设置计算域
     *Lx = 4.0;
     *Ly = 1.0;
-    *Time = 0.25;
+    *Time = 0.2;
 
     // 设置激波状态（根据论文公式22）
     post_shock_state[0] = 8.0;          // 密度
-    post_shock_state[1] = 7.145;        // x方向动量
-    post_shock_state[2] = -4.125;       // y方向动量
+    post_shock_state[1] = 7.145;        // x方向速度
+    post_shock_state[2] = -4.125;       // y方向速度
     post_shock_state[3] = 116.83333;    // 压力
 
     pre_shock_state[0] = 1.4;           // 密度
-    pre_shock_state[1] = 0.0;           // x方向动量
-    pre_shock_state[2] = 0.0;           // y方向动量
+    pre_shock_state[1] = 0.0;           // x方向速度
+    pre_shock_state[2] = 0.0;           // y方向速度
     pre_shock_state[3] = 1.0;           // 压力
 
     shock_slope = 1.732;                // tan(60°)
@@ -812,14 +743,14 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
             if (y_pos <= shock_slope * (x_pos - shock_start_x)) {
                 // 激波后区域
                 x[0][i][j] = pre_shock_state[0];   // 密度
-                x[1][i][j] = pre_shock_state[1];   // x动量
-                x[2][i][j] = pre_shock_state[2];   // y动量
+                x[1][i][j] = pre_shock_state[1];   // x速度
+                x[2][i][j] = pre_shock_state[2];   // y速度
                 x[3][i][j] = pre_shock_state[3];   // 压力
                 
             } else {
                 x[0][i][j] = post_shock_state[0];  // 密度
-                x[1][i][j] = post_shock_state[1];  // x动量
-                x[2][i][j] = post_shock_state[2];  // y动量
+                x[1][i][j] = post_shock_state[1];  // x速度
+                x[2][i][j] = post_shock_state[2];  // y速度
                 x[3][i][j] = post_shock_state[3];  // 压力
                
             }
@@ -912,7 +843,8 @@ static inline void Init_Euler_2D(int var,int rows, int cols, int GC, double (*x)
    
 //    initEulerpri2D_1DShocktube(var, rows,cols, x, Time);
 //    initEulerpri2D_Shocktube5(var, rows, cols, x, Time);
-    initEulerpri2D_DoubleMachReflection(var, rows, cols, x, Lx, Ly, Time);
+    initEulerpri2D_RayleighTaylor(var, rows, cols, x, Lx, Ly, Time);
+//    initEulerpri2D_DoubleMachReflection(var, rows, cols, x, Lx, Ly, Time);
 //    initEulerpri2D_TaylorGreenVortex(var, rows, cols, x, Lx, Ly, Time);
     initEulerconser2D(var, rows, cols, x, y);
     initEulerflux2D(var, rows, cols, y,f,g);

@@ -6,7 +6,7 @@
 
 //计算控制变量
 static int Control_Compution = 0;
-static int Control_output = 200;
+static int Control_output = 5;
 static bool Control_Out = false;
 
 
@@ -17,10 +17,10 @@ static int Recon_Accur = 5;
 static bool Characteriz = false;
 //边界条件控制：
 static bool Periodicity = false;
-static bool Reflect = true;
+static bool Reflect = false;
 
 //程序计算参数
-static double CFL = 0.6; 
+static double CFL = 0.4; 
 static double Time = 0;;       //计算域参数 
 static int Ite = 0;
 
@@ -28,11 +28,10 @@ static int Ite = 0;
 static int GhostCell = 4;
 
 //物质属性参数：
-static double M_gamma = 1.4;
+static double M_gamma = 5.0/3;
 
 //是否开启重力：
-
-static bool Source = false;
-static double Gravity = -1.0;
+static bool Source = true;
+static double Gravity = 1.0;
 
 #endif

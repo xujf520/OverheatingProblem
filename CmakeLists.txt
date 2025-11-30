@@ -20,14 +20,14 @@ add_executable(ShockImpact_RPS src/RP_FVM.c)
 target_link_libraries(ShockImpact_RPS m)
 
 # 自动复制数据文件到构建目录
-file(GLOB DATA_FILES "data/*")
-if(DATA_FILES)
-    add_custom_command(TARGET ShockImpact_RPS POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
-        COMMAND ${CMAKE_COMMAND} -E copy ${DATA_FILES} ${CMAKE_BINARY_DIR}/data
-        COMMENT "Copying data files to build directory"
-    )
-endif()
+#file(GLOB DATA_FILES "data/*")
+#if(DATA_FILES)
+#    add_custom_command(TARGET ShockImpact_RPS POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
+#        COMMAND ${CMAKE_COMMAND} -E copy ${DATA_FILES} ${CMAKE_BINARY_DIR}/data
+#        COMMENT "Copying data files to build directory"
+#   )
+#endif()
 
 # 添加运行目标
 add_custom_target(run

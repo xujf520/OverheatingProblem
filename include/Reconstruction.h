@@ -82,7 +82,7 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
         // 特征重构代码（暂时注释掉）
         Con_to_Pri_2D(var,rows,cols,Pri,y);
         if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols ,Pri, Eigen_L, Eigen_R);
             
             for (i = 0; i < var; i++) 
                 for ( j = GC-1; j <= rows-GC; j++) 
@@ -147,21 +147,26 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
         free(W_R);
     } 
     else{
-        if (dir == 1 )
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
+        if (dir == 1 ){
+            for ( i = 0; i < var; i++){
+                for ( j = GC-1; j < rows-GC; j++){
                     for ( k = GC; k < cols-GC; k++){
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j+1][k];
                     }
-                  
-        else if (dir == 2)
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
+                }
+            }
+        }
+        else if (dir == 2){
+            for ( i = 0; i < var; i++){
+                for ( j = GC; j < rows-GC; j++){
                     for ( k = GC-1; k < cols-GC; k++){
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j][k+1];
                     }
+                }
+            }
+        }
                  
     }
 

@@ -18,8 +18,8 @@
 // 控制计算步数子程序
 void StepLoop();
 void OutputData_file();
-void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
-                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols]);
+void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my,
+                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols],double now_time);
 
 // 读取黎曼问题
 void Get_RP_Parameters();
@@ -32,15 +32,15 @@ void Mesh_2D();
 /*                                            *********                                          */
 
 //网格参数
-const int L_nx = 800;                                                      //网格数量
-const int L_ny = 200;                                                      //网格数量      
+const int L_nx = 100;                                                      //网格数量
+const int L_ny = 400;                                                      //网格数量      
 const int var = 4;                                        
 
 int Time_ADM;                                                //Riemann Solver的具体方法 
 //Riemann Solver
 int scheme;
 //边界条件
-BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_REFLECTION, BC_REFLECTION};
+BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW};
 
 int main(int argc, char *argv[]) {
     int LNX_ngc = L_nx + 2 * GhostCell; 
@@ -71,22 +71,30 @@ int main(int argc, char *argv[]) {
     Init_Euler_2D(var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,&Lx,&Ly,&Tmax);            //初始化欧拉方程
     printf("Read initial conditions successfully!\n");
     printf("Euler equation initialization successful!\n");
-    //施加边界条件，
+
     Delta_x = Lx / L_nx;
     Delta_y = Ly / L_ny; 
-    
     double u_r = 0.0;
-   
     //mesh
     Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
+
+
+    double output_time = Tmax / Control_output;
+    double next_output_time = output_time;
     printf("Mesh successfully!\n");
     Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
     switch (Control_Compution){
         case 0:
             for (Time = 0.0; Time < Tmax; Time = Time+Delta_T) {
                 Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x,Delta_y);
-                if (Time + Delta_T >= Tmax)
-                    Delta_T = Tmax - Time ;
+                // 确保不会超过下一个输出时间点或Tmax
+                if (Time + Delta_T > next_output_time) {
+                    Delta_T = next_output_time - Time;
+                }
+                if (Time + Delta_T >= Tmax) {
+                    Delta_T = Tmax - Time;
+                }
+
                 switch (Time_ADM) {
                     case 1:
                         RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
@@ -98,11 +106,16 @@ int main(int argc, char *argv[]) {
                         //格式     
                         break;
                 }
-                if (Ite % Control_output == 0 ){
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time+Delta_T, Ite);
+    
+                double currentTime = Time + Delta_T;
+    
+                // 检查是否到达输出时间点（使用容差比较浮点数）
+                if (fabs(currentTime - next_output_time) < 1e-10 * output_time) {
+                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, currentTime, Ite);
                     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
-                    //打开文件并输出结果
-                    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri);
+                    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,currentTime);
+                    // 更新下一个输出时间点
+                    next_output_time += output_time;
                 }
 
                 Ite++;
@@ -143,7 +156,7 @@ int main(int argc, char *argv[]) {
     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
     //打开文件并输出结果
     Control_Out = true;
-    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri);
+    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,Tmax);
 
     printf("The program has completed its execution.\n");
     free(pri);
@@ -197,11 +210,11 @@ void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2)
     }
 
     // 验证输入的有效性
-    if (*Parameter1 < 0 || *Parameter1 > 1) {
+    if (*Parameter1 < 0 || *Parameter1 > 10) {
         printf("⚠ Warning: Parameter1 value %d is outside recommended range (1-3)\n", *Parameter1);
     }
     
-    if (*Parameter2 < 0 || *Parameter2 > 8) {
+    if (*Parameter2 < 0 || *Parameter2 > 100) {
         printf("⚠ Warning: Parameter2 value %d is outside recommended range (1-ll)\n", *Parameter2);
         printf("Using Exact Riemann solver as default\n");
     }
@@ -240,13 +253,13 @@ void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int ro
 
 
 void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
-                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols]) {
+                            double (*U)[rows][cols], double (*FU)[rows][cols], double (*pri)[rows][cols],double now_time) {
     printf("Output result(rho, u, v, p, T, U_M, U_E)\n");
     
     
     // 修复：正确格式化文件名
     char filename[100];
-    sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_data_%.6f.plt", Time);
+    sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/output_data_%.6f.plt", now_time);
     
     FILE* file = fopen(filename, "w");  
     if (file == NULL) {
@@ -263,7 +276,7 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
     int output_cols = cols - 2*GC;
     
     // 指定ZONE信息
-    fprintf(file, "ZONE T=\"Time=%.6f\"\n", Time);
+    fprintf(file, "ZONE T=\"Time=%.6f\"\n", now_time);
     fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);
     fprintf(file, "DATAPACKING=POINT\n");
     
@@ -291,7 +304,7 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
     if (Con_out)
         printf("Output calculation result successful\n");
     else
-        printf("The %d th calculation ended at %f\n", Ite, Time);
+        printf("The %d th calculation ended at %f\n", Ite, now_time);
     
         
 }
