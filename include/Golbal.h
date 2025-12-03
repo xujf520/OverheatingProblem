@@ -6,7 +6,7 @@
 
 //计算控制变量
 static int Control_Compution = 0;
-static int Control_output = 5;
+static int Control_output = 2;
 static bool Control_Out = false;
 
 
@@ -28,10 +28,10 @@ static int Ite = 0;
 static int GhostCell = 4;
 
 //物质属性参数：
-static double M_gamma = 5.0/3;
+static double M_gamma = 1.4;
 
 //是否开启重力：
-static bool Source = true;
+static bool Source = false;
 static double Gravity = 1.0;
 
 #endif

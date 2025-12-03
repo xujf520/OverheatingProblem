@@ -354,95 +354,6 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     }
 }
 
-
-// Rayleigh-Taylor不稳定性问题的边界条件函数 - 一次调用处理所有边界
-static inline void BC_RayleighTaylor_2D(int var, int rows, int cols, double (*x)[rows][cols], int Ghost_cell, double current_time) {
-    // RT不稳定性问题的物理参数
-    double Lx = 0.25;
-    double Ly = 1.0;
-    double gamma = 5.0/3.0;  // 比热比
-    
-    // 边界固定值状态（守恒变量形式）
-    // 下边界固定值（y=0处的状态）
-    double bottom_rho = 2.0;
-    double bottom_u = 0.0;
-    double bottom_v = 0.0;
-    double bottom_p = 1.0;  // p = 2*0 + 1 = 1.0
-    
-    double bottom_cons[4];
-    bottom_cons[0] = bottom_rho;
-    bottom_cons[1] = bottom_rho * bottom_u;
-    bottom_cons[2] = bottom_rho * bottom_v;
-    bottom_cons[3] = bottom_p/(gamma-1.0) + 0.5 * bottom_rho * (bottom_u*bottom_u + bottom_v*bottom_v);
-    
-    // 上边界固定值（y=1处的状态）
-    double top_rho = 1.0;
-    double top_u = 0.0;
-    double top_v = 0.0;
-    double top_p = 2.5;  // p = 1 + 1.5 = 2.5
-    
-    double top_cons[4];
-    top_cons[0] = top_rho;
-    top_cons[1] = top_rho * top_u;
-    top_cons[2] = top_rho * top_v;
-    top_cons[3] = top_p/(gamma-1.0) + 0.5 * top_rho * (top_u*top_u + top_v*top_v);
-    
-    // ========== 1. 左边界：反射边界 ==========
-    for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
-        for (int i = 0; i < var; i++) {
-            if (i == 1) { // x方向动量（速度反向）
-                x[i][Ghost_cell-1][k] = -x[i][Ghost_cell][k];
-                x[i][Ghost_cell-2][k] = -x[i][Ghost_cell+1][k];
-                x[i][Ghost_cell-3][k] = -x[i][Ghost_cell+2][k];
-                x[i][Ghost_cell-4][k] = -x[i][Ghost_cell+3][k];
-            } else { // 密度、y方向动量、能量等保持不变
-                x[i][Ghost_cell-1][k] = x[i][Ghost_cell][k];
-                x[i][Ghost_cell-2][k] = x[i][Ghost_cell+1][k];
-                x[i][Ghost_cell-3][k] = x[i][Ghost_cell+2][k];
-                x[i][Ghost_cell-4][k] = x[i][Ghost_cell+3][k];
-            }
-        }
-    }
-    
-    // ========== 2. 右边界：反射边界 ==========
-    for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
-        for (int i = 0; i < var; i++) {
-            if (i == 1) { // x方向动量（速度反向）
-                x[i][rows - Ghost_cell][k] = -x[i][rows - Ghost_cell - 1][k];
-                x[i][rows - Ghost_cell + 1][k] = -x[i][rows - Ghost_cell - 2][k];
-                x[i][rows - Ghost_cell + 2][k] = -x[i][rows - Ghost_cell - 3][k];
-                x[i][rows - Ghost_cell + 3][k] = -x[i][rows - Ghost_cell - 4][k];
-            } else { // 密度、y方向动量、能量等保持不变
-                x[i][rows - Ghost_cell][k] = x[i][rows - Ghost_cell - 1][k];
-                x[i][rows - Ghost_cell + 1][k] = x[i][rows - Ghost_cell - 2][k];
-                x[i][rows - Ghost_cell + 2][k] = x[i][rows - Ghost_cell - 3][k];
-                x[i][rows - Ghost_cell + 3][k] = x[i][rows - Ghost_cell - 4][k];
-            }
-        }
-    }
-    
-    // ========== 3. 下边界：固定值边界 ==========
-    for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
-        for (int i = 0; i < var; i++) {
-            x[i][j][Ghost_cell-1] = bottom_cons[i];
-            x[i][j][Ghost_cell-2] = bottom_cons[i];
-            x[i][j][Ghost_cell-3] = bottom_cons[i];
-            x[i][j][Ghost_cell-4] = bottom_cons[i];
-        }
-    }
-    
-    // ========== 4. 上边界：固定值边界 ==========
-    for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
-        for (int i = 0; i < var; i++) {
-            x[i][j][cols - Ghost_cell] = top_cons[i];
-            x[i][j][cols - Ghost_cell + 1] = top_cons[i];
-            x[i][j][cols - Ghost_cell + 2] = top_cons[i];
-            x[i][j][cols - Ghost_cell + 3] = top_cons[i];
-        }
-    }
-}
-
-
 // 双马赫反射问题的边界条件函数 - 一次调用处理所有边界
 static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[rows][cols], int Ghost_cell, double current_time) {
     // 双马赫反射问题的物理参数
@@ -635,6 +546,257 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
                 x[3][j][cols-Ghost_cell+2] = pre_E;
                 x[3][j][cols-Ghost_cell+3] = pre_E;
          
+        }
+    }
+}
+
+// 二维后台阶流动的边界条件函数 - 根据Woodward & Colella (1984)
+static inline void BC_BackwardStep_2D(int var, int rows, int cols, double (*x)[rows][cols], int Ghost_cell, double current_time) {
+    // 后台阶流动的物理参数
+    double Lx = 3.0;
+    double Ly = 1.0;
+    double gamma = 1.4;  // 比热比
+    
+    // 台阶几何参数
+    double step_height = 0.2;     // 台阶高度
+    double step_position = 0.6;   // 台阶位置
+    
+    // 来流条件（马赫数3超声速流动）
+    double inflow_density = 1.4;      // 来流密度
+    double inflow_pressure = 1.0;     // 来流压力
+    double sound_speed = sqrt(gamma * inflow_pressure / inflow_density);
+    double inflow_velocity_x = 3.0 * sound_speed;  // 马赫数3
+    double inflow_velocity_y = 0.0;
+    
+    // 计算守恒变量
+    double inflow_rho = inflow_density;
+    double inflow_rhou = inflow_density * inflow_velocity_x;
+    double inflow_rhov = 0.0;
+    double inflow_E = inflow_pressure/(gamma-1.0) + 
+                      0.5 * inflow_density * inflow_velocity_x * inflow_velocity_x;
+    
+    double nx = rows - 2 * Ghost_cell;
+    double ny = cols - 2 * Ghost_cell;
+    double dx = Lx / nx;
+    double dy = Ly / ny;
+    
+    // 计算台阶对应的网格索引
+    int step_idx = (int)(step_position / dx) + Ghost_cell;
+    int step_top_idx = Ghost_cell + (int)(step_height / dy);
+    
+    // ========== 1. 左边界：超声速入流 ==========
+    // 整个左边界都是固定来流条件
+    for (int k = Ghost_cell; k < cols-Ghost_cell; k++) {
+        // 密度
+        x[0][Ghost_cell-1][k] = inflow_rho;
+        x[0][Ghost_cell-2][k] = inflow_rho;
+        x[0][Ghost_cell-3][k] = inflow_rho;
+        x[0][Ghost_cell-4][k] = inflow_rho;
+        
+        // x动量
+        x[1][Ghost_cell-1][k] = inflow_rhou;
+        x[1][Ghost_cell-2][k] = inflow_rhou;
+        x[1][Ghost_cell-3][k] = inflow_rhou;
+        x[1][Ghost_cell-4][k] = inflow_rhou;
+        
+        // y动量
+        x[2][Ghost_cell-1][k] = inflow_rhov;
+        x[2][Ghost_cell-2][k] = inflow_rhov;
+        x[2][Ghost_cell-3][k] = inflow_rhov;
+        x[2][Ghost_cell-4][k] = inflow_rhov;
+        
+        // 总能量
+        x[3][Ghost_cell-1][k] = inflow_E;
+        x[3][Ghost_cell-2][k] = inflow_E;
+        x[3][Ghost_cell-3][k] = inflow_E;
+        x[3][Ghost_cell-4][k] = inflow_E;
+    }
+    
+    // ========== 2. 右边界：超声速出流 ==========
+    // 零梯度外推
+    for (int i = 0; i < var; i++) {
+        for (int k = Ghost_cell; k < cols-Ghost_cell; k++) {
+            x[i][rows-Ghost_cell][k] = x[i][rows-Ghost_cell-1][k];
+            x[i][rows-Ghost_cell+1][k] = x[i][rows-Ghost_cell-1][k];
+            x[i][rows-Ghost_cell+2][k] = x[i][rows-Ghost_cell-1][k];
+            x[i][rows-Ghost_cell+3][k] = x[i][rows-Ghost_cell-1][k];
+        }
+    }
+    
+    // ========== 3. 下边界：反射壁面 ==========
+    // 整个下边界都是反射壁面（包括台阶前和台阶后）
+    for (int j = Ghost_cell; j < rows-Ghost_cell; j++) {
+        // 计算物理坐标
+        double x_pos = (double)(j + 0.5 - Ghost_cell) * dx;
+        
+        // 标准反射壁面条件
+        // 密度
+        x[0][j][Ghost_cell-1] = x[0][j][Ghost_cell];
+        x[0][j][Ghost_cell-2] = x[0][j][Ghost_cell+1];
+        x[0][j][Ghost_cell-3] = x[0][j][Ghost_cell+2];
+        x[0][j][Ghost_cell-4] = x[0][j][Ghost_cell+3];
+        
+        // x动量 - 切向速度不变
+        x[1][j][Ghost_cell-1] = x[1][j][Ghost_cell];
+        x[1][j][Ghost_cell-2] = x[1][j][Ghost_cell+1];
+        x[1][j][Ghost_cell-3] = x[1][j][Ghost_cell+2];
+        x[1][j][Ghost_cell-4] = x[1][j][Ghost_cell+3];
+        
+        // y动量 - 法向速度反向
+        x[2][j][Ghost_cell-1] = -x[2][j][Ghost_cell];
+        x[2][j][Ghost_cell-2] = -x[2][j][Ghost_cell+1];
+        x[2][j][Ghost_cell-3] = -x[2][j][Ghost_cell+2];
+        x[2][j][Ghost_cell-4] = -x[2][j][Ghost_cell+3];
+        
+        // 总能量
+        x[3][j][Ghost_cell-1] = x[3][j][Ghost_cell];
+        x[3][j][Ghost_cell-2] = x[3][j][Ghost_cell+1];
+        x[3][j][Ghost_cell-3] = x[3][j][Ghost_cell+2];
+        x[3][j][Ghost_cell-4] = x[3][j][Ghost_cell+3];
+    }
+    
+    // ========== 4. 上边界：反射壁面 ==========
+    // 整个上边界都是反射壁面
+    for (int j = Ghost_cell; j < rows-Ghost_cell; j++) {
+        // 密度
+        x[0][j][cols-Ghost_cell] = x[0][j][cols-Ghost_cell-1];
+        x[0][j][cols-Ghost_cell+1] = x[0][j][cols-Ghost_cell-2];
+        x[0][j][cols-Ghost_cell+2] = x[0][j][cols-Ghost_cell-3];
+        x[0][j][cols-Ghost_cell+3] = x[0][j][cols-Ghost_cell-4];
+        
+        // x动量 - 切向速度不变
+        x[1][j][cols-Ghost_cell] = x[1][j][cols-Ghost_cell-1];
+        x[1][j][cols-Ghost_cell+1] = x[1][j][cols-Ghost_cell-2];
+        x[1][j][cols-Ghost_cell+2] = x[1][j][cols-Ghost_cell-3];
+        x[1][j][cols-Ghost_cell+3] = x[1][j][cols-Ghost_cell-4];
+        
+        // y动量 - 法向速度反向
+        x[2][j][cols-Ghost_cell] = -x[2][j][cols-Ghost_cell-1];
+        x[2][j][cols-Ghost_cell+1] = -x[2][j][cols-Ghost_cell-2];
+        x[2][j][cols-Ghost_cell+2] = -x[2][j][cols-Ghost_cell-3];
+        x[2][j][cols-Ghost_cell+3] = -x[2][j][cols-Ghost_cell-4];
+        
+        // 总能量
+        x[3][j][cols-Ghost_cell] = x[3][j][cols-Ghost_cell-1];
+        x[3][j][cols-Ghost_cell+1] = x[3][j][cols-Ghost_cell-2];
+        x[3][j][cols-Ghost_cell+2] = x[3][j][cols-Ghost_cell-3];
+        x[3][j][cols-Ghost_cell+3] = x[3][j][cols-Ghost_cell-4];
+    }
+    
+    // ========== 5. 台阶垂直面边界条件 ==========
+    // 处理x = step_position处的垂直壁面
+    // 注意：这里处理的是台阶右侧的幽灵单元格
+    if (step_idx >= Ghost_cell && step_idx < rows) {
+        for (int k = Ghost_cell; k < step_top_idx; k++) {
+            if (k >= Ghost_cell && k < cols) {
+                // 垂直壁面：法向为x方向
+                // 使用镜像反射边界条件
+                
+                // 第1层幽灵单元格
+                x[0][step_idx][k] = x[0][step_idx-1][k];      // 密度外推
+                x[1][step_idx][k] = -x[1][step_idx-1][k];     // x动量反射
+                x[2][step_idx][k] = x[2][step_idx-1][k];      // y动量外推
+                x[3][step_idx][k] = x[3][step_idx-1][k];      // 能量外推
+                
+                // 第2层幽灵单元格
+                if (step_idx+1 < rows) {
+                    x[0][step_idx+1][k] = x[0][step_idx-2][k];
+                    x[1][step_idx+1][k] = -x[1][step_idx-2][k];
+                    x[2][step_idx+1][k] = x[2][step_idx-2][k];
+                    x[3][step_idx+1][k] = x[3][step_idx-2][k];
+                }
+                
+                // 第3层幽灵单元格
+                if (step_idx+2 < rows) {
+                    x[0][step_idx+2][k] = x[0][step_idx-3][k];
+                    x[1][step_idx+2][k] = -x[1][step_idx-3][k];
+                    x[2][step_idx+2][k] = x[2][step_idx-3][k];
+                    x[3][step_idx+2][k] = x[3][step_idx-3][k];
+                }
+                
+                // 第4层幽灵单元格
+                if (step_idx+3 < rows) {
+                    x[0][step_idx+3][k] = x[0][step_idx-4][k];
+                    x[1][step_idx+3][k] = -x[1][step_idx-4][k];
+                    x[2][step_idx+3][k] = x[2][step_idx-4][k];
+                    x[3][step_idx+3][k] = x[3][step_idx-4][k];
+                }
+            }
+        }
+    }
+    
+    // ========== 6. 台阶上缘边界条件 ==========
+    // 处理y = step_height处的水平壁面
+    // 注意：这里处理的是台阶上方的幽灵单元格
+    if (step_top_idx >= Ghost_cell && step_top_idx < cols) {
+        for (int j = step_idx; j < rows-Ghost_cell; j++) {
+            if (j >= Ghost_cell && j < rows) {
+                // 水平壁面：法向为y方向
+                
+                // 第1层幽灵单元格
+                x[0][j][step_top_idx] = x[0][j][step_top_idx+1];      // 密度外推
+                x[1][j][step_top_idx] = x[1][j][step_top_idx+1];      // x动量外推
+                x[2][j][step_top_idx] = -x[2][j][step_top_idx+1];     // y动量反射
+                x[3][j][step_top_idx] = x[3][j][step_top_idx+1];      // 能量外推
+                
+                // 第2层幽灵单元格
+                if (step_top_idx-1 >= 0) {
+                    x[0][j][step_top_idx-1] = x[0][j][step_top_idx+2];
+                    x[1][j][step_top_idx-1] = x[1][j][step_top_idx+2];
+                    x[2][j][step_top_idx-1] = -x[2][j][step_top_idx+2];
+                    x[3][j][step_top_idx-1] = x[3][j][step_top_idx+2];
+                }
+                
+                // 第3层幽灵单元格
+                if (step_top_idx-2 >= 0) {
+                    x[0][j][step_top_idx-2] = x[0][j][step_top_idx+3];
+                    x[1][j][step_top_idx-2] = x[1][j][step_top_idx+3];
+                    x[2][j][step_top_idx-2] = -x[2][j][step_top_idx+3];
+                    x[3][j][step_top_idx-2] = x[3][j][step_top_idx+3];
+                }
+                
+                // 第4层幽灵单元格
+                if (step_top_idx-3 >= 0) {
+                    x[0][j][step_top_idx-3] = x[0][j][step_top_idx+4];
+                    x[1][j][step_top_idx-3] = x[1][j][step_top_idx+4];
+                    x[2][j][step_top_idx-3] = -x[2][j][step_top_idx+4];
+                    x[3][j][step_top_idx-3] = x[3][j][step_top_idx+4];
+                }
+            }
+        }
+    }
+    
+    // ========== 7. 台阶拐角特殊处理 ==========
+    // 处理x=step_position, y=step_height拐角处的幽灵单元格
+    if (step_idx >= Ghost_cell && step_idx < rows && 
+        step_top_idx >= Ghost_cell && step_top_idx < cols) {
+        
+        // 拐角点本身（如果是幽灵单元格）
+        if (step_idx < rows-Ghost_cell || step_top_idx < cols-Ghost_cell) {
+            // 使用对角线反射：两个方向都反射
+            x[0][step_idx][step_top_idx] = x[0][step_idx-1][step_top_idx+1];
+            x[1][step_idx][step_top_idx] = -x[1][step_idx-1][step_top_idx+1];  // x反射
+            x[2][step_idx][step_top_idx] = -x[2][step_idx-1][step_top_idx+1];  // y反射
+            x[3][step_idx][step_top_idx] = x[3][step_idx-1][step_top_idx+1];
+        }
+        
+        // 拐角附近的幽灵单元格
+        for (int layer = 1; layer < 4; layer++) {
+            // 垂直方向
+            if (step_idx+layer < rows && step_top_idx < cols) {
+                x[0][step_idx+layer][step_top_idx] = x[0][step_idx-1][step_top_idx+1];
+                x[1][step_idx+layer][step_top_idx] = -x[1][step_idx-1][step_top_idx+1];
+                x[2][step_idx+layer][step_top_idx] = x[2][step_idx-1][step_top_idx+1];
+                x[3][step_idx+layer][step_top_idx] = x[3][step_idx-1][step_top_idx+1];
+            }
+            
+            // 水平方向
+            if (step_idx < rows && step_top_idx-layer >= 0) {
+                x[0][step_idx][step_top_idx-layer] = x[0][step_idx-1][step_top_idx+1];
+                x[1][step_idx][step_top_idx-layer] = x[1][step_idx-1][step_top_idx+1];
+                x[2][step_idx][step_top_idx-layer] = -x[2][step_idx-1][step_top_idx+1];
+                x[3][step_idx][step_top_idx-layer] = x[3][step_idx-1][step_top_idx+1];
+            }
         }
     }
 }

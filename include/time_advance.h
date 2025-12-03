@@ -58,8 +58,8 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
 
    // 第一步计算
     // 施加边界条件
-    Boundary_Conditions(var, rows, cols, y, GC); 
-//    BC_RayleighTaylor_2D(var, rows, cols, y, GC,Time); 
+//    Boundary_Conditions(var, rows, cols, y, GC); 
+    BC_BackwardStep_2D(var, rows, cols, y, GC,Time); 
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
