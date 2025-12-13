@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <omp.h>
 #include "function.h"
 #include "Characteriz.h"
 #include "Golbal.h"
@@ -23,22 +24,18 @@ static inline double WENO5_R();
 /*                               ************************************                               */
 /*                               ************************************                               */
 
-/*                                      ******************                                          */
-/*                                         重构格式计算                                              */
-/*                                      ******************                                          */
-
-
 
 /*                                      ******************                                          */
-/*                                                TVD                                               */
+/*                                            Godunov                                               */
 /*                                      ******************                                          */
-
-
-
-static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
-                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols], double delta_x) {
+static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, int GC, 
+                                          double (*y)[rows][cols],
+                                          double (*conserl)[rows][cols], 
+                                          double (*conserr)[rows][cols], 
+                                          double delta_x) {
     int i, j, k;
     double epsilo = 1e-6;
+    
     
     if (Characteriz) {
         // 动态分配内存
@@ -48,29 +45,20 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
         double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        // 检查内存分配是否成功
-        if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL) {
+        
+        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
-            // 释放已分配的内存
-            free(Pri);
-            free(Chara_Var);
-            free(Eigen_L);
-            free(Eigen_R);
-            free(W_L);
-            free(W_R);
+            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
             return;
         }
 
-        // 初始化数组
+        // ========== 并行初始化所有数组 ==========
+        #pragma omp parallel for collapse(3)
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
                 for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < var; ii++){
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
                     W_L[i][j][k] = 0.0;
                     W_R[i][j][k] = 0.0;
                     conserl[i][j][k] = 0.0;
@@ -78,107 +66,149 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
                 }
             }
         }
-
-        // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(var,rows,cols,Pri,y);
-        if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, var, rows, cols ,Pri, Eigen_L, Eigen_R);
-            
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
         
+        // 初始化特征向量矩阵（需要额外的循环）
+        #pragma omp parallel for collapse(4)
+        for (i = 0; i < var; i++) {
+            for (int ii = 0; ii < var; ii++) {
+                for (j = 0; j < rows; j++) {
+                    for (k = 0; k < cols; k++) {
+                        Eigen_L[i][ii][j][k] = 0.0;
+                        Eigen_R[i][ii][j][k] = 0.0;
+                    }
+                }
+            }
+        }
 
+        // 转换到原始变量
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // ========== 并行计算特征变量 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
 
-            for (i = 0; i < var; i++) 
-                 for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++){
+            // ========== 并行赋值 W_L 和 W_R ==========
+            #pragma omp parallel for collapse(3)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
                         W_L[i][j][k] = Chara_Var[i][j][k];
                         W_R[i][j][k] = Chara_Var[i][j+1][k];
                     }
+                }
+            }
 
-
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
+            // ========== 并行计算守恒量 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
-                            
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
         }
-
-        else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+        else if (dir == 2) {
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
-        
+            // ========== y方向并行计算 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
 
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++){
+            #pragma omp parallel for collapse(3)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
                         W_L[i][j][k] = Chara_Var[i][j][k];
                         W_R[i][j][k] = Chara_Var[i][j][k+1];
                     }
+                }
+            }
 
-
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
                         }
-                            
-
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
         }
-        // 释放动态分配的内存
-        free(Pri);
-        free(Chara_Var);
-        free(Eigen_L);
-        free(Eigen_R);
-        free(W_L);
-        free(W_R);
+        
+        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
     } 
-    else{
-        if (dir == 1 ){
-            for ( i = 0; i < var; i++){
-                for ( j = GC-1; j < rows-GC; j++){
-                    for ( k = GC; k < cols-GC; k++){
+    else {
+        if (dir == 1) {
+            #pragma omp parallel for collapse(3)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j+1][k];
                     }
                 }
             }
         }
-        else if (dir == 2){
-            for ( i = 0; i < var; i++){
-                for ( j = GC; j < rows-GC; j++){
-                    for ( k = GC-1; k < cols-GC; k++){
+        else if (dir == 2) {
+            #pragma omp parallel for collapse(3)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
                         conserl[i][j][k] = y[i][j][k];
                         conserr[i][j][k] = y[i][j][k+1];
                     }
                 }
             }
         }
-                 
     }
-
+    
 }
 
-
-
-static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
-                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols], double delta_x, double delta_y) {
+/*                                      ******************                                          */
+/*                                            TVD                                                   */
+/*                                      ******************                                          */
+static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int GC, 
+                                      double (*y)[rows][cols],
+                                      double (*conserl)[rows][cols], 
+                                      double (*conserr)[rows][cols], 
+                                      double delta_x, double delta_y) {
     int i, j, k;
- 
-
+    
     if (Characteriz) {
         // 动态分配内存
         double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
@@ -187,29 +217,20 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
         double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        // 检查内存分配是否成功
-        if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
-            fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
-            // 释放已分配的内存
-            free(Pri);
-            free(Chara_Var);
-            free(Eigen_L);
-            free(Eigen_R);
-            free(W_L);
-            free(W_R);
+        
+        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
+            fprintf(stderr, "Memory allocation failed in TVD_Reconstruction\n");
+            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
             return;
         }
 
-        // 初始化数组
+        // ========== 并行初始化 ==========
+        #pragma omp parallel for collapse(3)
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
                 for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < var; ii++){
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
                     W_L[i][j][k] = 0.0;
                     W_R[i][j][k] = 0.0;
                     conserl[i][j][k] = 0.0;
@@ -217,152 +238,183 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                 }
             }
         }
+        
+        #pragma omp parallel for collapse(4)
+        for (i = 0; i < var; i++) {
+            for (int ii = 0; ii < var; ii++) {
+                for (j = 0; j < rows; j++) {
+                    for (k = 0; k < cols; k++) {
+                        Eigen_L[i][ii][j][k] = 0.0;
+                        Eigen_R[i][ii][j][k] = 0.0;
+                    }
+                }
+            }
+        }
 
-        // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(var,rows,cols,Pri,y);
-        if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            // ========== 计算特征变量 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
 
-
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+            // ========== TVD重构 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = Chara_Var[i][j-2+nn][k];
-
-                        W_L[i][j][k] = TVD_minmod_L(&fu[2],delta_x);
-                        W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_x);
-                    }
-        
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
-                            
-        }
+                        W_L[i][j][k] = TVD_minmod_L(&fu[2], delta_x);
+                        W_R[i][j][k] = TVD_minmod_R(&fu[2], delta_x);
+                    }
+                }
+            }
 
-        else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+            // ========== 转换回守恒量 ==========
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
+                        }
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
+        }
+        else if (dir == 2) {
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
-
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = y[i][j][k-2+nn];
-
-                        W_L[i][j][k] = TVD_minmod_L(&fu[2],delta_y);
-                        W_R[i][j][k] = TVD_minmod_R(&fu[2],delta_y);
-                    }
-
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
                         }
-                            
-
-        }
-        // 释放动态分配的内存
-        free(Pri);
-        free(Chara_Var);
-        free(Eigen_L);
-        free(Eigen_R);
-        free(W_L);
-        free(W_R);
-    } 
-
-    else{
-        if (dir == 1){
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = y[i][j-2+nn][k];
-
-                        conserl[i][j][k] = TVD_minmod_L(&fu[2],delta_x);
-                        conserr[i][j][k] = TVD_minmod_R(&fu[2],delta_x);
+                        Chara_Var[i][j][k] = sum;
                     }
-        }
-        else if (dir == 2){
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+                }
+            }
+
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = y[i][j][k-2+nn];
-
-                        conserl[i][j][k] = TVD_minmod_L(&fu[2],delta_y);
-                        conserr[i][j][k] = TVD_minmod_R(&fu[2],delta_y);
+                        }
+                        W_L[i][j][k] = TVD_minmod_L(&fu[2], delta_y);
+                        W_R[i][j][k] = TVD_minmod_R(&fu[2], delta_y);
                     }
-        }        
+                }
+            }
 
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+                        }
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
+        }
         
+        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
+    } 
+    else {
+        if (dir == 1) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[i][j-2+nn][k];
+                        }
+                        conserl[i][j][k] = TVD_minmod_L(&fu[2], delta_x);
+                        conserr[i][j][k] = TVD_minmod_R(&fu[2], delta_x);
+                    }
+                }
+            }
+        }
+        else if (dir == 2) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[i][j][k-2+nn];
+                        }
+                        conserl[i][j][k] = TVD_minmod_L(&fu[2], delta_y);
+                        conserr[i][j][k] = TVD_minmod_R(&fu[2], delta_y);
+                    }
+                }
+            }
+        }
     }
+    
 }
+
 /*                                      ******************                                          */
 /*                                               WENO                                               */
 /*                                      ******************                                          */
-
-
 // 三阶WENO重构
-static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
-                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols]) {
+static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC,
+                                        double (*y)[rows][cols],
+                                        double (*conserl)[rows][cols], 
+                                        double (*conserr)[rows][cols]) {
     int i, j, k;
-
-   
+    
     if (Characteriz) {
-         // 动态分配内存
         double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        // 检查内存分配是否成功
-        if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
-            fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
-            // 释放已分配的内存
-            free(Pri);
-            free(Chara_Var);
-            free(Eigen_L);
-            free(Eigen_R);
-            free(W_L);
-            free(W_R);
+        
+        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
+            fprintf(stderr, "Memory allocation failed in WENO3_Reconstruction\n");
+            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
             return;
         }
 
-        // 初始化数组
+        // ========== 并行初始化 ==========
+        #pragma omp parallel for collapse(3)
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
                 for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < var; ii++){
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
                     W_L[i][j][k] = 0.0;
                     W_R[i][j][k] = 0.0;
                     conserl[i][j][k] = 0.0;
@@ -370,146 +422,180 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
         }
-
-        // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(var,rows,cols,Pri,y);
-        if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
-
-
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = Chara_Var[i][j-2+nn][k];
-
-                        W_L[i][j][k] = WENO3_L(&fu[2]);
-                        W_R[i][j][k] = WENO3_R(&fu[2]);
-                    }
         
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
-                        }
-                            
+        #pragma omp parallel for collapse(4)
+        for (i = 0; i < var; i++) {
+            for (int ii = 0; ii < var; ii++) {
+                for (j = 0; j < rows; j++) {
+                    for (k = 0; k < cols; k++) {
+                        Eigen_L[i][ii][j][k] = 0.0;
+                        Eigen_R[i][ii][j][k] = 0.0;
+                    }
+                }
+            }
         }
 
-        else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
 
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = Chara_Var[i][j][k-2+nn];
-
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = Chara_Var[i][j-2+nn][k];
+                        }
                         W_L[i][j][k] = WENO3_L(&fu[2]);
                         W_R[i][j][k] = WENO3_R(&fu[2]);
                     }
+                }
+            }
 
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j <= rows-GC; j++) 
-                    for ( k = GC-1; k <= cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
-                            
-
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
         }
-        // 释放动态分配的内存
-        free(Pri);
-        free(Chara_Var);
-        free(Eigen_L);
-        free(Eigen_R);
-        free(W_L);
-        free(W_R);
+        else if (dir == 2) {
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
+
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = Chara_Var[i][j][k-2+nn];
+                        }
+                        W_L[i][j][k] = WENO3_L(&fu[2]);
+                        W_R[i][j][k] = WENO3_R(&fu[2]);
+                    }
+                }
+            }
+
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j <= rows-GC; j++) {
+                    for (k = GC-1; k <= cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+                        }
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
+        }
+        
+        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
     } 
-    else{
-        if (dir == 1){
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+    else {
+        if (dir == 1) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = y[i][j-2+nn][k];
-
+                        }
                         conserl[i][j][k] = WENO3_L(&fu[2]);
                         conserr[i][j][k] = WENO3_R(&fu[2]);
                     }
+                }
+            }
         }
-        else if (dir == 2){
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+        else if (dir == 2) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = y[i][j][k-2+nn];
-
+                        }
                         conserl[i][j][k] = WENO3_L(&fu[2]);
                         conserr[i][j][k] = WENO3_R(&fu[2]);
                     }
-                }        
+                }
+            }
+        }
     }
-
+    
 }
+
 
 
 // 五阶WENO重构
-static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
-                                            double (*conserl)[rows][cols], double (*conserr)[rows][cols]) {
+static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC,
+                                        double (*y)[rows][cols],
+                                        double (*conserl)[rows][cols], 
+                                        double (*conserr)[rows][cols]) {
     int i, j, k;
+    
 
-   
     if (Characteriz) {
-         // 动态分配内存
         double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
         double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
         double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        // 检查内存分配是否成功
-        if (Pri == NULL || Chara_Var == NULL || W_L == NULL || W_R == NULL || Eigen_L==NULL || Eigen_R==NULL) {
-            fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
-            // 释放已分配的内存
-            free(Pri);
-            free(Chara_Var);
-            free(Eigen_L);
-            free(Eigen_R);
-            free(W_L);
-            free(W_R);
+        
+        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
+            fprintf(stderr, "Memory allocation failed in WENO5_Reconstruction\n");
+            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
             return;
         }
 
-        // 初始化数组
+        // ========== 并行初始化 ==========
+        #pragma omp parallel for collapse(3)
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
                 for (k = 0; k < cols; k++) {
                     Pri[i][j][k] = 0.0;
                     Chara_Var[i][j][k] = 0.0;
-                    for (int ii = 0; ii < var; ii++){
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
                     W_L[i][j][k] = 0.0;
                     W_R[i][j][k] = 0.0;
                     conserl[i][j][k] = 0.0;
@@ -517,109 +603,149 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
         }
-
-        // 特征重构代码（暂时注释掉）
-        Con_to_Pri_2D(var,rows,cols,Pri,y);
-
-        if (dir == 1){
-            Compute_Eigen_2D(1.0, 0.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
-            
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j < rows-GC; j++) 
-                    for ( k = GC; k < cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
-
-
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++) 
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = Chara_Var[i][j-2+nn][k];
-
-                        W_L[i][j][k] = WENO5_L(&fu[2]);
-                        W_R[i][j][k] = WENO5_R(&fu[2]);
-                    }
         
-            for (i = 0; i < var; i++) 
-                for ( j = GC-1; j < rows-GC; j++) 
-                    for ( k = GC; k < cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
-                        }
-                            
+        #pragma omp parallel for collapse(4)
+        for (i = 0; i < var; i++) {
+            for (int ii = 0; ii < var; ii++) {
+                for (j = 0; j < rows; j++) {
+                    for (k = 0; k < cols; k++) {
+                        Eigen_L[i][ii][j][k] = 0.0;
+                        Eigen_R[i][ii][j][k] = 0.0;
+                    }
+                }
+            }
         }
 
-        else if (dir == 2){
-            Compute_Eigen_2D(0.0, 1.0, var, rows,cols ,Pri, Eigen_L, Eigen_R);
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            for (i = 0; i < var; i++) 
-                for ( j = GC; j < rows-GC; j++) 
-                    for ( k = GC-1; k < cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++)
-                            Chara_Var[i][j][k] += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
 
-
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
-                            fu[nn] = Chara_Var[i][j][k-2+nn];
-
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = Chara_Var[i][j-2+nn][k];
+                        }
                         W_L[i][j][k] = WENO5_L(&fu[2]);
                         W_R[i][j][k] = WENO5_R(&fu[2]);
                     }
+                }
+            }
 
-            for (i = 0; i < var; i++) 
-                for ( j = GC; j < rows-GC; j++) 
-                    for ( k = GC-1; k < cols-GC; k++)
-                        for (int ii = 0; ii < var; ii++){
-                            conserl[i][j][k] += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            conserr[i][j][k] += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
                         }
-                            
-
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
         }
-        // 释放动态分配的内存
-        free(Pri);
-        free(Chara_Var);
-        free(Eigen_L);
-        free(Eigen_R);
-        free(W_L);
-        free(W_R);
+        else if (dir == 2) {
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double sum = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+                        }
+                        Chara_Var[i][j][k] = sum;
+                    }
+                }
+            }
+
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = Chara_Var[i][j][k-2+nn];
+                        }
+                        W_L[i][j][k] = WENO5_L(&fu[2]);
+                        W_R[i][j][k] = WENO5_R(&fu[2]);
+                    }
+                }
+            }
+
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double sum_l = 0.0, sum_r = 0.0;
+                        for (int ii = 0; ii < var; ii++) {
+                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
+                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+                        }
+                        conserl[i][j][k] = sum_l;
+                        conserr[i][j][k] = sum_r;
+                    }
+                }
+            }
+        }
+        
+        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
     } 
-    else{
-        if (dir == 1){
-            for ( i = 0; i < var; i++)
-                for ( j = GC-1; j < rows-GC; j++)
-                    for ( k = GC; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+    else {
+        if (dir == 1) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC-1; j < rows-GC; j++) {
+                    for (k = GC; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = y[i][j-2+nn][k];
-
+                        }
                         conserl[i][j][k] = WENO5_L(&fu[2]);
                         conserr[i][j][k] = WENO5_R(&fu[2]);
                     }
+                }
+            }
         }
-        else if (dir == 2){
-            for ( i = 0; i < var; i++)
-                for ( j = GC; j < rows-GC; j++)
-                    for ( k = GC-1; k < cols-GC; k++){
-                        double fu[10] = {0.0};
-                        for (int nn = 0; nn < 6; nn++)
+        else if (dir == 2) {
+            #pragma omp parallel for collapse(3) private(i, j, k)
+            for (i = 0; i < var; i++) {
+                for (j = GC; j < rows-GC; j++) {
+                    for (k = GC-1; k < cols-GC; k++) {
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
                             fu[nn] = y[i][j][k-2+nn];
-
+                        }
                         conserl[i][j][k] = WENO5_L(&fu[2]);
                         conserr[i][j][k] = WENO5_R(&fu[2]);
                     }
-                }        
+                }
+            }
+        }
     }
-
+    
 }
+
 
 
 /*                                      ******************                                          */

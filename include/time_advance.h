@@ -42,6 +42,7 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     }
   
     //初始化参数
+    #pragma omp parallel for
     for ( k = 0; k < var; k++){
         for ( i = 0; i < rows; i++){
             for ( j = 0; j < cols; j++){
@@ -63,7 +64,7 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    
+    #pragma omp parallel for
     for ( i = GC; i <= rows-GC-1; i++)
         for ( j = GC; j <= cols-GC-1; j++)
             for ( k = 0; k < var; k++)

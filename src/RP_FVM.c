@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <sys/stat.h>  // 新增，用于目录操作
+#include <time.h>
 #include "initialize.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
@@ -12,6 +13,9 @@
 #include "scheme.h"
 #include "Golbal.h"
 #include "Error.h"
+
+#include <omp.h>
+
 
 // 全局变量存储当前算例
 TestCase2D current_test_case = TEST_1D_SHOCKTUBE; // 默认值
@@ -54,6 +58,7 @@ int scheme;
 BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW};
 
 int main(int argc, char *argv[]) {
+
     int LNX_ngc = L_nx + 2 * GhostCell; 
     int LNY_ngc = L_ny + 2 * GhostCell; 
     
@@ -62,13 +67,18 @@ int main(int argc, char *argv[]) {
     double Delta_x, Delta_y;
     double Delta_T;
 
-    //
+    // 增加计时变量
+    clock_t start_time, end_time;
+    double total_cpu_time = 0.0;
+    double average_time_per_step = 0.0;
+
     double mesh_x[L_nx], mesh_y[L_ny];
     double pri_Ver1[4], pri_Ver2[4];
     double (*pri)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*U)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*FU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*GU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+    
     // 检查内存分配是否成功
     if (pri == NULL || U == NULL || FU == NULL|| GU == NULL) {
         fprintf(stderr, "Memory allocation failed in Main\n");
@@ -83,7 +93,7 @@ int main(int argc, char *argv[]) {
     printAvailableTestCases();
 
     // 选择测试算例
-    TestCase2D selected_test = TEST_NOH_PROBLEM;
+    TestCase2D selected_test = TEST_TAYLOR_GREEN_VORTEX;
 
     // 设置当前算例（全局变量）
     set_current_test_case(selected_test);
@@ -97,17 +107,25 @@ int main(int argc, char *argv[]) {
     Delta_x = Lx / L_nx;
     Delta_y = Ly / L_ny; 
     double u_r = 0.0;
-    //mesh
+    
+    // mesh
     Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
-
 
     double output_time = Tmax / Control_output;
     double next_output_time = output_time;
     printf("Mesh successfully!\n");
+    
     Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
+    
+    // 记录程序开始时间
+    start_time = clock();
+    
     switch (Control_Compution){
         case 0:
             for (Time = 0.0; Time < Tmax; Time = Time+Delta_T) {
+                // 记录单步开始时间
+                clock_t step_start_time = clock();
+                
                 Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x,Delta_y);
                 // 确保不会超过下一个输出时间点或Tmax
                 if (Time + Delta_T > next_output_time) {
@@ -130,10 +148,24 @@ int main(int argc, char *argv[]) {
                 }
     
                 double currentTime = Time + Delta_T;
+                
+                // 记录单步结束时间并累加
+                clock_t step_end_time = clock();
+                total_cpu_time += ((double)(step_end_time - step_start_time)) / CLOCKS_PER_SEC;
     
                 // 检查是否到达输出时间点（使用容差比较浮点数）
                 if (fabs(currentTime - next_output_time) < 1e-10 * output_time) {
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, currentTime, Ite);
+                    // 计算平均每步耗时
+                    if (Ite > 0) {
+                        average_time_per_step = total_cpu_time / Ite;
+                        printf("Step = %d     Time = %f     Avg time per step = %.6f seconds\n", 
+                               Ite, currentTime, average_time_per_step);
+                    } else {
+                        printf("Step = %d     Time = %f  \n", Ite, currentTime);
+                    }
+                    
+                    printf("Calculation of step %d is completed \n", Ite);
+                    
                     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
                     OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,currentTime,scheme);
                     // 更新下一个输出时间点
@@ -145,9 +177,12 @@ int main(int argc, char *argv[]) {
             }
             break;
         case 1:
-            //迭代步数控制
+            // 迭代步数控制
             Time = 0.0;
             for (int m = 0; m <= 399; m++) {
+                // 记录单步开始时间
+                clock_t step_start_time = clock();
+                
                 Delta_T = 0.1*Delta_x;
                 switch (Time_ADM) {
                     case 1:
@@ -160,23 +195,63 @@ int main(int argc, char *argv[]) {
                         //格式     
                         break;
                 }
+                
+                // 记录单步结束时间并累加
+                clock_t step_end_time = clock();
+                total_cpu_time += ((double)(step_end_time - step_start_time)) / CLOCKS_PER_SEC;
+                
                 Ite++;
-                Time = Time+Delta_T;
+                Time = Time + Delta_T;
+                
                 if (Ite % Control_output == 0 ){
-                    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time, Ite);
+                    // 计算平均每步耗时
+                    if (Ite > 0) {
+                        average_time_per_step = total_cpu_time / Ite;
+                        printf("Step = %d     Time = %f     Avg time per step = %.6f seconds\n", 
+                               Ite, Time, average_time_per_step);
+                    } else {
+                        printf("Step = %d     Time = %f  \n", Ite, Time);
+                    }
+                    printf("Calculation of step %d is completed \n", Ite);
                 }
             }
             break;
         default:
             break;
     }
+    
+    // 记录程序结束时间
+    end_time = clock();
+    double total_program_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    
+    // 计算最终的平均每步耗时
+    if (Ite > 0) {
+        average_time_per_step = total_cpu_time / Ite;
+    }
 
-    printf("Step = %d     Time = %f  \nCalculation of step %d is completed \n", Ite, Time, Ite);
-    printf("end of calculation!\n");
+       printf("\n");
+    printf("════════════════════════════════════════════════════════════════════\n");
+    printf("                   CALCULATION SUMMARY                              \n");
+    printf("════════════════════════════════════════════════════════════════════\n");
+    printf("\n");
+    printf("  ▸ Final Statistics:\n");
+    printf("    • Steps Completed:   %d\n", Ite);
+    printf("    • Final Time:        %.6f\n", Time);
+    printf("\n");
+    printf("  ▸ Performance Metrics:\n");
+    printf("    • Total Time:        %.3f seconds\n", total_program_time);
+    printf("    • Avg Time/Step:     %.6f seconds\n", average_time_per_step);
+    if (Ite > 0) {
+        printf("    • Steps per Second:  %.2f steps/sec\n", Ite / total_program_time);
+    }
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════\n");
+    printf("✓ Calculation completed successfully!\n");
+    printf("\n");
 
-    //实现输出最后的结果
+    // 实现输出最后的结果
     Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
-    //打开文件并输出结果
+    // 打开文件并输出结果
     Control_Out = true;
     OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,Tmax,scheme);
 
@@ -186,9 +261,11 @@ int main(int argc, char *argv[]) {
     free(FU);
     free(GU);
     printf("Memory Deallocation succesed in Main\n");
+    
     return 0;
-
 }
+
+
 
 
 
@@ -248,8 +325,6 @@ void set_current_test_case(TestCase2D test_case) {
 }
 
 
-
-
 // 函数定义：同时获取RP_Method和scheme两个参数
 void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2) {
     // 先显示所有可选择的内容
@@ -270,41 +345,74 @@ void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2)
     printf("║   Other: Exact Riemann                            ║\n");
     printf("╚═══════════════════════════════════════════════════╝\n\n");
 
+    // 默认值设为1
+    *Parameter1 = 1;
+    *Parameter2 = 1;
+
     if (argc > 2) {
         // 有两个命令行参数
         *Parameter1 = atoi(argv[1]);
         *Parameter2 = atoi(argv[2]);
         printf("✓ Using Parameter1 %d and Parameter2 %d from command line arguments\n", *Parameter1, *Parameter2);
     } else if (argc > 1) {
-        // 只有一个命令行参数，提示用户输入另一个
+        // 只有一个命令行参数
         *Parameter1 = atoi(argv[1]);
         printf("✓ Using Parameter1 %d from command line argument\n", *Parameter1);
         
-        printf("Please enter the Parameter2 value (1-ll): ");
-        scanf("%d", Parameter2);
-        printf("✓ Using Parameter2 %d from user input\n", *Parameter2);
+        // 提示用户输入第二个参数，默认值为1
+        printf("Please enter the Parameter2 value (1-ll, default: 1): ");
+        char input[100];
+        fgets(input, sizeof(input), stdin);
+        
+        if (strlen(input) == 1) {  // 只输入了回车
+            *Parameter2 = 1;
+            printf("✓ Using default Parameter2 = 1 (HLL)\n");
+        } else {
+            *Parameter2 = atoi(input);
+            printf("✓ Using Parameter2 %d from user input\n", *Parameter2);
+        }
     } else {
-        // 没有命令行参数，交互式输入两个参数（合并为一行）
-        printf("Please enter Parameter1 and Parameter2 values (1-3, 1-ll): ");
-        scanf("%d %d", Parameter1, Parameter2);
+        // 没有命令行参数，交互式输入两个参数
+        char input1[100], input2[100];
+        
+        // 输入第一个参数
+        printf("Please enter Parameter1 value (1 or 3, default: 1): ");
+        fgets(input1, sizeof(input1), stdin);
+        
+        if (strlen(input1) == 1) {  // 只输入了回车
+            *Parameter1 = 1;
+        } else {
+            *Parameter1 = atoi(input1);
+        }
+        
+        // 输入第二个参数
+        printf("Please enter Parameter2 value (1-ll, default: 1): ");
+        fgets(input2, sizeof(input2), stdin);
+        
+        if (strlen(input2) == 1) {  // 只输入了回车
+            *Parameter2 = 1;
+        } else {
+            *Parameter2 = atoi(input2);
+        }
         
         printf("✓ Using Parameter1 %d and Parameter2 %d from user input\n", *Parameter1, *Parameter2);
     }
 
-    // 验证输入的有效性
-    if (*Parameter1 < 0 || *Parameter1 > 10) {
-        printf("⚠ Warning: Parameter1 value %d is outside recommended range (1-3)\n", *Parameter1);
+    // 验证输入的有效性，如果无效则使用默认值1
+    if (*Parameter1 != 1 && *Parameter1 != 3) {
+        printf("⚠ Warning: Parameter1 value %d is invalid, using default 1 (RK1)\n", *Parameter1);
+        *Parameter1 = 1;
     }
     
+    // 检查Parameter2是否在常见范围内
     if (*Parameter2 < 0 || *Parameter2 > 100) {
-        printf("⚠ Warning: Parameter2 value %d is outside recommended range (1-ll)\n", *Parameter2);
-        printf("Using Exact Riemann solver as default\n");
+        printf("⚠ Warning: Parameter2 value %d is outside recommended range\n", *Parameter2);
+        printf("Using default HLL solver (1)\n");
+        *Parameter2 = 1;
     }
     
     printf("\n");
 }
-
-
 
 void Mesh_2D(int rows, int cols, double *mesh_x, double *mesh_y, double deltax, double deltay) {
 

@@ -1,0 +1,98 @@
+cmake_minimum_required(VERSION 3.10)
+project(CFD_FVM_Solver LANGUAGES C)
+
+# 设置C标准和编译选项
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# 根据构建类型设置不同的编译选项
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
+
+if(BUILD_TYPE_UPPER STREQUAL "RELEASE")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -Wall -fopenmp")
+    message(STATUS "构建类型: Release (-O3, OpenMP启用)")
+elseif(BUILD_TYPE_UPPER STREQUAL "DEBUG")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -fopenmp -DDEBUG")
+    message(STATUS "构建类型: Debug (-g, OpenMP启用)")
+else()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fopenmp")
+    message(STATUS "构建类型: ${CMAKE_BUILD_TYPE} (OpenMP启用)")
+endif()
+
+# 对于未使用变量和未使用返回值不出现warning
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-result")
+
+# 包含头文件目录
+include_directories(include)
+
+# 创建主可执行文件
+add_executable(ShockImpact_RPS src/RP_FVM.c)
+
+# 链接数学库
+target_link_libraries(ShockImpact_RPS m)
+
+# ========== OpenMP 验证 ==========
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/check_openmp.c
+"#include <stdio.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+int main() {
+    printf(\"=== CFD_FVM_Solver OpenMP 配置检查 ===\\n\\n\");
+    
+    #ifdef _OPENMP
+        printf(\"✅ OpenMP 已启用\\n\");
+        printf(\"   版本号: %d (对应OpenMP 4.5)\\n\", _OPENMP);
+        printf(\"   可用处理器核心: %d\\n\", omp_get_num_procs());
+        printf(\"   默认最大线程数: %d\\n\", omp_get_max_threads());
+        
+        int suggested_threads = omp_get_num_procs();
+        printf(\"   建议线程数: %d (等于处理器核心数)\\n\", suggested_threads);
+        
+        printf(\"\\n✅ OpenMP 配置正确，可以开始并行计算！\\n\");
+        return 0;
+    #else
+        printf(\"❌ 错误: OpenMP 未启用\\n\");
+        printf(\"   请确保编译标志包含 -fopenmp\\n\");
+        return 1;
+    #endif
+}")
+
+add_executable(check_openmp ${CMAKE_CURRENT_BINARY_DIR}/check_openmp.c)
+target_link_libraries(check_openmp m)
+
+add_custom_target(verify_omp
+    COMMAND ./check_openmp
+    DEPENDS check_openmp
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "验证OpenMP配置"
+)
+
+# 添加运行目标
+add_custom_target(run
+    COMMAND ${CMAKE_BINARY_DIR}/ShockImpact_RPS
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "运行CFD求解器"
+)
+
+# 配置摘要
+message(STATUS "")
+message(STATUS "================ CFD_FVM_Solver 配置摘要 ================")
+message(STATUS "项目名称:      ${PROJECT_NAME}")
+message(STATUS "构建类型:      ${CMAKE_BUILD_TYPE}")
+message(STATUS "C编译器:       ${CMAKE_C_COMPILER}")
+message(STATUS "C标准:         ${CMAKE_C_STANDARD}")
+message(STATUS "编译标志:      ${CMAKE_C_FLAGS}")
+message(STATUS "OpenMP:        ✅ 已启用 (-fopenmp 标志已添加)")
+message(STATUS "")
+message(STATUS "可用命令:")
+message(STATUS "  make verify_omp                   # 验证OpenMP配置")
+message(STATUS "  make run                          # 编译并运行求解器")
+message(STATUS "  ./ShockImpact_RPS                 # 直接运行求解器")
+message(STATUS "=========================================================")

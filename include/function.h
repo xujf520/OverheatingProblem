@@ -2,6 +2,7 @@
 #define FUNCTION_H
 
 #include <math.h>
+#include <omp.h>
 
 #ifndef PI
     #define PI 3.14159265358979323846
@@ -104,28 +105,32 @@ static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx
 }
 
 static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[cols][depth], double dx, double dy) {
-    double S_plus_x = 0,S_plus_y = 0;
+    double S_plus_x = 0, S_plus_y = 0;
+    
+    // 使用归约操作获取最大值
+    #pragma omp parallel for reduction(max:S_plus_x, S_plus_y)
     for (int j = GhostCell; j < cols-GhostCell; j++) {
-        for (int k = GhostCell; k < depth-GhostCell; k++){
-             //读取已知的左右原始变量
+        for (int k = GhostCell; k < depth-GhostCell; k++) {
+            // 读取已知的左右原始变量
             double rho = x[0][j][k];
             double rhou = x[1][j][k];
             double rhov = x[2][j][k];
             double rhoe = x[3][j][k];
             double u = rhou / rho;
             double v = rhov / rho;
-            double p = (rhoe - 0.5 * rho * (pow(u, 2) + pow(v,2)))*(M_gamma-1);
-            //计算声速
-            double a= sqrt(M_gamma * p / rho);
-            //计算全局最大波速
-            S_plus_x = max_of_two (fabs(u) + a,S_plus_x);
-            S_plus_y = max_of_two (fabs(v) + a,S_plus_y);
+            double p = (rhoe - 0.5 * rho * (pow(u, 2) + pow(v,2))) * (M_gamma-1);
+            // 计算声速
+            double a = sqrt(M_gamma * p / rho);
+            // 计算局部最大波速
+            double local_S_plus_x = fabs(u) + a;
+            double local_S_plus_y = fabs(v) + a;
+            
+            S_plus_x = max_of_two(local_S_plus_x, S_plus_x);
+            S_plus_y = max_of_two(local_S_plus_y, S_plus_y);
         }
-    }   
-
-//    return CFL * dx / S_plus;
-    return CFL * min_of_two(dx,dy) / (S_plus_x + S_plus_y);
-//    return  0.5 * pow(dx, 5.0/3.0);
+    }
+    
+    return CFL * min_of_two(dx, dy) / (S_plus_x + S_plus_y);
 }
 
 //计算总守恒量

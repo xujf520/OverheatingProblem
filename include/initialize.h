@@ -1031,7 +1031,7 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
     // 计算域尺寸（第一象限，利用对称性）
     *Lx = 1.0;    // [0, 1]
     *Ly = 1.0;    // [0, 1]
-    *Time = 0.2;  // 典型计算时间
+    *Time = 0.6;  // 典型计算时间
     
     // 物理参数
     double gamma = 5.0/3.0;  // Noh问题常用γ=5/3
@@ -1357,8 +1357,8 @@ static inline const char* getTestCaseDescription(TestCase2D test_case) {
 // 打印所有可用测试算例
 void printAvailableTestCases() {
     printf("\n╔══════════════════════════════════════════════════════════════════════╗\n");
-    printf("║                    Available 2D Euler Test Cases                    ║\n");
-    printf("╠══════════════════════════════════════════════════════════════════════╣\n");
+    printf("║                    Available 2D Euler Test Cases             ║\n");
+    printf("╠══════════════════════════════════════════════════════════════╣\n");
     printf("║ %2d: %-25s - %-35s ║\n", TEST_1D_SHOCKTUBE, "1D Sod", "Classic 1D shock tube");
     printf("║ %2d: %-25s - %-35s ║\n", TEST_2D_SHOCKTUBE_CASE1, "2D Riemann Case1", "Four interacting states");
     printf("║ %2d: %-25s - %-35s ║\n", TEST_2D_SHOCKTUBE_CASE2, "2D Riemann Case2", "Complex wave interactions");
@@ -1375,9 +1375,8 @@ void printAvailableTestCases() {
     printf("║ %2d: %-25s - %-35s ║\n", TEST_BACKWARD_STEP, "Backward Step", "Supersonic flow with separation");
     printf("║ %2d: %-25s - %-35s ║\n", TEST_BLAST_WAVE, "Blast Wave", "Spherical explosion");
     printf("║ %2d: %-25s - %-35s ║\n", TEST_NOH_PROBLEM, "Noh Problem", "Converging shock wave");
-    printf("╚══════════════════════════════════════════════════════════════════════╝\n\n");
+    printf("╚═══════════════════════════════════════════════════════════════════╝\n\n");
 }
-
 
 
 #endif

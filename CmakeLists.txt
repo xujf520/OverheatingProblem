@@ -4,41 +4,165 @@ project(CFD_FVM_Solver LANGUAGES C)
 # 设置C标准和编译选项
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_FLAGS_RELEASE "-O3 -Wall")
-set(CMAKE_C_FLAGS_DEBUG "-g -Wall")
 
-#对于未使用变量不出现wearing
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable -Wno-unused-but-set-variable")
+# 设置默认构建类型
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# 设置编译标志
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fopenmp")
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -DDEBUG")
+endif()
+
+# 抑制警告
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable -Wno-unused-result")
 
 # 包含头文件目录
 include_directories(include)
 
-# 创建可执行文件
+# 创建主可执行文件
 add_executable(ShockImpact_RPS src/RP_FVM.c)
 
 # 链接数学库
 target_link_libraries(ShockImpact_RPS m)
 
-# 自动复制数据文件到构建目录
-#file(GLOB DATA_FILES "data/*")
-#if(DATA_FILES)
-#    add_custom_command(TARGET ShockImpact_RPS POST_BUILD
-#        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/data
-#        COMMAND ${CMAKE_COMMAND} -E copy ${DATA_FILES} ${CMAKE_BINARY_DIR}/data
-#        COMMENT "Copying data files to build directory"
-#   )
-#endif()
+# ========== 创建简单的运行脚本 ==========
+file(WRITE ${CMAKE_BINARY_DIR}/run.sh
+"#!/bin/bash
 
-# 添加运行目标
+# 默认线程数
+THREADS=\${1:-8}
+
+echo \"========================================\"
+echo \"CFD求解器运行配置\"
+echo \"========================================\"
+echo \"线程数: \${THREADS}\"
+echo \"可执行文件: ./ShockImpact_RPS\"
+echo \"工作目录: \$(pwd)\"
+echo \"时间: \$(date '+%Y-%m-%d %H:%M:%S')\"
+echo \"========================================\"
+
+# 设置OpenMP线程数
+export OMP_NUM_THREADS=\${THREADS}
+export OMP_PROC_BIND=true
+
+# 运行程序
+time ./ShockImpact_RPS
+
+EXIT_CODE=\$?
+echo \"========================================\"
+echo \"退出代码: \${EXIT_CODE}\"
+exit \${EXIT_CODE}
+")
+
+# 设置脚本可执行权限
+file(COPY ${CMAKE_BINARY_DIR}/run.sh
+     DESTINATION ${CMAKE_BINARY_DIR}
+     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+
+# ========== 创建运行目标 ==========
+
+# 默认运行（使用脚本，8线程）
 add_custom_target(run
-    COMMAND ${CMAKE_BINARY_DIR}/ShockImpact_RPS
+    COMMAND bash ./run.sh 8
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Running CFD solver"
+    COMMENT "运行CFD求解器（8线程）"
 )
 
-# 添加清理数据目标
-add_custom_target(clean-data
-    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/data
-    COMMENT "Cleaning data files from build directory"
+# 直接运行（默认线程数）
+add_custom_target(run_direct
+    COMMAND ./ShockImpact_RPS
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "直接运行求解器"
 )
+
+# 创建预设线程数的运行目标
+foreach(THREADS 1 2 4 8 16)
+    add_custom_target(run_${THREADS}
+        COMMAND bash ./run.sh ${THREADS}
+        DEPENDS ShockImpact_RPS
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "运行求解器（${THREADS}线程）"
+    )
+endforeach()
+
+# 自动检测核心数
+add_custom_target(run_auto
+    COMMAND bash -c "THREADS=\$$(nproc 2>/dev/null || echo 8) && bash ./run.sh \$$THREADS"
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "自动检测核心数运行"
+)
+
+# ========== 显示帮助信息（避免使用保留名称） ==========
+add_custom_target(usage
+    COMMAND echo "=== CFD_FVM_Solver 使用帮助 ===" &&
+            echo "" &&
+            echo "编译命令:" &&
+            echo "  make                        # 编译程序" &&
+            echo "  make clean                  # 清理编译文件" &&
+            echo "" &&
+            echo "运行命令:" &&
+            echo "  make run                    # 使用8线程运行" &&
+            echo "  make run_direct             # 直接运行（默认线程数）" &&
+            echo "  make run_auto               # 自动检测核心数运行" &&
+            echo "" &&
+            echo "指定线程数:" &&
+            echo "  make run_1                  # 1线程运行" &&
+            echo "  make run_2                  # 2线程运行" &&
+            echo "  make run_4                  # 4线程运行" &&
+            echo "  make run_8                  # 8线程运行" &&
+            echo "  make run_16                 # 16线程运行" &&
+            echo "" &&
+            echo "直接运行:" &&
+            echo "  ./ShockImpact_RPS           # 直接运行（使用默认线程数）" &&
+            echo "  bash ./run.sh [线程数]      # 使用运行脚本" &&
+            echo "" &&
+            echo "设置环境变量:" &&
+            echo "  export OMP_NUM_THREADS=4    # 设置线程数为4" &&
+            echo "  ./ShockImpact_RPS           # 使用4个线程运行"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "显示使用帮助"
+)
+
+# ========== OpenMP验证目标 ==========
+add_custom_target(verify_openmp
+    COMMAND bash -c "if grep -q _OPENMP include/*.h src/*.c 2>/dev/null; then \
+                     echo '✅ OpenMP 指令在代码中被检测到'; \
+                     else \
+                     echo '⚠️  警告: 未在代码中检测到OpenMP指令'; \
+                     fi && \
+                     echo '编译标志: ${CMAKE_C_FLAGS}' && \
+                     echo '要验证OpenMP是否正确启用，请运行: OMP_NUM_THREADS=2 ./ShockImpact_RPS'"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "验证OpenMP配置"
+)
+
+# ========== 配置摘要 ==========
+message(STATUS "")
+message(STATUS "================================================")
+message(STATUS "CFD_FVM_Solver 配置完成")
+message(STATUS "================================================")
+message(STATUS "构建类型:        ${CMAKE_BUILD_TYPE}")
+message(STATUS "编译器:          ${CMAKE_C_COMPILER}")
+message(STATUS "编译标志:        ${CMAKE_C_FLAGS}")
+message(STATUS "OpenMP支持:      ✅ 已启用")
+message(STATUS "")
+message(STATUS "可用命令:")
+message(STATUS "  make                    # 编译程序")
+message(STATUS "  make run               # 运行求解器（8线程）")
+message(STATUS "  make run_4             # 4线程运行")
+message(STATUS "  make usage             # 显示帮助")
+message(STATUS "  make verify_openmp     # 验证OpenMP配置")
+message(STATUS "")
+message(STATUS "直接运行:")
+message(STATUS "  ./ShockImpact_RPS      # 使用默认线程数")
+message(STATUS "  bash ./run.sh [线程数]  # 使用运行脚本")
+message(STATUS "================================================")
