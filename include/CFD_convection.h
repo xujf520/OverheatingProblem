@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <omp.h>
 #include "Golbal.h"
 #include "Reconstruction.h"
 #include "scheme.h"
@@ -96,10 +97,14 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
     }
 
 
-    for ( i = 0; i < var; i++)
-        for ( j = GC-1; j <= rows-GC; j++)
-            for ( k = GC-1; k <= cols-GC; k++)
+    #pragma omp parallel for collapse(3)
+    for (int i = 0; i < var; i++) {
+        for (int j = GC - 1; j <= rows - GC; j++) {
+            for (int k = GC - 1; k <= cols - GC; k++) {
                 f[i][j][k] = Flux[i][j][k];
+            }
+        }
+    }
 
     
     //y方向重构
@@ -155,13 +160,14 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             break;
     }
 
-
-
-    for ( i = 0; i < var; i++)
-        for ( j = GC-1; j <= rows-GC; j++)
-            for ( k = GC-1; k <= cols-GC; k++)
-                g[i][j][k] = Flux[i][j][k];
-
+    #pragma omp parallel for collapse(3)
+    for (int k = 0; k < var; k++) {
+        for (int i = GC - 1; i <= rows - GC; i++) {
+            for (int j = GC - 1; j <= cols - GC; j++) {
+                g[k][i][j] = Flux[k][i][j];
+            }
+        }
+    }
 
     free(Conserl);
     free(Conserr);

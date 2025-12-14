@@ -4,11 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <omp.h>
 #include "Golbal.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
 #include "initialize.h"
 #include "scheme.h"
+
 
 int Time_Step = 0;
 //static double mass_error = 0.0;
@@ -42,10 +44,10 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     }
   
     //初始化参数
-    #pragma omp parallel for
-    for ( k = 0; k < var; k++){
-        for ( i = 0; i < rows; i++){
-            for ( j = 0; j < cols; j++){
+    #pragma omp parallel for collapse(3)
+    for (int k = 0; k < var; k++) {
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
                 Space_Item[k][i][j] = 0.0;
                 Flux_F[k][i][j] = 0.0;
                 Flux_G[k][i][j] = 0.0;
@@ -59,24 +61,26 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
 
    // 第一步计算
     // 施加边界条件
-//    Boundary_Conditions(var, rows, cols, y, GC); 
-    BC_BackwardStep_2D(var, rows, cols, y, GC,Time); 
+    Boundary_Conditions(var, rows, cols, y, GC); 
+//    BC_BackwardStep_2D(var, rows, cols, y, GC,Time); 
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    #pragma omp parallel for
-    for ( i = GC; i <= rows-GC-1; i++)
-        for ( j = GC; j <= cols-GC-1; j++)
-            for ( k = 0; k < var; k++)
+
+    #pragma omp parallel for collapse(3)
+    for (int i = GC; i <= rows - GC - 1; i++) {
+        for (int j = GC; j <= cols - GC - 1; j++) {
+            for (int k = 0; k < var; k++) {
                 y[k][i][j] = y[k][i][j] + dt * Space_Item[k][i][j];
+            }
+        }
+    }
             
         
     free(Space_Item);
     free(Flux_F);
     free(Flux_G);
     free(Source_G);
-    
-
 }
 
 
@@ -186,6 +190,8 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
         return;
     }    
     //初始化参数
+
+    #pragma omp parallel for collapse(3)
     for ( k = 0; k < var; k++){
         for ( i = 0; i < rows; i++){
             for ( j = 0; j < cols; j++){
@@ -205,11 +211,14 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
                 Conser_U1[k][i][j] = y[k][i][j] + dt * Space_Item[k][i][j];
-
+            }
+        }
+    }
 
     //第二步计算
     if (Source)
@@ -219,11 +228,14 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
                 Conser_U2[k][i][j] = (3.0/4.0) * y[k][i][j] +  (1.0/4.0) * (Conser_U1[k][i][j] + dt * Space_Item[k][i][j]);
-    
+            }
+        }
+    }
     
     //第三步计算
     if (Source)
@@ -234,11 +246,13 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
                 y[k][i][j] = (1.0/3.0) * y[k][i][j] +  (2.0/3.0) * (Conser_U2[k][i][j] + dt * Space_Item[k][i][j]);
-
+            }
+        }
+    }
 
 
     free(Space_Item);

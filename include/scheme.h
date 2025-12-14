@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <omp.h>
 #include "Characteriz.h"
 #include "Golbal.h"
 
@@ -2188,7 +2189,7 @@ static inline void HLLC_Flux_HeatConduction(int var, int rows, int GC, double (*
         double T_star_R = p_star / rho_star_R;
 
         //热扩散相对的速度计算
-        double Splus = max_of_two(fabs(u_L) + a_L, fabs(u_R) + a_R);
+        //double Splus = max_of_two(fabs(u_L) + a_L, fabs(u_R) + a_R);
         double s_L_P = sleft - u_point;
         double s_R_P = sright - u_point;
 
@@ -2200,7 +2201,7 @@ static inline void HLLC_Flux_HeatConduction(int var, int rows, int GC, double (*
         double s_LW_R = u_R - a_R- u_point;
         double s_RW_R = u_R + a_R- u_point;
         double ma = u_L/cbar;
-        Splus = fabs(ubar) + cbar;
+        //Splus = fabs(ubar) + cbar;
 
         double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
         double rhou_HLL = (sright*rhou_R - sleft*rhou_L + rhou_FL - rhou_FR)/(sright-sleft);
@@ -2657,6 +2658,8 @@ static inline void Source_Gravity(int var, int rows, int cols, int GC,
                                  double (*x)[rows][cols], double (*source)[rows][cols]) {
     
     // 初始化源项为零
+
+    #pragma omp parallel for collapse(2)
     for (int i = GC; i <= rows-GC-1; i++) {
         for (int j = GC; j <= cols-GC-1; j++) {
             for (int k = 0; k < var; k++) {
@@ -2666,6 +2669,7 @@ static inline void Source_Gravity(int var, int rows, int cols, int GC,
     }
     
     // 设置重力源项
+    #pragma omp parallel for collapse(2)
     for (int i = GC; i <= rows-GC-1; i++) {
         for (int j = GC; j <= cols-GC-1; j++) {
             double rho = x[0][i][j];
@@ -2682,14 +2686,23 @@ static inline void Source_Gravity(int var, int rows, int cols, int GC,
 }
 
 
-static inline void Space_Discrete_Item(int var, int rows, int cols, int GC, double delta_x, double delta_y,\
-                                        double (*f)[rows][cols], double (*g)[rows][cols], double (*s)[rows][cols],double (*L)[rows][cols]) {
+static inline void Space_Discrete_Item(int var, int rows, int cols, int GC, double delta_x, double delta_y,
+                                        double (*f)[rows][cols], double (*g)[rows][cols], double (*s)[rows][cols],
+                                        double (*L)[rows][cols]) {
     
-    for (int i = GC; i <= rows-GC-1; i++) 
-        for (int j = GC; j <= cols-GC-1; j++)
-            for (int k = 0; k < var; k++) 
-                L[k][i][j] = - (f[k][i][j] - f[k][i-1][j])/delta_x - (g[k][i][j] - g[k][i][j-1])/delta_y + s[k][i][j];
-            
+    const double inv_dx = 1.0 / delta_x;
+    const double inv_dy = 1.0 / delta_y;
+    
+    #pragma omp parallel for collapse(3)
+    for (int i = GC; i <= rows - GC - 1; i++) {
+        for (int j = GC; j <= cols - GC - 1; j++) {
+            for (int k = 0; k < var; k++) {
+                L[k][i][j] = -(f[k][i][j] - f[k][i-1][j]) * inv_dx 
+                             -(g[k][i][j] - g[k][i][j-1]) * inv_dy 
+                             + s[k][i][j];
+            }
+        }
+    }
 }
 
 

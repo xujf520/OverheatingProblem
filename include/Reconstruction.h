@@ -52,42 +52,14 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
             return;
         }
 
-        // ========== 并行初始化所有数组 ==========
-        #pragma omp parallel for collapse(3)
-        for (i = 0; i < var; i++) {
-            for (j = 0; j < rows; j++) {
-                for (k = 0; k < cols; k++) {
-                    Pri[i][j][k] = 0.0;
-                    Chara_Var[i][j][k] = 0.0;
-                    W_L[i][j][k] = 0.0;
-                    W_R[i][j][k] = 0.0;
-                    conserl[i][j][k] = 0.0;
-                    conserr[i][j][k] = 0.0;
-                }
-            }
-        }
-        
-        // 初始化特征向量矩阵（需要额外的循环）
-        #pragma omp parallel for collapse(4)
-        for (i = 0; i < var; i++) {
-            for (int ii = 0; ii < var; ii++) {
-                for (j = 0; j < rows; j++) {
-                    for (k = 0; k < cols; k++) {
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
-                }
-            }
-        }
-
         // 转换到原始变量
         Con_to_Pri_2D(var, rows, cols, Pri, y);
         
         if (dir == 1) {
             Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            // ========== 并行计算特征变量 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            // 并行计算特征变量
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -100,8 +72,8 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
                 }
             }
 
-            // ========== 并行赋值 W_L 和 W_R ==========
-            #pragma omp parallel for collapse(3)
+            // 并行赋值 W_L 和 W_R
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -111,8 +83,8 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
                 }
             }
 
-            // ========== 并行计算守恒量 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            // 并行计算守恒量
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -130,8 +102,8 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
         else if (dir == 2) {
             Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            // ========== y方向并行计算 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            // 并行计算特征变量
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -144,7 +116,8 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
                 }
             }
 
-            #pragma omp parallel for collapse(3)
+            // 并行赋值 W_L 和 W_R
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -154,7 +127,8 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            // 并行计算守恒量
+            #pragma omp parallel for
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -174,31 +148,28 @@ static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, 
     } 
     else {
         if (dir == 1) {
-            #pragma omp parallel for collapse(3)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j < rows-GC; j++) {
-                    for (k = GC; k < cols-GC; k++) {
+            #pragma omp parallel for
+            for (int j = GC - 1; j < rows - GC; j++) {
+                for (int k = GC; k < cols - GC; k++) {
+                    for (int i = 0; i < var; i++) {
                         conserl[i][j][k] = y[i][j][k];
-                        conserr[i][j][k] = y[i][j+1][k];
+                        conserr[i][j][k] = y[i][j + 1][k];
                     }
                 }
             }
-        }
-        else if (dir == 2) {
-            #pragma omp parallel for collapse(3)
-            for (i = 0; i < var; i++) {
-                for (j = GC; j < rows-GC; j++) {
-                    for (k = GC-1; k < cols-GC; k++) {
+        } else if (dir == 2) {
+            #pragma omp parallel for
+            for (int j = GC; j < rows - GC; j++) {
+                for (int k = GC - 1; k < cols - GC; k++) {
+                    for (int i = 0; i < var; i++) {
                         conserl[i][j][k] = y[i][j][k];
-                        conserr[i][j][k] = y[i][j][k+1];
+                        conserr[i][j][k] = y[i][j][k + 1];
                     }
                 }
             }
         }
     }
-    
 }
-
 /*                                      ******************                                          */
 /*                                            TVD                                                   */
 /*                                      ******************                                          */
@@ -225,7 +196,7 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
         }
 
         // ========== 并行初始化 ==========
-        #pragma omp parallel for collapse(3)
+        #pragma omp parallel for 
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
                 for (k = 0; k < cols; k++) {
@@ -239,7 +210,7 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
             }
         }
         
-        #pragma omp parallel for collapse(4)
+        #pragma omp parallel for
         for (i = 0; i < var; i++) {
             for (int ii = 0; ii < var; ii++) {
                 for (j = 0; j < rows; j++) {
@@ -351,28 +322,27 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
     } 
     else {
         if (dir == 1) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j < rows-GC; j++) {
-                    for (k = GC; k < cols-GC; k++) {
+            #pragma omp parallel for collapse(3)
+            for (int j = GC - 1; j < rows - GC; j++) {
+                for (int k = GC; k < cols - GC; k++) {
+                    for (int i = 0; i < var; i++) {
                         double fu[6];
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j-2+nn][k];
+                            fu[nn] = y[i][j - 2 + nn][k];
                         }
                         conserl[i][j][k] = TVD_minmod_L(&fu[2], delta_x);
                         conserr[i][j][k] = TVD_minmod_R(&fu[2], delta_x);
                     }
                 }
             }
-        }
-        else if (dir == 2) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC; j < rows-GC; j++) {
-                    for (k = GC-1; k < cols-GC; k++) {
+        } else if (dir == 2) {
+            #pragma omp parallel for collapse(3)
+            for (int j = GC; j < rows - GC; j++) {
+                for (int k = GC - 1; k < cols - GC; k++) {
+                    for (int i = 0; i < var; i++) {
                         double fu[6];
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j][k-2+nn];
+                            fu[nn] = y[i][j][k - 2 + nn];
                         }
                         conserl[i][j][k] = TVD_minmod_L(&fu[2], delta_y);
                         conserr[i][j][k] = TVD_minmod_R(&fu[2], delta_y);
@@ -532,7 +502,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
     } 
     else {
         if (dir == 1) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3)
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -547,7 +517,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
             }
         }
         else if (dir == 2) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3)
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {
@@ -713,7 +683,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
     } 
     else {
         if (dir == 1) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3)
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -728,7 +698,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
             }
         }
         else if (dir == 2) {
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3)
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {

@@ -44,7 +44,7 @@ static inline void Compute_Eigen(int vars, int var, int rows, double (*Pri)[rows
         eigen_r[1][1][j] = _u * b1;
         eigen_r[1][2][j] = _u + _c;
 
-        eigen_r[2][0][j] = _H - _u * _c;
+        eigen_r[2][0][j] = _H - _uc;
         eigen_r[2][1][j] = _H * b1 - 1.0;
         eigen_r[2][2][j] = _H + _u * _c;
     }

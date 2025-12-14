@@ -70,6 +70,7 @@ static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[row
     // 应用固定值边界条件
     if (strcmp(boundary_type, L) == 0) {
         // 左边界固定值
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
                 x[i][Ghost_cell-1][k] = fixed_state[i];
@@ -81,6 +82,7 @@ static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, R) == 0) {
         // 右边界固定值
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
                 x[i][rows - Ghost_cell][k] = fixed_state[i];
@@ -92,6 +94,7 @@ static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, B) == 0) {
         // 下边界固定值
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
                 x[i][j][Ghost_cell-1] = fixed_state[i];
@@ -103,6 +106,7 @@ static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, T) == 0) {
         // 上边界固定值
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
                 x[i][j][cols - Ghost_cell] = fixed_state[i];
@@ -118,9 +122,9 @@ static inline void BC_FixedValue_2D(int var, int rows, int cols, double (*x)[row
 // 入口边界条件函数
 static inline void BC_Inflow_2D(int var, int rows, int cols, double (*x)[rows][cols], const char* boundary_type, int Ghost_cell) {
     // 使用全局的 inflow_state 数组作为入流条件
-    
     if (strcmp(boundary_type, L) == 0) {
         // 左边界入口
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
                 x[i][Ghost_cell-1][k] = inflow_state[i];
@@ -132,6 +136,7 @@ static inline void BC_Inflow_2D(int var, int rows, int cols, double (*x)[rows][c
     }
     else if (strcmp(boundary_type, R) == 0) {
         // 右边界入口
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++) {
                 x[i][rows - Ghost_cell][k] = inflow_state[i];
@@ -143,6 +148,7 @@ static inline void BC_Inflow_2D(int var, int rows, int cols, double (*x)[rows][c
     }
     else if (strcmp(boundary_type, B) == 0) {
         // 下边界入口
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
                 x[i][j][Ghost_cell-1] = inflow_state[i];
@@ -154,6 +160,7 @@ static inline void BC_Inflow_2D(int var, int rows, int cols, double (*x)[rows][c
     }
     else if (strcmp(boundary_type, T) == 0) {
         // 上边界入口
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++) {
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++) {
                 x[i][j][cols - Ghost_cell] = inflow_state[i];
@@ -173,6 +180,7 @@ static inline void BC_OutFlow_2D(int var, int rows, int cols, double (*x)[rows][
     // 根据边界类型字符串执行相应的边界条件
     if (strcmp(boundary_type, L) == 0) {
         //左边界出口边界条件设计
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k <= cols-Ghost_cell; k++){
                 x[i][Ghost_cell-1][k] = x[i][Ghost_cell][k];
@@ -184,6 +192,7 @@ static inline void BC_OutFlow_2D(int var, int rows, int cols, double (*x)[rows][
     }
     else if (strcmp(boundary_type, R) == 0) {
         //右边界无反射边界条件设计
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k <= cols-Ghost_cell; k++){
                 x[i][rows-Ghost_cell][k] = x[i][rows-Ghost_cell-1][k];
@@ -195,6 +204,7 @@ static inline void BC_OutFlow_2D(int var, int rows, int cols, double (*x)[rows][
     }
     else if (strcmp(boundary_type, B) == 0) {
         //下边界
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j <= rows-Ghost_cell; j++){
                 x[i][j][Ghost_cell-1] = x[i][j][Ghost_cell];
@@ -206,6 +216,7 @@ static inline void BC_OutFlow_2D(int var, int rows, int cols, double (*x)[rows][
     }
     else if (strcmp(boundary_type, T) == 0) {
         //上边界
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j <= rows-Ghost_cell; j++){
                 x[i][j][cols-Ghost_cell] = x[i][j][cols-Ghost_cell-1];
@@ -225,6 +236,7 @@ static inline void BC_OutFlow_2D(int var, int rows, int cols, double (*x)[rows][
 static inline void BC_Periodicity_2D(int var, int rows, int cols, double (*x)[rows][cols], const char* boundary_type, int Ghost_cell){
     if (strcmp(boundary_type, L) == 0) {
         // 左边界 <- 右边界内部区域
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++){  
                 x[i][Ghost_cell-1][k] = x[i][rows - Ghost_cell - 1][k];  // 左ghost <- 右内部
@@ -236,6 +248,7 @@ static inline void BC_Periodicity_2D(int var, int rows, int cols, double (*x)[ro
     }
     else if (strcmp(boundary_type, R) == 0) {
         // 右边界 <- 左边界内部区域
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++){
                 x[i][rows - Ghost_cell][k] = x[i][Ghost_cell][k];         // 右ghost <- 左内部
@@ -247,6 +260,7 @@ static inline void BC_Periodicity_2D(int var, int rows, int cols, double (*x)[ro
     }
     else if (strcmp(boundary_type, B) == 0) {
         // 下边界 <- 上边界内部区域
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
                 x[i][j][Ghost_cell-1] = x[i][j][cols - Ghost_cell - 1];   // 下ghost <- 上内部
@@ -258,6 +272,7 @@ static inline void BC_Periodicity_2D(int var, int rows, int cols, double (*x)[ro
     }
     else if (strcmp(boundary_type, T) == 0) {
         // 上边界 <- 下边界内部区域
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
                 x[i][j][cols - Ghost_cell] = x[i][j][Ghost_cell];         // 上ghost <- 下内部
@@ -279,6 +294,7 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     // 对于反射边界，法向速度反向，切向速度不变，其他变量不变
     if (strcmp(boundary_type, L) == 0) {
         // 左边界固壁反射：x方向速度反向，y方向速度不变
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++){
                 if (i == 1) { // x方向动量（速度反向）
@@ -297,6 +313,7 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, R) == 0) {
         // 右边界固壁反射：x方向速度反向，y方向速度不变
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++){
                 if (i == 1) { // x方向动量（速度反向）
@@ -315,6 +332,7 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, B) == 0) {
         // 下边界固壁反射：y方向速度反向，x方向速度不变
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
                 if (i == 2) { // y方向动量（速度反向）
@@ -333,6 +351,7 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, T) == 0) {
         // 上边界固壁反射：y方向速度反向，x方向速度不变
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
                 if (i == 2) { // y方向动量（速度反向）
@@ -392,6 +411,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     double nx = rows - 2 * Ghost_cell;
     
     // ========== 1. 左边界：激波后入流 ==========
+    #pragma omp parallel for collapse(1)
     for (int k = Ghost_cell; k < cols-Ghost_cell; k++){
         // 密度
         x[0][Ghost_cell-1][k] = post_rho;
@@ -419,6 +439,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     }
     
     // ========== 2. 右边界：出流边界 ==========
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < var; i++){
         for (int k = Ghost_cell; k < cols-Ghost_cell; k++){
             x[i][rows-Ghost_cell][k] = x[i][rows-Ghost_cell-1][k];
@@ -429,6 +450,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     }
     
     // ========== 3. 下边界：部分反射壁面，部分激波后入流 ==========
+    #pragma omp parallel for collapse(1)
     for (int j = Ghost_cell; j < rows-Ghost_cell; j++){
         // 计算物理坐标
         double x_pos = (double)(j+0.5-Ghost_cell)/ nx * Lx;
@@ -489,7 +511,8 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     // ========== 4. 上边界：根据激波位置设置 ==========
 // 计算激波与上边界的交点
     double shock_x_at_top = shock_start_x + (Ly / shock_slope) + (20.0 * current_time / shock_slope);
-
+    
+    #pragma omp parallel for collapse(1)
     for (int j = Ghost_cell; j < rows-Ghost_cell; j++){
         // 计算物理坐标 - 使用网格中心坐标
         double x_pos = (double)(j + 0.5 - Ghost_cell) / nx * Lx;

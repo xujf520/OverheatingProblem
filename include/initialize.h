@@ -38,6 +38,8 @@ typedef enum {
 
 static inline void initEuler2D(int var, int rows, int cols, double (*x)[rows][cols]) {
     int i, j, k;
+
+    #pragma omp parallel for collapse(3)
     for (i = 0; i < var; i++) 
         for (j = 0; j < rows; j++) 
            for (k = 0; k < cols; k++) 
@@ -60,6 +62,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
     *Lx = 1.0;    // 计算域长度
     *Ly = 1.0;    // 计算域宽度
     
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 ){
@@ -102,6 +105,7 @@ static inline void initEulerpri2D_Shocktube1(int var, int rows, int cols, double
     *Lx = 1.0;    // 计算域长度
     *Ly = 1.0;    // 计算域宽度
 
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 && j < cols/2) {
@@ -155,6 +159,7 @@ static inline void initEulerpri2D_Shocktube2(int var, int rows, int cols, double
     *Lx = 1.0;    // 计算域长度
     *Ly = 1.0;    // 计算域宽度
 
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 && j < cols/2) {
@@ -209,6 +214,7 @@ static inline void initEulerpri2D_Shocktube3(int var, int rows, int cols, double
     *Lx = 1.0;    // 计算域长度
     *Ly = 1.0;    // 计算域宽度
 
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 && j < cols/2) {
@@ -263,6 +269,7 @@ static inline void initEulerpri2D_Shocktube4(int var, int rows, int cols, double
     *Lx = 1.0;    // 计算域长度
     *Ly = 1.0;    // 计算域宽度
 
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 && j < cols/2) {
@@ -315,8 +322,9 @@ static inline void initEulerpri2D_Shocktube5(int var, int rows, int cols, double
 
     int i, j;
     *Lx = 1.0;    // 计算域长度
-    *Ly = 1.0;    // 计算域宽度
+    *Ly = 1.0;    // 计算域宽度、
 
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
             if( i < rows/2 && j < cols/2) {
@@ -357,6 +365,7 @@ static inline void initEulerpri2D_Shocktube5(int var, int rows, int cols, double
 }
 
 // 泰勒格林涡问题
+// 泰勒格林涡问题
 static inline void initEulerpri2D_TaylorGreenVortex(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
     printf("=== Taylor-Green Vortex Test Case ===\n");
 
@@ -366,28 +375,42 @@ static inline void initEulerpri2D_TaylorGreenVortex(int var, int rows, int cols,
     bc_config.bottom = BC_PERIODICITY; // Bottom: periodic
     bc_config.top = BC_PERIODICITY;    // Top: periodic
 
-    int i, j;
     *Lx = 2.0 * M_PI;  // x方向周期
     *Ly = 2.0 * M_PI;  // y方向周期
     double rho0 = 1.0;       // 参考密度
     double p0 = 1.0;         // 参考压力
     double U0 = 1.0;         // 参考速度
-    double x_pos, y_pos;
-    double nx = rows - 2* GhostCell;
-    double ny = cols - 2* GhostCell;
+    double nx = rows - 2 * GhostCell;
+    double ny = cols - 2 * GhostCell;
     
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
+    // 预计算常数
+    double inv_nx = 1.0 / nx;
+    double inv_ny = 1.0 / ny;
+    double prefactor = rho0 * U0 * U0 / 4.0;
+    
+    // 并行初始化整个网格
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
             // 计算物理坐标位置
-            x_pos = (double)i / nx * (*Lx);
-            y_pos = (double)j / ny * (*Ly);
-            
+            double x_pos = (double)i * inv_nx * (*Lx);
+            double y_pos = (double)j * inv_ny * (*Ly);
             
             // 泰勒格林涡速度场
-            x[0][i][j] = rho0;  // 密度
-            x[1][i][j] = U0 * sin(x_pos) * cos(y_pos);      // u速度
-            x[2][i][j] = -U0 * cos(x_pos) * sin(y_pos);     // v速度
-            x[3][i][j] = p0 + (rho0 * U0 * U0 / 4.0) * (cos(2.0 * x_pos) + cos(2.0 * y_pos)); // 压力
+            double sin_x = sin(x_pos);
+            double cos_x = cos(x_pos);
+            double sin_y = sin(y_pos);
+            double cos_y = cos(y_pos);
+            
+            double u = U0 * sin_x * cos_y;      // u速度
+            double v = -U0 * cos_x * sin_y;     // v速度
+            double pressure = p0 + prefactor * (cos(2.0 * x_pos) + cos(2.0 * y_pos)); // 压力
+            
+            // 存储原始变量
+            x[0][i][j] = rho0;    // 密度
+            x[1][i][j] = u;       // u速度
+            x[2][i][j] = v;       // v速度
+            x[3][i][j] = pressure;// 压力
         }
     }
 
@@ -426,7 +449,9 @@ static inline void initEulerpri2D_GaussianPulse(int var, int rows, int cols, dou
     double x_pos, y_pos, r2;
     double nx = rows - 2* GhostCell;
     double ny = cols - 2* GhostCell;
-    
+
+
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for (j = 0; j < cols; j++) {
             // 计算物理坐标位置
@@ -482,6 +507,8 @@ static inline void initEulerpri2D_KelvinHelmholtz(int var, int rows, int cols, d
     double nx = rows - 2 * GhostCell;
     double ny = cols - 2 * GhostCell;
     
+
+    #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for (j = 0; j < cols; j++) {
             // 计算物理坐标位置
@@ -676,7 +703,8 @@ static inline void initEulerpri2D_RayleighTaylor(int var, int rows, int cols, do
     // 初始化流场
     double nx = rows - 2 * GhostCell;
     double ny = cols - 2 * GhostCell;
-    
+
+    #pragma omp parallel for collapse(2)
     for (int i = GhostCell; i < rows - GhostCell; i++) {
         for (int j = GhostCell; j < cols - GhostCell; j++) {
             // 计算物理坐标
@@ -752,7 +780,8 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
     // 初始化流场
     double nx = rows - 2 * GhostCell;
     double ny = cols - 2 * GhostCell;
-    
+
+    #pragma omp parallel for collapse(2)
     for (int i = GhostCell; i < rows-GhostCell; i++) {
         for (int j = GhostCell; j < cols-GhostCell; j++) {
             // 计算物理坐标
@@ -964,6 +993,8 @@ static inline void initEulerpri2D_BlastWave(int var, int rows, int cols,
     int high_pressure_cells = 0;
     int low_pressure_cells = 0;
     
+
+    #pragma omp parallel for collapse(2)
     for (int i = GhostCell; i < rows - GhostCell; i++) {
         for (int j = GhostCell; j < cols - GhostCell; j++) {
             // 计算物理坐标（从-0.5到0.5）
@@ -1056,6 +1087,8 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
     // 添加微小扰动避免完全对称（可选，有助于数值稳定性）
     double perturbation_amplitude = 0.001;
     
+
+    #pragma omp parallel for collapse(2)
     for (int i = GhostCell; i < rows - GhostCell; i++) {
         for (int j = GhostCell; j < cols - GhostCell; j++) {
             // 计算物理坐标
@@ -1143,6 +1176,8 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
 
 static inline void initEulerconser2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]) {
     int j,k;
+
+    #pragma omp parallel for collapse(2)
     for (j = 0; j < rows; j++) {
         for ( k = 0; k < cols; k++){
             double rho, u, v, p;
@@ -1162,6 +1197,9 @@ static inline void initEulerconser2D(int var, int rows, int cols, double (*x)[ro
 
 static inline void initEulerflux2D(int var, int rows, int cols, double (*y)[rows][cols], double (*f)[rows][cols],double (*g)[rows][cols]) {
     int j,k;
+
+    #pragma omp parallel for collapse(2)
+
     for (j = 0; j < rows; j++) {
         for ( k = 0; k < cols; k++){
             double rho, u, v, p;
@@ -1186,6 +1224,8 @@ static inline void initEulerflux2D(int var, int rows, int cols, double (*y)[rows
 
 static inline void Con_to_Pri_2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]){
    int j,k;
+
+    #pragma omp parallel for collapse(2)
     for (j = 0; j < rows; j++) {
         for ( k = 0; k < cols; k++){
             double rho, u, v, p;

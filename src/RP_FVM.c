@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <sys/stat.h>  // 新增，用于目录操作
+#include <omp.h>
 #include <time.h>
 #include "initialize.h"
 #include "CFD_convection.h"
@@ -14,8 +15,17 @@
 #include "Golbal.h"
 #include "Error.h"
 
-#include <omp.h>
 
+// 统一的高精度计时器
+static inline double get_wall_time(void) {
+#ifdef _OPENMP
+    return omp_get_wtime();
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+#endif
+}
 
 // 全局变量存储当前算例
 TestCase2D current_test_case = TEST_1D_SHOCKTUBE; // 默认值
@@ -43,7 +53,7 @@ void Get_RP_Parameters();
 void Mesh(int n, double deltax, double *x);
 void Mesh_2D();
 /*                                            *********                                          */
-/*                                              主程序                                            */
+/*                                             部分参数                                            */
 /*                                            *********                                          */
 
 //网格参数
@@ -56,20 +66,24 @@ int Time_ADM;                                                //Riemann Solver的
 int scheme;
 //边界条件
 BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW};
+/*                                            *********                                          */
+/*                                              主程序                                            */
+/*                                            *********                                          */
+
+#include <omp.h>
 
 int main(int argc, char *argv[]) {
-
     int LNX_ngc = L_nx + 2 * GhostCell; 
     int LNY_ngc = L_ny + 2 * GhostCell; 
     
-    double Lx,Ly;
+    double Lx, Ly;
     double Tmax;       
     double Delta_x, Delta_y;
     double Delta_T;
 
-    // 增加计时变量
-    clock_t start_time, end_time;
-    double total_cpu_time = 0.0;
+    // 计时变量
+    double program_start_time, program_end_time;
+    double total_wall_time = 0.0;
     double average_time_per_step = 0.0;
 
     double mesh_x[L_nx], mesh_y[L_ny];
@@ -80,13 +94,10 @@ int main(int argc, char *argv[]) {
     double (*GU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     
     // 检查内存分配是否成功
-    if (pri == NULL || U == NULL || FU == NULL|| GU == NULL) {
+    if (pri == NULL || U == NULL || FU == NULL || GU == NULL) {
         fprintf(stderr, "Memory allocation failed in Main\n");
-        // 释放已分配的内存
-        free(pri);
-        free(U);
-        free(FU);
-        free(GU);
+        free(pri); free(U); free(FU); free(GU);
+        return 1;
     } 
 
     // 显示可用算例
@@ -94,19 +105,16 @@ int main(int argc, char *argv[]) {
 
     // 选择测试算例
     TestCase2D selected_test = TEST_TAYLOR_GREEN_VORTEX;
-
-    // 设置当前算例（全局变量）
     set_current_test_case(selected_test);
 
     // 初始化
-    Init_Euler_2D(selected_test,var,LNX_ngc,LNY_ngc,GhostCell,pri,U,FU,GU,&Lx,&Ly,&Tmax);
+    Init_Euler_2D(selected_test, var, LNX_ngc, LNY_ngc, GhostCell, pri, U, FU, GU, &Lx, &Ly, &Tmax);
 
     printf("Read initial conditions successfully!\n");
     printf("Euler equation initialization successful!\n");
 
     Delta_x = Lx / L_nx;
-    Delta_y = Ly / L_ny; 
-    double u_r = 0.0;
+    Delta_y = Ly / L_ny;
     
     // mesh
     Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
@@ -118,15 +126,16 @@ int main(int argc, char *argv[]) {
     Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
     
     // 记录程序开始时间
-    start_time = clock();
+    program_start_time = omp_get_wtime();
     
-    switch (Control_Compution){
+    switch (Control_Compution) {
         case 0:
-            for (Time = 0.0; Time < Tmax; Time = Time+Delta_T) {
+            for (Time = 0.0; Time < Tmax; Time = Time + Delta_T) {
                 // 记录单步开始时间
-                clock_t step_start_time = clock();
+                double step_start_time = omp_get_wtime();
                 
-                Delta_T = Get_Delta_T_2D(var,LNX_ngc,LNY_ngc,U,Delta_x,Delta_y);
+                Delta_T = Get_Delta_T_2D(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
+                
                 // 确保不会超过下一个输出时间点或Tmax
                 if (Time + Delta_T > next_output_time) {
                     Delta_T = next_output_time - Time;
@@ -137,99 +146,104 @@ int main(int argc, char *argv[]) {
 
                 switch (Time_ADM) {
                     case 1:
-                        RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
+                        RK1_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     case 3:
-                        RK3_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
+                        RK3_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     default:
-                        //格式     
+                        // 格式     
                         break;
                 }
-    
+
                 double currentTime = Time + Delta_T;
                 
                 // 记录单步结束时间并累加
-                clock_t step_end_time = clock();
-                total_cpu_time += ((double)(step_end_time - step_start_time)) / CLOCKS_PER_SEC;
-    
-                // 检查是否到达输出时间点（使用容差比较浮点数）
+                double step_end_time = omp_get_wtime();
+                double step_wall_time = step_end_time - step_start_time;
+                total_wall_time += step_wall_time;
+
+                // 检查是否到达输出时间点
                 if (fabs(currentTime - next_output_time) < 1e-10 * output_time) {
                     // 计算平均每步耗时
                     if (Ite > 0) {
-                        average_time_per_step = total_cpu_time / Ite;
-                        printf("Step = %d     Time = %f     Avg time per step = %.6f seconds\n", 
+                        average_time_per_step = total_wall_time / Ite;
+                        printf("Step = %d     Time = %.6f     Wall time per step = %.6f seconds", 
                                Ite, currentTime, average_time_per_step);
+                        printf(" (Threads: %d)\n", omp_get_max_threads());
                     } else {
-                        printf("Step = %d     Time = %f  \n", Ite, currentTime);
+                        printf("Step = %d     Time = %.6f  \n", Ite, currentTime);
                     }
                     
                     printf("Calculation of step %d is completed \n", Ite);
                     
-                    Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
-                    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,currentTime,scheme);
+                    Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
+                    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, mesh_x, mesh_y, U, FU, pri, currentTime, scheme);
                     // 更新下一个输出时间点
                     next_output_time += output_time;
                 }
 
                 Ite++;
-                
             }
             break;
+            
         case 1:
             // 迭代步数控制
             Time = 0.0;
             for (int m = 0; m <= 399; m++) {
                 // 记录单步开始时间
-                clock_t step_start_time = clock();
+                double step_start_time = omp_get_wtime();
                 
-                Delta_T = 0.1*Delta_x;
+                Delta_T = 0.1 * Delta_x;
                 switch (Time_ADM) {
                     case 1:
-                        RK1_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
+                        RK1_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     case 3:
-                        RK3_TimeAd(scheme,var,LNX_ngc,LNY_ngc,GhostCell,U,Delta_T,Delta_x,Delta_y);
+                        RK3_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     default:
-                        //格式     
+                        // 格式     
                         break;
                 }
                 
                 // 记录单步结束时间并累加
-                clock_t step_end_time = clock();
-                total_cpu_time += ((double)(step_end_time - step_start_time)) / CLOCKS_PER_SEC;
+                double step_end_time = omp_get_wtime();
+                double step_wall_time = step_end_time - step_start_time;
+                total_wall_time += step_wall_time;
                 
                 Ite++;
                 Time = Time + Delta_T;
                 
-                if (Ite % Control_output == 0 ){
+                if (Ite % Control_output == 0) {
                     // 计算平均每步耗时
                     if (Ite > 0) {
-                        average_time_per_step = total_cpu_time / Ite;
-                        printf("Step = %d     Time = %f     Avg time per step = %.6f seconds\n", 
+                        average_time_per_step = total_wall_time / Ite;
+                        printf("Step = %d     Time = %.6f     Wall time per step = %.6f seconds", 
                                Ite, Time, average_time_per_step);
+                        printf(" (Threads: %d)\n", omp_get_max_threads());
                     } else {
-                        printf("Step = %d     Time = %f  \n", Ite, Time);
+                        printf("Step = %d     Time = %.6f  \n", Ite, Time);
                     }
                     printf("Calculation of step %d is completed \n", Ite);
                 }
             }
             break;
+            
         default:
             break;
     }
     
     // 记录程序结束时间
-    end_time = clock();
-    double total_program_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    program_end_time = omp_get_wtime();
+    double total_program_time = program_end_time - program_start_time;
     
     // 计算最终的平均每步耗时
     if (Ite > 0) {
-        average_time_per_step = total_cpu_time / Ite;
+        average_time_per_step = total_wall_time / Ite;
     }
 
-       printf("\n");
+    printf("\n");
     printf("════════════════════════════════════════════════════════════════════\n");
     printf("                   CALCULATION SUMMARY                              \n");
     printf("════════════════════════════════════════════════════════════════════\n");
@@ -239,21 +253,22 @@ int main(int argc, char *argv[]) {
     printf("    • Final Time:        %.6f\n", Time);
     printf("\n");
     printf("  ▸ Performance Metrics:\n");
-    printf("    • Total Time:        %.3f seconds\n", total_program_time);
+    printf("    • Total Wall Time:   %.3f seconds\n", total_program_time);
     printf("    • Avg Time/Step:     %.6f seconds\n", average_time_per_step);
     if (Ite > 0) {
         printf("    • Steps per Second:  %.2f steps/sec\n", Ite / total_program_time);
     }
+    printf("    • Threads Used:      %d\n", omp_get_max_threads());
     printf("\n");
     printf("════════════════════════════════════════════════════════════════════\n");
     printf("✓ Calculation completed successfully!\n");
     printf("\n");
 
     // 实现输出最后的结果
-    Con_to_Pri_2D(var,LNX_ngc,LNY_ngc,pri,U);
+    Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
     // 打开文件并输出结果
     Control_Out = true;
-    OutputData_file_2D(Control_Out,LNX_ngc,LNY_ngc,GhostCell,mesh_x,mesh_y,U,FU,pri,Tmax,scheme);
+    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, mesh_x, mesh_y, U, FU, pri, Tmax, scheme);
 
     printf("The program has completed its execution.\n");
     free(pri);
@@ -266,13 +281,9 @@ int main(int argc, char *argv[]) {
 }
 
 
-
-
-
 /*                                            *********                                          */
 /*                                            算例名称函数实现                                    */
 /*                                            *********                                          */
-
 // 获取完整算例名称
 const char* getTestCaseName(TestCase2D test_case) {
     switch(test_case) {

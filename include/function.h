@@ -105,12 +105,11 @@ static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx
 }
 
 static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[cols][depth], double dx, double dy) {
-    double S_plus_x = 0, S_plus_y = 0;
-    
-    // 使用归约操作获取最大值
-    #pragma omp parallel for reduction(max:S_plus_x, S_plus_y)
-    for (int j = GhostCell; j < cols-GhostCell; j++) {
-        for (int k = GhostCell; k < depth-GhostCell; k++) {
+    double S_plus_x = 0.0, S_plus_y = 0.0;
+
+    #pragma omp parallel for reduction(max: S_plus_x, S_plus_y) collapse(2)
+    for (int j = GhostCell; j < cols - GhostCell; j++) {
+        for (int k = GhostCell; k < depth - GhostCell; k++) {
             // 读取已知的左右原始变量
             double rho = x[0][j][k];
             double rhou = x[1][j][k];
@@ -118,15 +117,16 @@ static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[c
             double rhoe = x[3][j][k];
             double u = rhou / rho;
             double v = rhov / rho;
-            double p = (rhoe - 0.5 * rho * (pow(u, 2) + pow(v,2))) * (M_gamma-1);
+            double p = (rhoe - 0.5 * rho * (u*u + v*v)) * (M_gamma - 1);
             // 计算声速
             double a = sqrt(M_gamma * p / rho);
             // 计算局部最大波速
             double local_S_plus_x = fabs(u) + a;
             double local_S_plus_y = fabs(v) + a;
             
-            S_plus_x = max_of_two(local_S_plus_x, S_plus_x);
-            S_plus_y = max_of_two(local_S_plus_y, S_plus_y);
+            // 归约操作更新全局最大值
+            if (local_S_plus_x > S_plus_x) S_plus_x = local_S_plus_x;
+            if (local_S_plus_y > S_plus_y) S_plus_y = local_S_plus_y;
         }
     }
     
@@ -147,7 +147,6 @@ static inline void Total_Conser(int rows, int cols, double Ghost_Cell , double (
 
 
 //数值积分程序
-
 
 // 梯形法则数值积分（修改版本）
 // f: 被积函数; x_up: 积分上限; x_down: 积分下限; k: 积分精度; u: 额外参数
