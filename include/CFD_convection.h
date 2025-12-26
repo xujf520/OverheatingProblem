@@ -10,93 +10,106 @@
 #include "scheme.h"
 #include "function.h"
 
-/*                               ************************************                               */
-/*                               ************************************                               */
-/*                                      重构格式：TVD类格式                                          */
-/*                               ************************************                               */
-/*                               ************************************                               */
-
-
 /*                                      ******************                                          */
-/*                                      重构步：基于守恒变量                                          */
+/*                          Reconstruction Step Based on Conservative Variables                     */
 /*                                      ******************                                          */
 
                                     /*……………………………………………………*/
-                                        /*近似黎曼求解*/
+                                /*Approximate Riemann Solver*/
                                     /*……………………………………………………*/
 
+/**
+ * Flux reconstruction using approximate Riemann solvers
+ * This function performs spatial reconstruction and flux calculation in both x and y directions
+ * 
+ * @param AR_scheme Approximate Riemann solver scheme identifier:
+ *                  1: HLL, 2: HLLC, 3: Roe, 11: HLLHC, 22: HLLCHC, 33: RoeHC
+ * @param var Number of variables (typically 4 for Euler equations)
+ * @param rows Number of rows in the grid (including ghost cells)
+ * @param cols Number of columns in the grid (including ghost cells)
+ * @param GC Number of ghost cells
+ * @param y Solution array in conservative variables [var][rows][cols]
+ * @param f Flux array in x-direction [var][rows][cols]
+ * @param g Flux array in y-direction [var][rows][cols]
+ * @param dt Time step (currently not used but kept for compatibility)
+ * @param dx Grid spacing in x-direction
+ * @param dy Grid spacing in y-direction
+ */
+static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int cols, int GC, double (*y)[rows][cols],
+                                          double (*f)[rows][cols], double (*g)[rows][cols], double dt, double dx, double dy) {
+    int i, j, k;
 
-static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int cols, int GC, double (*y)[rows][cols], \
-                                                double (*f)[rows][cols],double (*g)[rows][cols], double dt, double dx, double dy) {
-    int i,j,k;
-
+    // Allocate memory for temporary arrays
     double (*Flux)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Conserl)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Conserr)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    // 检查内存分配是否成功
+    double (*Conserl)[rows][cols] = malloc(var * sizeof(double[rows][cols]));  // Left reconstructed states
+    double (*Conserr)[rows][cols] = malloc(var * sizeof(double[rows][cols]));  // Right reconstructed states
+    
+    // Check if memory allocation was successful
     if (Flux == NULL || Conserl == NULL || Conserr == NULL) {
         fprintf(stderr, "Memory allocation failed in Flux_Reconstruction_RP\n");
-        // 释放已分配的内存
+        // Free any allocated memory before returning
         free(Flux);
         free(Conserl);
         free(Conserr);
         return;
     }
 
-    //维度分裂
-    //x方向重构
-    int space_dir = 1;
-    switch (Recon_Accur){
-        case 1:
-            Reconstruction_Godunov(space_dir,var,rows,cols,GC,y,Conserl,Conserr,dx);
+    // Dimensional splitting: process x-direction first, then y-direction
+    
+    // ========== X-Direction Reconstruction ==========
+    int space_dir = 1;  // 1 for x-direction, 2 for y-direction
+    
+    // Select reconstruction method based on accuracy order
+    switch (Recon_Accur) {
+        case 1:  // First-order Godunov
+            Reconstruction_Godunov(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx);
             break;
-        case 2:
-            TVD_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr,dx,dy);
+        case 2:  // Second-order TVD
+            TVD_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
             break;
-        case 3:
-            WENO3_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr);
+        case 3:  // Third-order WENO
+            WENO3_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
             break;
-        case 5:
-            WENO5_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr);
+        case 5:  // Fifth-order WENO
+            WENO5_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
             break;
 
         default:
-            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            printf("The reconstruction program with the %d-th order has not been implemented.\n", Recon_Accur);
             exit(1);
     }
 
-    
-    //演化过程：
-    //AR_scheme is Approximate Riemann Solver
+    // Evolution process: compute fluxes using approximate Riemann solver
+    // AR_scheme is Approximate Riemann Solver identifier
     switch (AR_scheme) {
-        case 1:
-            HLL_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 1:   // HLL Riemann solver
+            HLL_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 2:
-            HLLC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 2:   // HLLC Riemann solver
+            HLLC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 3:
-            Roe_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 3:   // Roe Riemann solver
+            Roe_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 11:
-            HLLHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 11:  // HLLHC (HLL with Heat Conduction)
+            HLLHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 22:
-            HLLCHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 22:  // HLLCHC (HLLC with Heat Conduction)
+            HLLCHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 33:
-            RoeHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 33:  // RoeHC (Roe with Heat Conduction)
+            RoeHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 5:
-//            RS_Marquina(3,rows,y,Flux,dt,dx);
+        case 5:   // RS_Marquina (not implemented in current code)
+            // RS_Marquina(3, rows, y, Flux, dt, dx);
             break;
         default:
-//            ER_Flux(var, rows, GC, prileft,priright,Flux);
-            // 你可以根据实际需求添加相应的处理逻辑
+            // ER_Flux(var, rows, GC, prileft, priright, Flux);
+            // Add appropriate handling logic based on actual requirements
             break;
     }
 
-
+    // Store x-direction fluxes in f array (for interior cells including one ghost cell)
     #pragma omp parallel for collapse(3)
     for (int i = 0; i < var; i++) {
         for (int j = GC - 1; j <= rows - GC; j++) {
@@ -106,60 +119,61 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
         }
     }
 
+    // ========== Y-Direction Reconstruction ==========
+    space_dir = 2;  // Switch to y-direction
     
-    //y方向重构
-
-    space_dir = 2;
-    switch (Recon_Accur){
-        case 1:
-            Reconstruction_Godunov(space_dir,var,rows,cols,GC,y,Conserl,Conserr,dx);
+    // Select reconstruction method based on accuracy order
+    switch (Recon_Accur) {
+        case 1:  // First-order Godunov
+            Reconstruction_Godunov(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx);
             break;
-        case 2:
-            TVD_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr,dx,dy);
+        case 2:  // Second-order TVD
+            TVD_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
             break;
-        case 3:
-            WENO3_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr);
+        case 3:  // Third-order WENO
+            WENO3_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
             break;
-        case 5:
-            WENO5_Reconstruction(space_dir,var,rows,cols,GC,y,Conserl,Conserr);
+        case 5:  // Fifth-order WENO
+            WENO5_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
             break;
 
         default:
-            printf("The reconstruction program with the %d-th order has not been implemented.\n",Recon_Accur);
+            printf("The reconstruction program with the %d-th order has not been implemented.\n", Recon_Accur);
             exit(1);
     }
 
-
-    //演化过程：
-    //AR_scheme is Approximate Riemann Solver
+    
+    // Evolution process: compute fluxes using approximate Riemann solver
+    // AR_scheme is Approximate Riemann Solver identifier
     switch (AR_scheme) {
-        case 1:
-            HLL_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 1:   // HLL Riemann solver
+            HLL_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 2:
-            HLLC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 2:   // HLLC Riemann solver
+            HLLC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 3:
-            Roe_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 3:   // Roe Riemann solver
+            Roe_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 11:
-            HLLHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 11:  // HLLHC (HLL with Heat Conduction)
+            HLLHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 22:
-            HLLCHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 22:  // HLLCHC (HLLC with Heat Conduction)
+            HLLCHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 33:
-            RoeHC_Flux(space_dir,var, rows,cols, GC, Conserl,Conserr,Flux);
+        case 33:  // RoeHC (Roe with Heat Conduction)
+            RoeHC_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             break;
-        case 5:
-//            RS_Marquina(3,rows,y,Flux,dt,dx);
+        case 5:   // RS_Marquina (not implemented in current code)
+            // RS_Marquina(3, rows, y, Flux, dt, dx);
             break;
         default:
-//            ER_Flux(var, rows, GC, prileft,priright,Flux);
-            // 你可以根据实际需求添加相应的处理逻辑
+            // ER_Flux(var, rows, GC, prileft, priright, Flux);
+            // Add appropriate handling logic based on actual requirements
             break;
     }
 
+    // Store y-direction fluxes in g array (for interior cells including one ghost cell)
     #pragma omp parallel for collapse(3)
     for (int k = 0; k < var; k++) {
         for (int i = GC - 1; i <= rows - GC; i++) {
@@ -169,10 +183,10 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
         }
     }
 
+    // Free allocated memory
     free(Conserl);
     free(Conserr);
     free(Flux);
-
 }
 
 
@@ -246,18 +260,6 @@ static inline void Flux_Reconstruction_RP_Heat(int AR_scheme, int var, int rows,
     }
 
 }
-
-
-
-/*……………………………………………………………………………………………………*/
-
-/*                                      ******************                                          */
-/*                                      重构步：MUSCL类格式                                           */
-/*                                      重构步：基于守恒变量                                          */
-/*                                      ******************                                          */
-                                    /*……………………………………………………*/
-                                        /*近似黎曼求解*/
-                                    /*……………………………………………………*/
 
 
 

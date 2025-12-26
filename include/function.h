@@ -8,11 +8,11 @@
     #define PI 3.14159265358979323846
 #endif
 
-// 函数指针类型，用于传递被积函数
-// 修改函数指针类型，增加 u 参数
+// Function Pointer Type Used To Pass The Integrand
+//Modify The Function Pointer Type And Add A U Parameter
 typedef double (*FuncPtrWithU)(double x, double* u);
 
-// 示例测试函数 - 这些也可以设为static inline如果需要在多个文件中使用
+// Example Test Function These Can Also Be Set As Static Inline If They Need To Be Used In Multiple Files
 static inline double test_function1(double x) {
     return x * x;  // f(x) = x²，积分结果应为 b³/3 - a³/3
 }
@@ -24,7 +24,6 @@ static inline double test_function2(double x) {
 static inline double test_function3(double x) {
     return exp(x);  // f(x) = e^x，积分结果应为 e^b - e^a
 }
-
 
 
 static inline int sgn(double num) {
@@ -72,8 +71,8 @@ static inline double min_mod(double a, double b){
 }
 
 static inline double van_leer(double a, double b){
-    double epsilo = 1e-6;
-	return ((sgn(a)+sgn(b))*a*b)/(fabs(a)+fabs(b)+epsilo);
+    double epsilo = 1e-10;
+	return ((sgn(a)+sgn(b)) * a * b)/(fabs(a)+fabs(b) + epsilo);
 }
 
 
@@ -86,15 +85,15 @@ static inline double van_albada(double a, double b){
 static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx) {
     double S_plus = 0;
     for (int j = 1; j < cols-1; j++) {
-        //读取已知的左右原始变量
+        //Read The Known Left And Right Original Variables
         double rho = x[0][j];
         double rhou = x[1][j];
         double rhoe = x[2][j];
         double u = rhou / rho;
         double p = (rhoe - 0.5 * rho * pow(u, 2))*(M_gamma-1);
-        //计算声速
+        //Calculate The Speed Of Sound
         double a= sqrt(M_gamma * p / rho);
-        //计算全局最大波速
+        //Calculate The Global Maximum Wave Speed
         S_plus = max_of_two (fabs(u) + a,S_plus);
     
     }   
@@ -110,7 +109,7 @@ static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[c
     #pragma omp parallel for reduction(max: S_plus_x, S_plus_y) collapse(2)
     for (int j = GhostCell; j < cols - GhostCell; j++) {
         for (int k = GhostCell; k < depth - GhostCell; k++) {
-            // 读取已知的左右原始变量
+            // Read The Known Left And Right Original Variables
             double rho = x[0][j][k];
             double rhou = x[1][j][k];
             double rhov = x[2][j][k];
@@ -118,13 +117,13 @@ static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[c
             double u = rhou / rho;
             double v = rhov / rho;
             double p = (rhoe - 0.5 * rho * (u*u + v*v)) * (M_gamma - 1);
-            // 计算声速
+            // Calculate The Speed Of Sound
             double a = sqrt(M_gamma * p / rho);
-            // 计算局部最大波速
+            //Calculate Local Maximum Wave Speed
             double local_S_plus_x = fabs(u) + a;
             double local_S_plus_y = fabs(v) + a;
             
-            // 归约操作更新全局最大值
+            // Reduction Operation Updates The Global Maximum
             if (local_S_plus_x > S_plus_x) S_plus_x = local_S_plus_x;
             if (local_S_plus_y > S_plus_y) S_plus_y = local_S_plus_y;
         }
@@ -143,8 +142,6 @@ static inline void Total_Conser(int rows, int cols, double Ghost_Cell , double (
         
     }
 }
-
-
 
 //数值积分程序
 

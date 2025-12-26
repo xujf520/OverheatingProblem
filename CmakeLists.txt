@@ -34,17 +34,19 @@ add_executable(ShockImpact_RPS src/RP_FVM.c)
 # Link math library and OpenMP
 target_link_libraries(ShockImpact_RPS m OpenMP::OpenMP_C)
 
-# ========== Create simple run script ==========
+# ========== Create enhanced run script with control file support ==========
 file(WRITE ${CMAKE_BINARY_DIR}/run.sh
 "#!/bin/bash
 
 # Default thread count
 THREADS=\${1:-8}
+CONTROL_FILE=\${2:-\"ControlFile.txt\"}
 
 echo \"========================================\"
 echo \"CFD Solver Configuration\"
 echo \"========================================\"
 echo \"Threads: \${THREADS}\"
+echo \"Control File: \${CONTROL_FILE}\"
 echo \"Executable: ./ShockImpact_RPS\"
 echo \"Working directory: \$(pwd)\"
 echo \"Time: \$(date '+%Y-%m-%d %H:%M:%S')\"
@@ -54,8 +56,19 @@ echo \"========================================\"
 export OMP_NUM_THREADS=\${THREADS}
 export OMP_PROC_BIND=true
 
-# Run the program
-time ./ShockImpact_RPS
+# Run the program with control file
+if [ -f \"\$CONTROL_FILE\" ]; then
+    time ./ShockImpact_RPS \"\$CONTROL_FILE\"
+else
+    echo \"ERROR: Control file '\$CONTROL_FILE' not found!\"
+    echo \"Available control files:\"
+    ls *.txt 2>/dev/null || echo \"  No .txt files found in current directory\"
+    echo \"\"
+    echo \"To create a default control file:\"
+    echo \"  cp \$(dirname \$0)/../ControlFile.txt .  # Copy from parent directory\"
+    echo \"  # or edit ControlFile_template.txt and rename it\" 
+    exit 1
+fi
 
 EXIT_CODE=\$?
 echo \"========================================\"
@@ -66,16 +79,16 @@ exit \${EXIT_CODE}
 # Set script executable permissions
 file(COPY ${CMAKE_BINARY_DIR}/run.sh
      DESTINATION ${CMAKE_BINARY_DIR}
-     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 # ========== Create run targets ==========
 
-# Default run (using script, 8 threads)
+# Default run (using script, 8 threads, ControlFile.txt)
 add_custom_target(run
-    COMMAND bash ./run.sh 8
+    COMMAND bash ./run.sh 8 ControlFile.txt
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Run CFD solver (8 threads)"
+    COMMENT "Run CFD solver (8 threads, ControlFile.txt)"
 )
 
 # Direct run (default thread count)
@@ -83,15 +96,32 @@ add_custom_target(run_direct
     COMMAND ./ShockImpact_RPS
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Run solver directly"
+    COMMENT "Run solver directly (no control file)"
 )
 
-# Auto-detect core count
-add_custom_target(run_auto
-    COMMAND bash -c "THREADS=\$$(nproc 2>/dev/null || echo 8) && bash ./run.sh \$$THREADS"
+# Run with control file (4 threads, ControlFile.txt)
+add_custom_target(run_ctrl
+    COMMAND bash ./run.sh 4 ControlFile.txt
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Run with auto-detected core count"
+    COMMENT "Run with control file (4 threads)"
+)
+
+# Auto-detect core count with control file
+add_custom_target(run_auto
+    COMMAND bash -c "THREADS=\$$(nproc 2>/dev/null || echo 8) && bash ./run.sh \$$THREADS ControlFile.txt"
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Run with auto-detected core count and control file"
+)
+
+# Custom run with specific control file
+add_custom_target(run_custom
+    COMMAND ${CMAKE_COMMAND} -E echo "Usage: make run_custom THREADS=4 CONTROL=MyConfig.txt"
+    COMMAND ${CMAKE_COMMAND} -E echo "       make run_custom THREADS=8 CONTROL=ControlFile_RT.txt"
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Show custom run usage"
 )
 
 # ========== OpenMP information display target ==========
@@ -103,7 +133,7 @@ add_custom_target(openmp_info
     COMMAND ${CMAKE_COMMAND} -E echo "OpenMP enabled: ${OpenMP_C_FOUND}"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "To test OpenMP:"
-    COMMAND ${CMAKE_COMMAND} -E echo "  OMP_NUM_THREADS=2 ./ShockImpact_RPS"
+    COMMAND ${CMAKE_COMMAND} -E echo "  OMP_NUM_THREADS=2 ./ShockImpact_RPS ControlFile.txt"
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Display OpenMP version and configuration information"
@@ -122,10 +152,32 @@ add_custom_target(verify_openmp
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "=== Recommended Run Parameters ==="
     COMMAND bash -c "echo 'Suggested thread count: \$$(nproc 2>/dev/null || echo 8)'"
-    COMMAND bash -c "echo 'Run example: OMP_NUM_THREADS=\$$(nproc 2>/dev/null || echo 8) ./ShockImpact_RPS'"
+    COMMAND bash -c "echo 'Run example: OMP_NUM_THREADS=\$$(nproc 2>/dev/null || echo 8) ./ShockImpact_RPS ControlFile.txt'"
     DEPENDS ShockImpact_RPS
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Verify OpenMP configuration and system core information"
+    VERBATIM
+)
+
+# ========== Control file management targets ==========
+
+# List available control files
+add_custom_target(list_ctrl
+    COMMAND ${CMAKE_COMMAND} -E echo "=== Available Control Files ==="
+    COMMAND bash -c "find . -name \"*.txt\" -type f | grep -i control || echo 'No control files found in current directory'"
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "List available control files"
+    VERBATIM
+)
+
+# Copy control file template
+add_custom_target(ctrl_template
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/ControlFile.txt ${CMAKE_BINARY_DIR}/ControlFile_template.txt
+    COMMAND ${CMAKE_COMMAND} -E echo "Control file template copied to build directory"
+    DEPENDS ShockImpact_RPS
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Copy control file template to build directory"
     VERBATIM
 )
 
@@ -138,17 +190,30 @@ add_custom_target(usage
     COMMAND ${CMAKE_COMMAND} -E echo "  make clean                  # Clean build files"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Run commands:"
-    COMMAND ${CMAKE_COMMAND} -E echo "  make run                    # Run with 8 threads"
-    COMMAND ${CMAKE_COMMAND} -E echo "  make run_direct             # Run directly (default thread count)"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make run                    # Run with 8 threads, ControlFile.txt"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make run_direct             # Run directly (no control file)"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make run_ctrl               # Run with 4 threads, ControlFile.txt"
     COMMAND ${CMAKE_COMMAND} -E echo "  make run_auto               # Run with auto-detected core count"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make run_custom             # Show custom run usage"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Control file commands:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make list_ctrl              # List available control files"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make ctrl_template          # Copy control file template"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Information commands:"
     COMMAND ${CMAKE_COMMAND} -E echo "  make openmp_info            # Display OpenMP version information"
     COMMAND ${CMAKE_COMMAND} -E echo "  make verify_openmp          # Verify OpenMP configuration"
+    COMMAND ${CMAKE_COMMAND} -E echo "  make usage                  # Display this help"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Direct execution:"
     COMMAND ${CMAKE_COMMAND} -E echo "  ./ShockImpact_RPS           # Run directly (using default thread count)"
-    COMMAND ${CMAKE_COMMAND} -E echo "  bash ./run.sh [threads]     # Use run script"
+    COMMAND ${CMAKE_COMMAND} -E echo "  ./ShockImpact_RPS ControlFile.txt  # Run with control file"
+    COMMAND ${CMAKE_COMMAND} -E echo "  bash ./run.sh [threads] [control_file] # Use run script"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Run script examples:"
+    COMMAND ${CMAKE_COMMAND} -E echo "  bash ./run.sh 4 ControlFile.txt"
+    COMMAND ${CMAKE_COMMAND} -E echo "  bash ./run.sh 8 ControlFile_RT.txt"
+    COMMAND ${CMAKE_COMMAND} -E echo "  bash ./run.sh 4              # Uses default ControlFile.txt"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Set environment variables:"
     COMMAND ${CMAKE_COMMAND} -E echo "  export OMP_NUM_THREADS=4    # Set thread count to 4"
@@ -174,13 +239,15 @@ endif()
 message(STATUS "")
 message(STATUS "Available commands:")
 message(STATUS "  make                    # Build program")
-message(STATUS "  make run               # Run solver (8 threads)")
+message(STATUS "  make run               # Run solver (8 threads, ControlFile.txt)")
+message(STATUS "  make run_ctrl          # Run with 4 threads, ControlFile.txt")
 message(STATUS "  make run_auto          # Run with auto-detected core count")
+message(STATUS "  make list_ctrl         # List available control files")
 message(STATUS "  make openmp_info       # Display OpenMP information")
 message(STATUS "  make verify_openmp     # Verify OpenMP configuration")
 message(STATUS "  make usage             # Display help")
 message(STATUS "")
 message(STATUS "Direct execution:")
-message(STATUS "  ./ShockImpact_RPS      # Using default thread count")
-message(STATUS "  bash ./run.sh [threads] # Using run script")
+message(STATUS "  ./ShockImpact_RPS ControlFile.txt    # Run with control file")
+message(STATUS "  bash ./run.sh [threads] [control_file] # Using enhanced run script")
 message(STATUS "================================================")

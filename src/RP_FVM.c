@@ -3,9 +3,10 @@
 #include <math.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include <sys/stat.h>  // 新增，用于目录操作
+#include <sys/stat.h>  // For Directory Operations
 #include <omp.h>
 #include <time.h>
+#include "mesh.h"
 #include "initialize.h"
 #include "CFD_convection.h"
 #include "CFD_diffusion.h"
@@ -16,7 +17,8 @@
 #include "Error.h"
 
 
-// 统一的高精度计时器
+
+// Unified High Precision Timer
 static inline double get_wall_time(void) {
 #ifdef _OPENMP
     return omp_get_wtime();
@@ -27,116 +29,143 @@ static inline double get_wall_time(void) {
 #endif
 }
 
-// 全局变量存储当前算例
+// Global Variable Stores The Current Case
 TestCase2D current_test_case = TEST_1D_SHOCKTUBE; // 默认值
 
-// 算例相关函数声明
+// Function Declarations Related To Examples
 const char* getTestCaseName(TestCase2D test_case);
 const char* getTestCaseShortName(TestCase2D test_case);
-void printAvailableTestCases();
+void ReadControlFile(const char* filename);
+void set_material_parameters(double gamma, bool source, double gravity, double cfl);
 void set_current_test_case(TestCase2D test_case);
 
 /*                                            *********                                          */
-/*                                            声明子程序                                          */
+/*                                         Declare Subroutine                                    */
 /*                                            *********                                          */
-// 控制计算步数子程序
+// Subroutine For Controlling Calculation Steps
 void StepLoop();
 void OutputData_file();
 void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
                         double (*U)[rows][cols], double (*FU)[rows][cols], 
                         double (*pri)[rows][cols], double now_time, int scheme_type);
+void OutputData_file_2D_BS(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
+                        double (*U)[rows][cols], double (*FU)[rows][cols], 
+                        double (*pri)[rows][cols], double now_time, int scheme_type);
 
-// 读取黎曼问题
+// Reading The Riemann Problem
 void Get_RP_Parameters();
 
-//简单的网格代码
+//Simple Grid Code
 void Mesh(int n, double deltax, double *x);
 void Mesh_2D();
 /*                                            *********                                          */
-/*                                             部分参数                                            */
+/*                                        Partial Parameters                                      */
 /*                                            *********                                          */
+// Control Parameter Structure
+typedef struct {
+    TestCase2D test_case;
+    int L_nx;
+    int L_ny;
+    int Time_ADM;
+    int scheme;
+    double M_gamma;
+    bool Source;
+    double Gravity;
+    double CFL;
+    double Tmax;
+    int Control_Compution;
+    int Control_output;
+    int Recon_Accur;      
+    bool Characteriz;     
+    char output_dir[256];
+} ControlParams;
+// Global Control Parameter Variable
+ControlParams ctrl_params;
 
-//网格参数
-const int L_nx = 200;                                                      //网格数量
-const int L_ny = 200;                                                      //网格数量      
-const int var = 4;                                        
-
-int Time_ADM;                                                //Riemann Solver的具体方法 
-//Riemann Solver
-int scheme;
-//边界条件
 BoundaryConfig bc_config = {BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW, BC_OUTFLOW};
-/*                                            *********                                          */
-/*                                              主程序                                            */
-/*                                            *********                                          */
 
-#include <omp.h>
+/*                                            *********                                          */
+/*                                         Main Program                                            */
+/*                                            *********                                          */
 
 int main(int argc, char *argv[]) {
-    int LNX_ngc = L_nx + 2 * GhostCell; 
-    int LNY_ngc = L_ny + 2 * GhostCell; 
+   //read Control File
+    if (argc > 1) {
+        ReadControlFile(argv[1]);
+    } else {
+        printf("Using default parameters (no control file specified)\n");
+        // Set Default Control Parameters
+        ctrl_params.test_case = TEST_BLAST_WAVE;
+        ctrl_params.L_nx = 100;
+        ctrl_params.L_ny = 100;
+        ctrl_params.Time_ADM = 3;
+        ctrl_params.scheme = 1;
+        ctrl_params.M_gamma = 1.4;
+        ctrl_params.Source = false;
+        ctrl_params.Gravity = 1.0;
+        ctrl_params.CFL = 0.4;
+        ctrl_params.Tmax = 0.1;
+        ctrl_params.Control_Compution = 0;
+        ctrl_params.Control_output = 2;
+        strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
+    }
+    // Set Global Parameters According To The Control File
+    set_current_test_case(ctrl_params.test_case);
+    
+    int LNX_ngc = ctrl_params.L_nx + 2 * GhostCell; 
+    int LNY_ngc = ctrl_params.L_ny + 2 * GhostCell; 
     
     double Lx, Ly;
-    double Tmax;       
+    double Tmax = ctrl_params.Tmax;       
     double Delta_x, Delta_y;
     double Delta_T;
 
-    // 计时变量
+    // Timing Variable
     double program_start_time, program_end_time;
     double total_wall_time = 0.0;
     double average_time_per_step = 0.0;
 
-    double mesh_x[L_nx], mesh_y[L_ny];
+    double mesh_x[ctrl_params.L_nx], mesh_y[ctrl_params.L_ny];
     double pri_Ver1[4], pri_Ver2[4];
     double (*pri)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*U)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*FU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
     double (*GU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
-    
-    // 检查内存分配是否成功
+    // Check If The Memory Allocation Was Successful
     if (pri == NULL || U == NULL || FU == NULL || GU == NULL) {
         fprintf(stderr, "Memory allocation failed in Main\n");
         free(pri); free(U); free(FU); free(GU);
         return 1;
     } 
-
-    // 显示可用算例
-    printAvailableTestCases();
-
-    // 选择测试算例
-    TestCase2D selected_test = TEST_TAYLOR_GREEN_VORTEX;
-    set_current_test_case(selected_test);
-
-    // 初始化
-    Init_Euler_2D(selected_test, var, LNX_ngc, LNY_ngc, GhostCell, pri, U, FU, GU, &Lx, &Ly, &Tmax);
+    // Set Material Parameters
+    set_material_parameters(ctrl_params.M_gamma, ctrl_params.Source, ctrl_params.Gravity, ctrl_params.CFL);
+    // Initialize
+    Init_Euler_2D(ctrl_params.test_case, var, LNX_ngc, LNY_ngc, GhostCell, pri, U, FU, GU, &Lx, &Ly, &Tmax);
 
     printf("Read initial conditions successfully!\n");
     printf("Euler equation initialization successful!\n");
 
-    Delta_x = Lx / L_nx;
-    Delta_y = Ly / L_ny;
+    Delta_x = Lx / ctrl_params.L_nx;
+    Delta_y = Ly / ctrl_params.L_ny;
     
     // mesh
-    Mesh_2D(L_nx, L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
+    Mesh_2D(ctrl_params.L_nx, ctrl_params.L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
 
-    double output_time = Tmax / Control_output;
+    double output_time = Tmax / ctrl_params.Control_output;
     double next_output_time = output_time;
     printf("Mesh successfully!\n");
-    
-    Get_RP_Parameters(argc, argv, &Time_ADM, &scheme);
-    
-    // 记录程序开始时间
+
+    // Record Program Start Time
     program_start_time = omp_get_wtime();
     
-    switch (Control_Compution) {
+    switch (ctrl_params.Control_Compution) {
         case 0:
             for (Time = 0.0; Time < Tmax; Time = Time + Delta_T) {
-                // 记录单步开始时间
+                // Record Single Step Start Time
                 double step_start_time = omp_get_wtime();
-                
                 Delta_T = Get_Delta_T_2D(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
                 
-                // 确保不会超过下一个输出时间点或Tmax
+                // Ensure It Does Not Exceed The Next Output Time Point Or Tmax
                 if (Time + Delta_T > next_output_time) {
                     Delta_T = next_output_time - Time;
                 }
@@ -144,15 +173,16 @@ int main(int argc, char *argv[]) {
                     Delta_T = Tmax - Time;
                 }
 
-                switch (Time_ADM) {
+                switch (ctrl_params.Time_ADM) {
                     case 1:
-                        RK1_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     case 3:
-                        RK3_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        //RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     default:
-                        // 格式     
+                        fprintf(stderr, "Error: Invalid time advancement method\n");
                         break;
                 }
 
@@ -178,7 +208,8 @@ int main(int argc, char *argv[]) {
                     printf("Calculation of step %d is completed \n", Ite);
                     
                     Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
-                    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, mesh_x, mesh_y, U, FU, pri, currentTime, scheme);
+                    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, 
+                                       mesh_x, mesh_y, U, FU, pri, currentTime, ctrl_params.scheme);
                     // 更新下一个输出时间点
                     next_output_time += output_time;
                 }
@@ -195,15 +226,17 @@ int main(int argc, char *argv[]) {
                 double step_start_time = omp_get_wtime();
                 
                 Delta_T = 0.1 * Delta_x;
-                switch (Time_ADM) {
+                switch (ctrl_params.Time_ADM) {
                     case 1:
-                        RK1_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, 
+                                   U, Delta_T, Delta_x, Delta_y);
                         break;
                     case 3:
-                        RK3_TimeAd(scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, 
+                                   U, Delta_T, Delta_x, Delta_y);
                         break;
                     default:
-                        // 格式     
+                        fprintf(stderr, "Error: Invalid time advancement method\n");
                         break;
                 }
                 
@@ -215,7 +248,7 @@ int main(int argc, char *argv[]) {
                 Ite++;
                 Time = Time + Delta_T;
                 
-                if (Ite % Control_output == 0) {
+                if (Ite % ctrl_params.Control_output == 0) {
                     // 计算平均每步耗时
                     if (Ite > 0) {
                         average_time_per_step = total_wall_time / Ite;
@@ -231,6 +264,7 @@ int main(int argc, char *argv[]) {
             break;
             
         default:
+            fprintf(stderr, "Error: Invalid control computation mode\n");
             break;
     }
     
@@ -268,7 +302,8 @@ int main(int argc, char *argv[]) {
     Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
     // 打开文件并输出结果
     Control_Out = true;
-    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, mesh_x, mesh_y, U, FU, pri, Tmax, scheme);
+    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, 
+                       mesh_x, mesh_y, U, FU, pri, Tmax, ctrl_params.scheme);
 
     printf("The program has completed its execution.\n");
     free(pri);
@@ -280,6 +315,170 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+
+
+void ReadControlFile(const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (!file) {
+        fprintf(stderr, "Error: Cannot open control file %s\n", filename);
+        exit(1);
+    }
+    
+    char line[256];
+    char key[100];
+    char value[150];
+    char test_case_name[100];
+    
+    // 设置默认值
+    ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
+    ctrl_params.L_nx = 100;
+    ctrl_params.L_ny = 400;
+    ctrl_params.Time_ADM = 3;
+    ctrl_params.scheme = 1;
+    ctrl_params.M_gamma = 1.667;
+    ctrl_params.Source = true;
+    ctrl_params.Gravity = 1.0;
+    ctrl_params.CFL = 0.4;
+    ctrl_params.Tmax = 1.0;
+    ctrl_params.Control_Compution = 0;
+    ctrl_params.Control_output = 2;
+    ctrl_params.Recon_Accur = 5;        // 新增：默认5阶WENO重构
+    ctrl_params.Characteriz = false;    // 新增：默认不开启特征重构
+    strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
+    
+    while (fgets(line, sizeof(line), file)) {
+        // 跳过注释行和空行
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
+            continue;
+        }
+        
+        // 移除行尾的换行符
+        line[strcspn(line, "\n")] = 0;
+        line[strcspn(line, "\r")] = 0;
+        
+        // 解析键值对
+        if (sscanf(line, "%99[^:]: %149[^\n]", key, value) == 2) {
+            // 去除键值两端的空格
+            char *key_trim = key;
+            char *value_trim = value;
+            while (*key_trim == ' ') key_trim++;
+            while (*key_trim && key_trim[strlen(key_trim)-1] == ' ') 
+                key_trim[strlen(key_trim)-1] = 0;
+            while (*value_trim == ' ') value_trim++;
+            while (*value_trim && value_trim[strlen(value_trim)-1] == ' ') 
+                value_trim[strlen(value_trim)-1] = 0;
+            
+            if (strcmp(key_trim, "TestCase") == 0) {
+                if (strcmp(value_trim, "Sod_Shocktube") == 0) ctrl_params.test_case = TEST_1D_SHOCKTUBE;
+                else if (strcmp(value_trim, "Riemann_Case1") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE1;
+                else if (strcmp(value_trim, "Riemann_Case2") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE2;
+                else if (strcmp(value_trim, "Riemann_Case3") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE3;
+                else if (strcmp(value_trim, "Riemann_Case4") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE4;
+                else if (strcmp(value_trim, "Riemann_Case5") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE5;
+                else if (strcmp(value_trim, "Taylor_Green_Vortex") == 0) ctrl_params.test_case = TEST_TAYLOR_GREEN_VORTEX;
+                else if (strcmp(value_trim, "Gaussian_Pulse") == 0) ctrl_params.test_case = TEST_GAUSSIAN_PULSE;
+                else if (strcmp(value_trim, "Kelvin_Helmholtz") == 0) ctrl_params.test_case = TEST_KELVIN_HELMHOLTZ;
+                else if (strcmp(value_trim, "Rayleigh_Taylor") == 0) ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
+                else if (strcmp(value_trim, "Double_Mach_Reflection") == 0) ctrl_params.test_case = TEST_DOUBLE_MACH_REFLECTION;
+                else if (strcmp(value_trim, "Backward_Step") == 0) ctrl_params.test_case = TEST_BACKWARD_STEP;
+                else if (strcmp(value_trim, "Blast_Wave") == 0) ctrl_params.test_case = TEST_BLAST_WAVE;
+                else if (strcmp(value_trim, "Noh_Problem") == 0) ctrl_params.test_case = TEST_NOH_PROBLEM;
+                else {
+                    fprintf(stderr, "Warning: Unknown test case '%s', using default Rayleigh_Taylor\n", value_trim);
+                }
+            }
+            else if (strcmp(key_trim, "L_nx") == 0) ctrl_params.L_nx = atoi(value_trim);
+            else if (strcmp(key_trim, "L_ny") == 0) ctrl_params.L_ny = atoi(value_trim);
+            else if (strcmp(key_trim, "Time_ADM") == 0) ctrl_params.Time_ADM = atoi(value_trim);
+            else if (strcmp(key_trim, "scheme") == 0) ctrl_params.scheme = atoi(value_trim);
+            else if (strcmp(key_trim, "M_gamma") == 0) ctrl_params.M_gamma = atof(value_trim);
+            else if (strcmp(key_trim, "Source") == 0) {
+                if (strcmp(value_trim, "true") == 0 || strcmp(value_trim, "1") == 0) 
+                    ctrl_params.Source = true;
+                else 
+                    ctrl_params.Source = false;
+            }
+            else if (strcmp(key_trim, "Gravity") == 0) ctrl_params.Gravity = atof(value_trim);
+            else if (strcmp(key_trim, "CFL") == 0) ctrl_params.CFL = atof(value_trim);
+            else if (strcmp(key_trim, "Tmax") == 0) ctrl_params.Tmax = atof(value_trim);
+            else if (strcmp(key_trim, "Control_Compution") == 0) ctrl_params.Control_Compution = atoi(value_trim);
+            else if (strcmp(key_trim, "Control_output") == 0) ctrl_params.Control_output = atoi(value_trim);
+            else if (strcmp(key_trim, "output_dir") == 0) strcpy(ctrl_params.output_dir, value_trim);
+            // 新增：重构精度参数
+            else if (strcmp(key_trim, "Recon_Accur") == 0) {
+                int recon_val = atoi(value_trim);
+                // 验证重构精度值的有效性
+                if (recon_val == 1 || recon_val == 2 || recon_val == 3 || recon_val == 5) {
+                    ctrl_params.Recon_Accur = recon_val;
+                } else {
+                    fprintf(stderr, "Warning: Invalid Recon_Accur value %d. Valid values are 1, 2, 3, 5. Using default 5.\n", recon_val);
+                    ctrl_params.Recon_Accur = 5;
+                }
+            }
+            // 新增：特征重构参数
+            else if (strcmp(key_trim, "Characteriz") == 0) {
+                if (strcmp(value_trim, "true") == 0 || strcmp(value_trim, "1") == 0) 
+                    ctrl_params.Characteriz = true;
+                else if (strcmp(value_trim, "false") == 0 || strcmp(value_trim, "0") == 0)
+                    ctrl_params.Characteriz = false;
+                else {
+                    fprintf(stderr, "Warning: Invalid Characteriz value '%s'. Using default false.\n", value_trim);
+                    ctrl_params.Characteriz = false;
+                }
+            }
+        }
+    }
+    
+    fclose(file);
+    
+    // 打印读取的参数
+    printf("╔═══════════════════════════════════════════════════╗\n");
+    printf("║            Control Parameters Loaded              ║\n");
+    printf("╠═══════════════════════════════════════════════════╣\n");
+    printf("║ Test Case:         %-30s ║\n", getTestCaseName(ctrl_params.test_case));
+    printf("║ Grid Size (nx×ny): %-5d × %-5d               ║\n", ctrl_params.L_nx, ctrl_params.L_ny);
+    printf("║ Time Integration:  %-30s ║\n", ctrl_params.Time_ADM == 1 ? "RK1" : "RK3");
+    printf("║ Riemann Solver:    %-30s ║\n", 
+           ctrl_params.scheme == 1 ? "HLL" : 
+           ctrl_params.scheme == 2 ? "HLLC" : 
+           ctrl_params.scheme == 3 ? "Roe" : 
+           ctrl_params.scheme == 11 ? "HLLHC" : 
+           ctrl_params.scheme == 22 ? "HLLCHC" : 
+           ctrl_params.scheme == 33 ? "RoeHC" : "ExactRiemann");
+    printf("║ Gamma (γ):         %-30.3f ║\n", ctrl_params.M_gamma);
+    printf("║ Gravity Source:    %-30s ║\n", ctrl_params.Source ? "ON" : "OFF");
+    printf("║ Gravity Constant:  %-30.3f ║\n", ctrl_params.Gravity);
+    printf("║ CFL Number:        %-30.3f ║\n", ctrl_params.CFL);
+    printf("║ Final Time (Tmax): %-30.3f ║\n", ctrl_params.Tmax);
+    printf("║ Output Steps:      %-30d ║\n", ctrl_params.Control_output);
+    printf("║ Output Directory:  %-30s ║\n", ctrl_params.output_dir);
+    // 新增：重构参数显示
+    printf("║ Reconstruction:    %-30s ║\n", 
+           ctrl_params.Recon_Accur == 1 ? "0th Order (Constant)" :
+           ctrl_params.Recon_Accur == 2 ? "2nd Order TVD" :
+           ctrl_params.Recon_Accur == 3 ? "3rd Order WENO" :
+           ctrl_params.Recon_Accur == 5 ? "5th Order WENO" : "Unknown");
+    printf("║ Characteristic:    %-30s ║\n", ctrl_params.Characteriz ? "Characteristic" : "Primitive");
+    printf("╚═══════════════════════════════════════════════════╝\n\n");
+}
+
+// 读取控制文件的函数
+void set_material_parameters(double gamma, bool source, double gravity, double cfl) {
+
+    M_gamma = gamma;
+    Source = source;
+    Gravity = gravity;
+
+    CFL = cfl;
+    
+    printf("Material parameters set:\n");
+    printf("  Gamma: %.3f\n", M_gamma);
+    printf("  Gravity source: %s\n", Source ? "ON" : "OFF");
+    if (Source) {
+        printf("  Gravity constant: %.3f\n", Gravity);
+    }
+    printf("  CFL number: %.3f\n", CFL);
+}
 
 /*                                            *********                                          */
 /*                                            算例名称函数实现                                    */
@@ -295,9 +494,7 @@ const char* getTestCaseName(TestCase2D test_case) {
         case TEST_2D_SHOCKTUBE_CASE5: return "2D_Riemann_Case5";
         case TEST_TAYLOR_GREEN_VORTEX: return "Taylor_Green_Vortex";
         case TEST_GAUSSIAN_PULSE: return "Gaussian_Pulse";
-        case TEST_KELVIN_HELMHOLTZ: return "Kelvin_Helmholtz_Smooth";
-        case TEST_KELVIN_HELMHOLTZ_SHARP: return "Kelvin_Helmholtz_Sharp";
-        case TEST_KELVIN_HELMHOLTZ_VP: return "Kelvin_Helmholtz_VP";
+        case TEST_KELVIN_HELMHOLTZ: return "Kelvin_Helmholtz";
         case TEST_RAYLEIGH_TAYLOR: return "Rayleigh_Taylor";
         case TEST_DOUBLE_MACH_REFLECTION: return "Double_Mach_Reflection";
         case TEST_BACKWARD_STEP: return "Backward_Step";
@@ -319,8 +516,6 @@ const char* getTestCaseShortName(TestCase2D test_case) {
         case TEST_TAYLOR_GREEN_VORTEX: return "TGV";
         case TEST_GAUSSIAN_PULSE: return "Gaussian";
         case TEST_KELVIN_HELMHOLTZ: return "KH_Smooth";
-        case TEST_KELVIN_HELMHOLTZ_SHARP: return "KH_Sharp";
-        case TEST_KELVIN_HELMHOLTZ_VP: return "KH_VP";
         case TEST_RAYLEIGH_TAYLOR: return "RT";
         case TEST_DOUBLE_MACH_REFLECTION: return "DMR";
         case TEST_BACKWARD_STEP: return "BackStep";
@@ -425,16 +620,7 @@ void Get_RP_Parameters(int argc, char *argv[], int *Parameter1, int *Parameter2)
     printf("\n");
 }
 
-void Mesh_2D(int rows, int cols, double *mesh_x, double *mesh_y, double deltax, double deltay) {
 
-    for (int j = 0; j < rows; j++) 
-            mesh_x[j] = deltax * j + 0.5 * deltax;
-    
-    
-    for (int k = 0; k < cols; k++) 
-        mesh_y[k] = deltay * k + 0.5 * deltay;
-        
-}
 
 
 
@@ -452,8 +638,30 @@ void StepLoop(double* deltat, double deltax, double CFL, double t, int l, int ro
     }
 }
 
-// 更简单的文件名生成，避免缓冲区溢出
-// 修改后的OutputData_file_2D函数，包含scheme信息
+
+
+
+
+
+// 辅助函数：获取格式名称
+const char* getSchemeName(int scheme_type) {
+    switch(scheme_type) {
+        case 1: return "HLL";
+        case 2: return "HLLC";
+        case 3: return "Roe";
+        case 11: return "HLLHC";
+        case 22: return "HLLCHC";
+        case 33: return "RoeHC";
+        default: return "ExactRiemann";
+    }
+}
+
+// 辅助函数：判断点是否在空白区域（后台阶算例）
+// 空白区域：x在[0.6, 3.0]且y在[0.0, 0.2]
+int isBlankRegion(double x, double y) {
+    return (x >= 0.6 && x <= 3.0 && y >= 0.0 && y <= 0.2) ? 0 : 1;
+}
+
 void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
                         double (*U)[rows][cols], double (*FU)[rows][cols], 
                         double (*pri)[rows][cols], double now_time, int scheme_type) {
@@ -501,12 +709,6 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         case TEST_KELVIN_HELMHOLTZ: 
             case_name = "KH"; 
             break;
-        case TEST_KELVIN_HELMHOLTZ_SHARP: 
-            case_name = "KH_SHARP"; 
-            break;
-        case TEST_KELVIN_HELMHOLTZ_VP: 
-            case_name = "KH_VP"; 
-            break;
         case TEST_RAYLEIGH_TAYLOR: 
             case_name = "RT"; 
             break;
@@ -526,59 +728,104 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         default: scheme_name = "ExactRiemann"; break;
     }
     
-    // 生成文件名：算例名称 + scheme类型 + 原来的文件名格式
-    char filename[200];
-    sprintf(filename, "/mnt/d/Desktop/RP_FVM/data/%s_%s_output_data_%.6f.plt", 
-            case_name, scheme_name, now_time);
+    // 生成文件名：使用 .dat 扩展名表示ASCII格式
+    char filename[512];
+    sprintf(filename, "%s/%s_%s_output_data_%.6f.plt", 
+            ctrl_params.output_dir, 
+            getTestCaseShortName(ctrl_params.test_case),
+            scheme_name, 
+            now_time);
     
     printf("Writing to file: %s\n", filename);
     
+    // 创建目录（如果不存在）
+    char mkdir_cmd[1024];
+    sprintf(mkdir_cmd, "mkdir -p %s", ctrl_params.output_dir);
+    system(mkdir_cmd);
+    
     FILE* file = fopen(filename, "w");  
     if (file == NULL) {
-        printf("File opening failed\n");
-        printf("---------------Error----------------\n");
-        
-        // 尝试创建目录
-        system("mkdir -p /mnt/d/Desktop/RP_FVM/data");
-        
-        // 再次尝试打开文件
-        file = fopen(filename, "w");
-        if (file == NULL) {
-            printf("Still failed to open file. Check permissions.\n");
-            return;
-        }
+        printf("Error: Failed to open file: %s\n", filename);
+        printf("Check permissions and path.\n");
+        return;
     }
     
-    // Tecplot格式头信息
+    // Tecplot格式头信息 - 修正变量列表，添加IBLANK
     fprintf(file, "TITLE = \"2D Fluid Dynamics Data - %s with %s\"\n", case_name, scheme_name);
-    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\"\n");
+    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\", \"IBLANK\"\n");
     
     int output_rows = rows - 2*GC;
     int output_cols = cols - 2*GC;
     
-    // 指定ZONE信息
-    fprintf(file, "ZONE T=\"Time=%.6f\"\n", now_time);
-    fprintf(file, "I=%d, J=%d\n", output_cols, output_rows);
-    fprintf(file, "DATAPACKING=POINT\n");
-    
-    // 输出数据
-    for (int j = 0; j < output_rows; j++) {
-        for (int kk = 0; kk < output_cols; kk++) {
-            int actual_j = j + GC;
-            int actual_kk = kk + GC;
-            
-            double temperature = pri[3][actual_j][actual_kk] / pri[0][actual_j][actual_kk];
-            
-            fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
-                    mx[j], my[kk], 
-                    pri[0][actual_j][actual_kk], 
-                    pri[1][actual_j][actual_kk], 
-                    pri[2][actual_j][actual_kk], 
-                    pri[3][actual_j][actual_kk],
-                    temperature,
-                    U[1][actual_j][actual_kk], 
-                    U[2][actual_j][actual_kk], 
-                    U[3][actual_j][actual_kk]);
+    // 检查是否为后台阶算例
+    if (current_test_case == TEST_BACKWARD_STEP) {
+        printf("Processing BACKWARD_STEP case with IBLANK blanking...\n");
+        
+        // 对于后台阶算例，输出整个区域，使用IBLANK标记空白区域
+        // 空白区域规则：x在[0.6, 3.0]且y在[0.0, 0.2]的是空区域
+        
+        // 修正ZONE语法：所有参数在一行，使用POINT格式
+        fprintf(file, "ZONE T=\"Backward Step: Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
+                now_time, output_cols, output_rows);
+        
+        // 输出整个区域的数据
+        for (int i = 0; i < output_rows; i++) {
+            for (int j = 0; j < output_cols; j++) {
+                int actual_i = i + GC;
+                int actual_j = j + GC;
+                
+                // 判断是否为空白区域
+                int iblank = 1; // 默认1表示有效区域
+                if (mx[i] >= 0.6 && mx[i] <= 3.0 && my[j] >= 0.0 && my[j] <= 0.2) {
+                    iblank = 0; // 0表示空白区域
+                }
+                
+                double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                
+                // 输出数据，包括IBLANK值
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                        mx[i], my[j], 
+                        pri[0][actual_i][actual_j], 
+                        pri[1][actual_i][actual_j], 
+                        pri[2][actual_i][actual_j], 
+                        pri[3][actual_i][actual_j],
+                        temperature,
+                        U[1][actual_i][actual_j], 
+                        U[2][actual_i][actual_j], 
+                        U[3][actual_i][actual_j],
+                        iblank);
+            }
+        }
+        
+        printf("Backward Step region output with IBLANK: %d x %d points\n", output_cols, output_rows);
+        printf("IBLANK=0 for blanked region (x=[0.6,3.0], y=[0.0,0.2]), IBLANK=1 for active region.\n");
+        
+    } else {
+        // 其他算例保持原样输出，IBLANK全部设为1
+        fprintf(file, "ZONE T=\"Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
+                now_time, output_cols, output_rows);
+        
+        // 输出数据
+        for (int i = 0; i < output_rows; i++) {
+            for (int j = 0; j < output_cols; j++) {
+                int actual_i = i + GC;
+                int actual_j = j + GC;
+                
+                double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                
+                // IBLANK=1 表示所有区域有效
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                        mx[i], my[j], 
+                        pri[0][actual_i][actual_j], 
+                        pri[1][actual_i][actual_j], 
+                        pri[2][actual_i][actual_j], 
+                        pri[3][actual_i][actual_j],
+                        temperature,
+                        U[1][actual_i][actual_j], 
+                        U[2][actual_i][actual_j], 
+                        U[3][actual_i][actual_j],
+                        1); // IBLANK=1
+            }
         }
     }
     
@@ -588,6 +835,7 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
     printf("Riemann Solver: %s\n", scheme_name);
     printf("Time: %.6f\n", now_time);
     printf("File: %s\n", filename);
+    printf("Grid size: %d x %d (excluding ghost cells)\n", output_cols, output_rows);
     
     if (Con_out) {
         printf("Output calculation result successful\n");

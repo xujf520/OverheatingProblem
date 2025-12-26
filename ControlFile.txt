@@ -1,0 +1,47 @@
+# ==============================================
+# Euler Equations 2D Solver Control File
+# ==============================================
+
+# 测试算例名称（可选值）：
+# Sod_Shocktube, Riemann_Case1, Riemann_Case2, Riemann_Case3, 
+# Riemann_Case4, Riemann_Case5, Taylor_Green_Vortex, Gaussian_Pulse,
+# Kelvin_Helmholtz_Smooth, Kelvin_Helmholtz_Sharp, Kelvin_Helmholtz_VP,
+# Rayleigh_Taylor, Double_Mach_Reflection, Backward_Step, Blast_Wave, Noh_Problem
+TestCase: Rayleigh_Taylor
+
+# 网格参数
+L_nx: 50
+L_ny: 200
+
+# 时间推进方法 (1: RK1, 3: RK3)
+Time_ADM: 3
+
+# Riemann Solver方法:
+# 1: HLL, 2: HLLC, 3: Roe, 
+# 11: HLL with Heat Conduction, 22: HLLC with Heat Conduction, 
+# 33: Roe with Heat Conduction, Other: Exact Riemann
+scheme: 2
+
+# 物质属性参数
+M_gamma: 1.667
+
+# 是否开启重力源项 (true/false 或 1/0)
+Source: true
+
+# 重力常数
+Gravity: 1.0
+
+# 程序计算参数
+CFL: 0.4
+
+# 计算时间参数
+Tmax: 1.0
+
+# 计算控制模式 (0: 时间控制, 1: 步数控制)
+Control_Compution: 0
+
+# 输出间隔（0:时间控制时为输出次数，1:步数控制时为输出步数间隔）
+Control_output: 10
+
+# 输出目录
+output_dir: /mnt/d/Desktop/RP_FVM/data

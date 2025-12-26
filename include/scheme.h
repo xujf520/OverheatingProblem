@@ -2653,12 +2653,10 @@ static inline void RS_Marquina(int var, int rows,double (*y)[rows],double (*z)[r
 
 }
 
-
 static inline void Source_Gravity(int var, int rows, int cols, int GC, 
                                  double (*x)[rows][cols], double (*source)[rows][cols]) {
     
-    // 初始化源项为零
-
+    // Initialize source term to zero
     #pragma omp parallel for collapse(2)
     for (int i = GC; i <= rows-GC-1; i++) {
         for (int j = GC; j <= cols-GC-1; j++) {
@@ -2668,35 +2666,41 @@ static inline void Source_Gravity(int var, int rows, int cols, int GC,
         }
     }
     
-    // 设置重力源项
+    // Set gravity source term for Euler equations
     #pragma omp parallel for collapse(2)
     for (int i = GC; i <= rows-GC-1; i++) {
         for (int j = GC; j <= cols-GC-1; j++) {
-            double rho = x[0][i][j];
-            double rhov = x[2][i][j];  // y方向动量
-            double v = rhov / rho;  // 避免除零
+            double rho = x[0][i][j];          // Density
+            double rhov = x[2][i][j];         // y-momentum
+            double v = rhov / rho;            // y-velocity (avoid division by zero)
             
-            // 欧拉方程的重力源项
-            source[0][i][j] = 0.0;           // 质量方程：无源项
-            source[1][i][j] = 0.0;           // x动量方程：无源项  
-            source[2][i][j] = rho * Gravity; // y动量方程：重力
-            source[3][i][j] = rho * Gravity * v; // 能量方程：重力做功
+            // Gravity source terms for Euler equations
+            source[0][i][j] = 0.0;           // Mass equation: no source term
+            source[1][i][j] = 0.0;           // x-momentum equation: no source term  
+            source[2][i][j] = rho * Gravity; // y-momentum equation: gravity force
+            source[3][i][j] = rho * Gravity * v; // Energy equation: work done by gravity
         }
     }
 }
 
-
+/*
+ * Compute spatial discretization term for Euler equations
+ * L = -∂f/∂x - ∂g/∂y + source
+ * Using finite volume method with first-order upwind scheme
+ */
 static inline void Space_Discrete_Item(int var, int rows, int cols, int GC, double delta_x, double delta_y,
                                         double (*f)[rows][cols], double (*g)[rows][cols], double (*s)[rows][cols],
                                         double (*L)[rows][cols]) {
     
-    const double inv_dx = 1.0 / delta_x;
-    const double inv_dy = 1.0 / delta_y;
+    const double inv_dx = 1.0 / delta_x;  // Inverse of x-spacing for efficiency
+    const double inv_dy = 1.0 / delta_y;  // Inverse of y-spacing for efficiency
     
+    // Compute spatial derivative for interior cells only
     #pragma omp parallel for collapse(3)
     for (int i = GC; i <= rows - GC - 1; i++) {
         for (int j = GC; j <= cols - GC - 1; j++) {
             for (int k = 0; k < var; k++) {
+                // Finite volume discretization: ∂f/∂x ≈ (f_{i+1/2} - f_{i-1/2})/Δx
                 L[k][i][j] = -(f[k][i][j] - f[k][i-1][j]) * inv_dx 
                              -(g[k][i][j] - g[k][i][j-1]) * inv_dy 
                              + s[k][i][j];
@@ -2704,6 +2708,5 @@ static inline void Space_Discrete_Item(int var, int rows, int cols, int GC, doub
         }
     }
 }
-
 
 #endif  
