@@ -54,6 +54,10 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
         return;
     }
 
+//    double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+//    Con_to_Pri_2D(var, rows, cols, Pri, y);
+//    free(Pri);
+
     // Dimensional splitting: process x-direction first, then y-direction
     
     // ========== X-Direction Reconstruction ==========
@@ -104,6 +108,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             // RS_Marquina(3, rows, y, Flux, dt, dx);
             break;
         default:
+            LLF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             // ER_Flux(var, rows, GC, prileft, priright, Flux);
             // Add appropriate handling logic based on actual requirements
             break;
@@ -168,6 +173,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             // RS_Marquina(3, rows, y, Flux, dt, dx);
             break;
         default:
+            LLF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
             // ER_Flux(var, rows, GC, prileft, priright, Flux);
             // Add appropriate handling logic based on actual requirements
             break;

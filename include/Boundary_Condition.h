@@ -943,6 +943,17 @@ static inline void Boundary_Conditions(int var, int rows, int cols, double (*y)[
     for (int i = 0; i < 4; i++) {
         bc_funcs[bc_types[i]](var, rows, cols, y, sides[i], GC);
     }
+
+    //Assign Values To The Four Corner Points To Prevent Calculation Errors
+    for (int k = 0; k < var; k++){
+        y[k][GhostCell-1][GhostCell-1] = y[k][GhostCell][GhostCell];
+        y[k][rows - GhostCell][GhostCell-1] = y[k][rows - GhostCell-1][GhostCell];
+        y[k][GhostCell-1][cols - GhostCell] = y[k][GhostCell][cols - GhostCell-1];
+        y[k][rows - GhostCell][cols - GhostCell] = y[k][rows - GhostCell-1][cols - GhostCell-1];
+
+    }
+    
+    
 }
 
 

@@ -95,10 +95,10 @@ int main(int argc, char *argv[]) {
     } else {
         printf("Using default parameters (no control file specified)\n");
         // Set Default Control Parameters
-        ctrl_params.test_case = TEST_BLAST_WAVE;
-        ctrl_params.L_nx = 100;
-        ctrl_params.L_ny = 100;
-        ctrl_params.Time_ADM = 3;
+        ctrl_params.test_case = TEST_BACKWARD_STEP;
+        ctrl_params.L_nx = 60;
+        ctrl_params.L_ny = 20;
+        ctrl_params.Time_ADM = 1;
         ctrl_params.scheme = 1;
         ctrl_params.M_gamma = 1.4;
         ctrl_params.Source = false;
@@ -176,10 +176,11 @@ int main(int argc, char *argv[]) {
                 switch (ctrl_params.Time_ADM) {
                     case 1:
                         RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        //RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     case 3:
-                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
-                        //RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        //RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     default:
                         fprintf(stderr, "Error: Invalid time advancement method\n");

@@ -151,6 +151,11 @@ static inline void RK1_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
                               DEA.OverLap_X[0], DEA.OverLap_Y[0], Lap_U, test_case, Blockn);
         }
     
+//        double (*Pri)[BGP.LNX_NGC[Blockn]][BGP.LNY_NGC[Blockn]] = 
+//            malloc(var * sizeof(double[BGP.LNX_NGC[Blockn]][BGP.LNY_NGC[Blockn]]));
+//        Con_to_Pri_2D(var, BGP.LNX_NGC[Blockn], BGP.LNY_NGC[Blockn], Pri, BlockU);
+//        free(Pri);
+
         // Calculate fluxes and spatial discretization terms for the block
         Flux_Reconstruction_RP(AR_scheme, var, BGP.LNX_NGC[Blockn], BGP.LNY_NGC[Blockn], GC, 
                                BlockU, BlockF, BlockG, dt, dx, dy);
@@ -328,7 +333,7 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
     for (k = 0; k < var; k++) {
         for (i = 0; i < DEA.OverLap_X[0]; i++) {
             for (j = 0; j < DEA.OverLap_Y[0]; j++) {
-                Lap_U[k][i][j] = y[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
+               Lap_U[k][i][j] = y[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
             }
         }
     }
@@ -401,7 +406,7 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
             Get_block_BC(test_case, Blockn);
             Boundary_Conditions(var, BGP.LNX_NGC[Blockn], BGP.LNY_NGC[Blockn], BlockU, GC);
             Block_DataExchange(var, BGP.LNX_NGC[Blockn], BGP.LNY_NGC[Blockn], BlockU,
-                              DEA.OverLap_X[0], DEA.OverLap_Y[0], Lap_U, test_case, Blockn);
+                             DEA.OverLap_X[0], DEA.OverLap_Y[0], Lap_U, test_case, Blockn);
         }
     
         // Calculate fluxes and spatial discretization terms
@@ -440,7 +445,7 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
     for (k = 0; k < var; k++) {
         for (i = 0; i < DEA.OverLap_X[0]; i++) {
             for (j = 0; j < DEA.OverLap_Y[0]; j++) {
-                Lap_U[k][i][j] = Conser_U1[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
+               Lap_U[k][i][j] = Conser_U1[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
             }
         }
     }
@@ -550,7 +555,7 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
     for (k = 0; k < var; k++) {
         for (i = 0; i < DEA.OverLap_X[0]; i++) {
             for (j = 0; j < DEA.OverLap_Y[0]; j++) {
-                Lap_U[k][i][j] = Conser_U2[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
+               Lap_U[k][i][j] = Conser_U2[k][i + DEA.start_OLX[0]][j + DEA.start_OLY[0]];
             }
         }
     }
@@ -572,7 +577,7 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         if (BlockU == NULL || BlockSI == NULL || BlockF == NULL || BlockG == NULL || BlockS == NULL) {
             fprintf(stderr, "Memory allocation failed for block arrays in stage 3\n");
             free(BlockU); free(BlockSI); free(BlockF); free(BlockG); free(BlockS);
-            free(Lap_U); free_block_decomposition(&BGP); free(Conser_U1); free(Conser_U2);
+            //free(Lap_U); free_block_decomposition(&BGP); free(Conser_U1); free(Conser_U2);
             return;
         }
 

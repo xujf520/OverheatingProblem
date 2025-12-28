@@ -33,7 +33,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
     // Set boundary conditions for 1D shock tube
     bc_config.left = BC_OUTFLOW;      
     bc_config.right = BC_OUTFLOW;     
-    bc_config.bottom = BC_REFLECTION;
+    bc_config.bottom = BC_OUTFLOW;
     bc_config.top = BC_REFLECTION;
 
     int i, j;
@@ -43,7 +43,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
     #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
-            if( i < rows/2 ){
+            if( j < cols/2 ){
                 x[0][i][j] = 1.0;
                 x[1][i][j] = 0.0;
                 x[2][i][j] = 0.0;
@@ -58,7 +58,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
         }
     }
 
-    *Time = 0.15;
+    *Time = 0.4;
     printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
     printf("Final simulation time: t = %f \n", *Time);
     printf("Boundary Conditions:\n");
@@ -668,7 +668,7 @@ static inline void initEulerpri2D_BlastWave(int var, int rows, int cols,
     // Set Computational Domain
     *Lx = 1.0;                                  // [-0.5, 0.5]
     *Ly = 1.0;                                  // [-0.5, 0.5]
-    *Time = 0.038;                              // Typical Time In The Literature
+    *Time = 0.01;                              // Typical Time In The Literature
     
     // High Pressure Zone Central Explosion
     double high_pressure = 10.0;   
@@ -893,7 +893,7 @@ static inline void initEulerpri2D_BackwardStep(int var, int rows, int cols, doub
     *Ly = 1.0;
 
     // Final simulation time: t = 4.0
-    *Time = 4.0;
+    *Time = 2.0;
 
     // Step geometric parameters
     double step_height = 0.2;
@@ -1015,21 +1015,20 @@ static inline void initEulerflux2D(int var, int rows, int cols, double (*y)[rows
 
 // Map Conserved Variables To Primitive Variables
 static inline void Con_to_Pri_2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]){
-   int j,k;
 
-    #pragma omp parallel for collapse(2)
-    for (j = 0; j < rows; j++) {
-        for ( k = 0; k < cols; k++){
+    //#pragma omp parallel for collapse(2)
+    for (int i = GhostCell-1; i <= rows-GhostCell; i++) {
+        for (int j = GhostCell-1; j <= cols-GhostCell; j++){
             double rho, u, v, p;
-            rho = y[0][j][k];
-            u = y[1][j][k]/y[0][j][k];
-            v = y[2][j][k]/y[0][j][k];
-            p = (y[3][j][k] - 0.5 * rho * (pow(u,2) + pow(v,2)))*(M_gamma-1);
-            //x dir initilize
-            x[0][j][k] = rho;
-            x[1][j][k] = u;
-            x[2][j][k] = v;
-            x[3][j][k] = p;
+            rho = y[0][i][j];
+            u = y[1][i][j]/y[0][i][j];
+            v = y[2][i][j]/y[0][i][j];
+            p = (y[3][i][j] - 0.5 * rho * (pow(u,2) + pow(v,2)))*(M_gamma-1);
+            //initilize
+            x[0][i][j] = rho;
+            x[1][i][j] = u;
+            x[2][i][j] = v;
+            x[3][i][j] = p;
         }
     }
 }

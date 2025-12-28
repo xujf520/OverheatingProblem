@@ -17,6 +17,86 @@ static inline double WENO3_R();
 static inline double WENO5_L();
 static inline double WENO5_R();
 
+double weno_P(double *f)
+{
+
+	int k;
+	double v1, v2, v3, v4, v5;
+	double s1, s2, s3;
+	double a1, a2, a3, w1, w2, w3;
+
+	//assign value to v1, v2,...
+	k = 0;
+	v1 = *(f + k - 2);
+	v2 = *(f + k - 1);
+	v3 = *(f + k);
+	v4 = *(f + k + 1); 
+	v5 = *(f + k + 2);
+
+	//smoothness indicator
+	s1 = 13.0/12.0*(v1 - 2.0*v2 + v3)*(v1 - 2.0*v2 + v3) 
+	   + 0.25*(v1 - 4.0*v2 + 3.0*v3)*(v1 - 4.0*v2 + 3.0*v3);
+	s2 = 13.0/12.0*(v2 - 2.0*v3 + v4)*(v2 - 2.0*v3 + v4) 
+	   + 0.25*(v2 - v4)*(v2 - v4);
+	s3 = 13.0/12.0*(v3 - 2.0*v4 + v5)*(v3 - 2.0*v4 + v5) 
+	   + 0.25*(3.0*v3 - 4.0*v4 + v5)*(3.0*v3 - 4.0*v4 + v5);
+
+	//weights
+	a1 = 0.1/(1.0e-15 + s1)/(1.0e-6 + s1);
+	a2 = 0.6/(1.0e-15 + s2)/(1.0e-6 + s2);
+	a3 = 0.3/(1.0e-15 + s3)/(1.0e-6 + s3);
+
+	w1 = a1/(a1 + a2 + a3);
+	w2 = a2/(a1 + a2 + a3);
+	w3 = a3/(a1 + a2 + a3);
+	
+
+	//return weighted average
+	return  w1*(2.0*v1 - 7.0*v2 + 11.0*v3)/6.0
+		  + w2*(-v2 + 5.0*v3 + 2.0*v4)/6.0
+		  + w3*(2.0*v3 + 5.0*v4 - v5)/6.0;
+
+}
+double weno_M(double *f)
+{
+
+	int k;
+	double v1, v2, v3, v4, v5;
+	double s1, s2,s3;
+	double a1, a2,a3, w1, w2, w3;
+
+	//assign value to v1, v2,...
+	k = 1;
+	v1 = *(f + k + 2);
+	v2 = *(f + k + 1);
+	v3 = *(f + k);
+	v4 = *(f + k - 1); 
+	v5 = *(f + k - 2);
+
+	//smoothness indicator
+	s1 = 13.0/12.0*(v1 - 2.0*v2 + v3)*(v1 - 2.0*v2 + v3) 
+	   + 0.25*(v1 - 4.0*v2 + 3.0*v3)*(v1 - 4.0*v2 + 3.0*v3);
+	s2 = 13.0/12.0*(v2 - 2.0*v3 + v4)*(v2 - 2.0*v3 + v4) 
+	   + 0.25*(v2 - v4)*(v2 - v4);
+	s3 = 13.0/12.0*(v3 - 2.0*v4 + v5)*(v3 - 2.0*v4 + v5) 
+	   + 0.25*(3.0*v3 - 4.0*v4 + v5)*(3.0*v3 - 4.0*v4 + v5);
+
+	//weights
+	a1 = 0.1/(1.0e-15 + s1)/(1.0e-6 + s1);
+	a2 = 0.6/(1.0e-15 + s2)/(1.0e-6 + s2);
+	a3 = 0.3/(1.0e-15 + s3)/(1.0e-6 + s3);
+
+	w1 = a1/(a1 + a2 +a3);
+	w2 = a2/(a1 + a2 +a3);
+	w3 = a3/(a1 + a2 +a3);
+
+	//return weighted average
+	return  w1*(2.0*v1 - 7.0*v2 + 11.0*v3)/6.0
+		  + w2*(-v2 + 5.0*v3 + 2.0*v4)/6.0
+		  + w3*(2.0*v3 + 5.0*v4 - v5)/6.0;
+}
+
+
 
 /*                               ************************************                               */
 /*                               ************************************                               */
@@ -28,337 +108,625 @@ static inline double WENO5_R();
 /*                                      ******************                                          */
 /*                                            Godunov                                               */
 /*                                      ******************                                          */
+/**
+ * First-order Godunov reconstruction (piecewise constant)
+ * Reconstructs left and right states at cell interfaces
+ * Can perform reconstruction in characteristic variables for better accuracy
+ * 
+ * @param dir Direction of reconstruction: 1 for x-direction, 2 for y-direction
+ * @param var Number of variables (typically 4 for Euler equations)
+ * @param rows Number of rows in the grid (including ghost cells)
+ * @param cols Number of columns in the grid (including ghost cells)
+ * @param GC Number of ghost cells
+ * @param y Input conservative variables array [var][rows][cols]
+ * @param conserl Output: left reconstructed states at cell interfaces
+ * @param conserr Output: right reconstructed states at cell interfaces
+ * @param delta_x Grid spacing (used for characteristic decomposition but not for 1st order)
+ */
 static inline void Reconstruction_Godunov(int dir, int var, int rows, int cols, int GC, 
                                           double (*y)[rows][cols],
                                           double (*conserl)[rows][cols], 
                                           double (*conserr)[rows][cols], 
                                           double delta_x) {
-    int i, j, k;
-    double epsilo = 1e-6;
+    double epsilo = 1e-6;  // Small constant (not used in Godunov but kept for compatibility)
     
-    
+    // Check if characteristic decomposition is enabled
     if (Characteriz) {
-        // 动态分配内存
-        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
-        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
-        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        // Dynamic memory allocation for characteristic decomposition arrays
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));        // Primitive variables
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Left eigenvectors
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Right eigenvectors
         
-        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
+        // Check memory allocation
+        if (!Pri || !Eigen_L || !Eigen_R) {
             fprintf(stderr, "Memory allocation failed in Reconstruction_Godunov\n");
-            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
+            free(Pri); free(Eigen_L); free(Eigen_R);
             return;
         }
 
-        // 转换到原始变量
+        // Convert conservative variables to primitive variables
         Con_to_Pri_2D(var, rows, cols, Pri, y);
         
         if (dir == 1) {
+            // X-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=1.0, ny=0.0)
             Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            // 并行计算特征变量
+            // Process each cell interface in x-direction
             #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Single characteristic variable (left)
+                    double Characteristic_Variable_R;  // Single characteristic variable (right)
+                    
+                    // Project conservative variables onto characteristic space
+                    // Mathematical operation: w = L * u, where:
+                    // w = characteristic variables (wave strengths)
+                    // L = left eigenvector matrix (size: 4×4)
+                    // u = conservative variables (size: 4×1)
+                    for (int k = 0; k < var; k++) {
+                        Characteristic_Variable_L = 0.0;
+                        Characteristic_Variable_R = 0.0;
+                        
+                        // Matrix-vector multiplication: w_k = Σ_{m=0}^3 (L_km * u_m)
+                        // For each characteristic field k, compute weighted sum of all conservative variables
+                        for (int m = 0; m < var; m++) {
+                            Characteristic_Variable_L += y[m][i][j] * Eigen_L[k][m][i][j];
+                            Characteristic_Variable_R += y[m][i + 1][j] * Eigen_L[k][m][i][j];
                         }
-                        Chara_Var[i][j][k] = sum;
-                    }
-                }
-            }
-
-            // 并行赋值 W_L 和 W_R
-            #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        W_L[i][j][k] = Chara_Var[i][j][k];
-                        W_R[i][j][k] = Chara_Var[i][j+1][k];
-                    }
-                }
-            }
-
-            // 并行计算守恒量
-            #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum_l = 0.0, sum_r = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
+                        
+                        // Reconstruct conservative variables from characteristic space
+                        // Mathematical operation: u' = R * w, where:
+                        // u' = reconstructed conservative variables
+                        // R = right eigenvector matrix (size: 4×4)
+                        // Note: R[m][k] accesses element at row m, column k of eigenvector matrix
+                        for (int m = 0; m < var; m++) {
+                            // Chara_L[k][m] = contribution of k-th characteristic variable to m-th conservative variable
+                            // = R_mk * w_k, where w_k = Characteristic_Variable_L
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
                         }
-                        conserl[i][j][k] = sum_l;
-                        conserr[i][j][k] = sum_r;
+                    }
+                    
+                    // Reconstruct states at interface (Godunov: simple average in characteristic space)
+                    // For each conservative variable, sum contributions from all characteristic fields:
+                    // conserl_k = Σ_{m=0}^3 (Chara_L[m][k]) = Σ_{m=0}^3 (R_km * w_m_L)
+                    // conserr_k = Σ_{m=0}^3 (Chara_R[m][k]) = Σ_{m=0}^3 (R_km * w_m_R)
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                        
+                        // Complete matrix multiplication: u' = Σ (characteristic contributions)
+                        // This implements the full transformation: u' = R * w = R * (L * u) = I * u = u
+                        // In theory, R * L = I (identity matrix), so this should be an identity transform
+                        for (int m = 0; m < var; m++) {
+                            // Index mapping:
+                            // k: conservative variable index (0=density, 1=x-momentum, 2=y-momentum, 3=energy)
+                            // m: characteristic field index (0=entropy wave, 1=acoustic wave(-), 2=shear wave, 3=acoustic wave(+))
+                            conserl[k][i][j] += Chara_L[m][k];  // Left state: u_L = R * w_L
+                            conserr[k][i][j] += Chara_R[m][k];  // Right state: u_R = R * w_R
+                        }
                     }
                 }
             }
         }
         else if (dir == 2) {
+            // Y-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=0.0, ny=1.0)
             Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            // 并行计算特征变量
+            // Process each cell interface in y-direction
             #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];
+                    double Chara_R[4][4];
+                    double Characteristic_Variable_L;
+                    double Characteristic_Variable_R;
+                    
+                    // Project conservative variables onto characteristic space
+                    // Same mathematical operations as x-direction, but applied to y-direction interfaces
+                    for (int k = 0; k < var; k++) {
+                        Characteristic_Variable_L = 0.0;
+                        Characteristic_Variable_R = 0.0;
+                        
+                        // Matrix-vector multiplication: w = L * u
+                        for (int m = 0; m < var; m++) {
+                            Characteristic_Variable_L += y[m][i][j] * Eigen_L[k][m][i][j];
+                            Characteristic_Variable_R += y[m][i][j + 1] * Eigen_L[k][m][i][j];
                         }
-                        Chara_Var[i][j][k] = sum;
-                    }
-                }
-            }
-
-            // 并行赋值 W_L 和 W_R
-            #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        W_L[i][j][k] = Chara_Var[i][j][k];
-                        W_R[i][j][k] = Chara_Var[i][j][k+1];
-                    }
-                }
-            }
-
-            // 并行计算守恒量
-            #pragma omp parallel for
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum_l = 0.0, sum_r = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+                        
+                        // Matrix-vector multiplication: u' = R * w
+                        // Note: Eigen_R[m][k] accesses the (m,k) element of right eigenvector matrix
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
                         }
-                        conserl[i][j][k] = sum_l;
-                        conserr[i][j][k] = sum_r;
+                    }
+                    
+                    // Reconstruct states at interface
+                    // Complete the transformation back to conservative variables
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                        
+                        // Final summation: u' = Σ (characteristic contributions)
+                        // This should result in the original conservative variables
+                        // since R * L = I (if eigenvectors are properly normalized)
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];
+                            conserr[k][i][j] += Chara_R[m][k];
+                        }
                     }
                 }
             }
         }
         
-        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
+        // Free allocated memory for characteristic decomposition
+        free(Pri); 
+        free(Eigen_L); 
+        free(Eigen_R);
     } 
     else {
+        // Standard reconstruction without characteristic decomposition
+        // Godunov scheme: piecewise constant reconstruction (1st order)
         if (dir == 1) {
-            #pragma omp parallel for
-            for (int j = GC - 1; j < rows - GC; j++) {
-                for (int k = GC; k < cols - GC; k++) {
-                    for (int i = 0; i < var; i++) {
-                        conserl[i][j][k] = y[i][j][k];
-                        conserr[i][j][k] = y[i][j + 1][k];
+            // X-direction reconstruction (piecewise constant)
+            // For 1st order Godunov: u_{i+1/2}^- = u_i, u_{i+1/2}^+ = u_{i+1}
+            #pragma omp parallel for collapse(3)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Left state at interface i+1/2: simply cell-centered value at i
+                        conserl[k][i][j] = y[k][i][j];
+                        
+                        // Right state at interface i+1/2: simply cell-centered value at i+1
+                        conserr[k][i][j] = y[k][i + 1][j];
                     }
                 }
             }
-        } else if (dir == 2) {
-            #pragma omp parallel for
-            for (int j = GC; j < rows - GC; j++) {
-                for (int k = GC - 1; k < cols - GC; k++) {
-                    for (int i = 0; i < var; i++) {
-                        conserl[i][j][k] = y[i][j][k];
-                        conserr[i][j][k] = y[i][j][k + 1];
+        } 
+        else if (dir == 2) {
+            // Y-direction reconstruction (piecewise constant)
+            // For 1st order Godunov: u_{j+1/2}^- = u_j, u_{j+1/2}^+ = u_{j+1}
+            #pragma omp parallel for collapse(3)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Left state at interface j+1/2: cell-centered value at j
+                        conserl[k][i][j] = y[k][i][j];
+                        
+                        // Right state at interface j+1/2: cell-centered value at j+1
+                        conserr[k][i][j] = y[k][i][j + 1];
                     }
                 }
             }
         }
     }
+
+
 }
+
 /*                                      ******************                                          */
 /*                                            TVD                                                   */
 /*                                      ******************                                          */
+/**
+ * Second-order TVD (Total Variation Diminishing) reconstruction
+ * Reconstructs left and right states at cell interfaces using TVD limiters
+ * Can perform reconstruction in characteristic variables for better numerical stability
+ * 
+ * @param dir Direction of reconstruction: 1 for x-direction, 2 for y-direction
+ * @param var Number of variables (typically 4 for Euler equations)
+ * @param rows Number of rows in the grid (including ghost cells)
+ * @param cols Number of columns in the grid (including ghost cells)
+ * @param GC Number of ghost cells
+ * @param y Input conservative variables array [var][rows][cols]
+ * @param conserl Output: left reconstructed states at cell interfaces
+ * @param conserr Output: right reconstructed states at cell interfaces
+ * @param delta_x Grid spacing in x-direction
+ * @param delta_y Grid spacing in y-direction
+ */
 static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int GC, 
                                       double (*y)[rows][cols],
                                       double (*conserl)[rows][cols], 
                                       double (*conserr)[rows][cols], 
                                       double delta_x, double delta_y) {
-    int i, j, k;
     
+    // Check if characteristic decomposition is enabled
     if (Characteriz) {
-        // 动态分配内存
-        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*Chara_Var)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
-        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));
-        double (*W_L)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-        double (*W_R)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+        // Dynamic memory allocation for characteristic decomposition arrays
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));        // Primitive variables
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Left eigenvectors
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Right eigenvectors
         
-        if (!Pri || !Chara_Var || !Eigen_L || !Eigen_R || !W_L || !W_R) {
+        // Check memory allocation
+        if (!Pri || !Eigen_L || !Eigen_R) {
             fprintf(stderr, "Memory allocation failed in TVD_Reconstruction\n");
-            free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
+            free(Pri); free(Eigen_L); free(Eigen_R);
             return;
         }
 
-        // ========== 并行初始化 ==========
-        #pragma omp parallel for 
-        for (i = 0; i < var; i++) {
-            for (j = 0; j < rows; j++) {
-                for (k = 0; k < cols; k++) {
-                    Pri[i][j][k] = 0.0;
-                    Chara_Var[i][j][k] = 0.0;
-                    W_L[i][j][k] = 0.0;
-                    W_R[i][j][k] = 0.0;
-                    conserl[i][j][k] = 0.0;
-                    conserr[i][j][k] = 0.0;
-                }
-            }
-        }
-        
-        #pragma omp parallel for
-        for (i = 0; i < var; i++) {
-            for (int ii = 0; ii < var; ii++) {
-                for (j = 0; j < rows; j++) {
-                    for (k = 0; k < cols; k++) {
-                        Eigen_L[i][ii][j][k] = 0.0;
-                        Eigen_R[i][ii][j][k] = 0.0;
-                    }
-                }
-            }
-        }
-
+        // Convert conservative variables to primitive variables
         Con_to_Pri_2D(var, rows, cols, Pri, y);
         
         if (dir == 1) {
+            // X-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=1.0, ny=0.0)
             Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            // ========== 计算特征变量 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            // Process each cell interface in x-direction
+            #pragma omp parallel for collapse(2)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Single characteristic variable (left)
+                    double Characteristic_Variable_R;  // Single characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [i-2, i-1, i, i+1, i+2, i+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil
+                        // uu array indices: 0=i-2, 1=i-1, 2=i, 3=i+1, 4=i+2, 5=i+3
+                        for (int nn = i - 2; nn <= i + 3; nn++) {
+                            uu[nn - i + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - i + 2] += y[m][nn][j] * Eigen_L[k][m][i][j];
+                            }
                         }
-                        Chara_Var[i][j][k] = sum;
-                    }
-                }
-            }
+                        
+                        // Apply TVD reconstruction in characteristic space
+                        // Uses van Leer limiter for better accuracy than minmod
+                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_x);
+                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_x);
 
-            // ========== TVD重构 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j < rows-GC; j++) {
-                    for (k = GC; k < cols-GC; k++) {
-                        double fu[6];
-                        for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = Chara_Var[i][j-2+nn][k];
+                        // Transform reconstructed characteristic variables back to conservative space
+                        // u' = R * w, where w is the reconstructed characteristic variable
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
                         }
-                        W_L[i][j][k] = TVD_minmod_L(&fu[2], delta_x);
-                        W_R[i][j][k] = TVD_minmod_R(&fu[2], delta_x);
                     }
-                }
-            }
-
-            // ========== 转换回守恒量 ==========
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum_l = 0.0, sum_r = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j+1][k];
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                    
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];  // Left state: u_L = R * w_L
+                            conserr[k][i][j] += Chara_R[m][k];  // Right state: u_R = R * w_R
                         }
-                        conserl[i][j][k] = sum_l;
-                        conserr[i][j][k] = sum_r;
                     }
                 }
             }
         }
         else if (dir == 2) {
+            // Y-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=0.0, ny=1.0)
             Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum += y[ii][j][k] * Eigen_L[i][ii][j][k];
+            // Process each cell interface in y-direction
+            #pragma omp parallel for collapse(2)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Characteristic variable (left)
+                    double Characteristic_Variable_R;  // Characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [j-2, j-1, j, j+1, j+2, j+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil in y-direction
+                        for (int nn = j - 2; nn <= j + 3; nn++) {
+                            uu[nn - j + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - j + 2] += y[m][i][nn] * Eigen_L[k][m][i][j];
+                            }
                         }
-                        Chara_Var[i][j][k] = sum;
-                    }
-                }
-            }
+                        
+                        // Apply TVD reconstruction in characteristic space
+                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_y);
+                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_y);
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC; j < rows-GC; j++) {
-                    for (k = GC-1; k < cols-GC; k++) {
-                        double fu[6];
-                        for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j][k-2+nn];
+                        // Transform back to conservative space: u' = R * w
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
                         }
-                        W_L[i][j][k] = TVD_minmod_L(&fu[2], delta_y);
-                        W_R[i][j][k] = TVD_minmod_R(&fu[2], delta_y);
                     }
-                }
-            }
-
-            #pragma omp parallel for collapse(3) private(i, j, k)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j <= rows-GC; j++) {
-                    for (k = GC-1; k <= cols-GC; k++) {
-                        double sum_l = 0.0, sum_r = 0.0;
-                        for (int ii = 0; ii < var; ii++) {
-                            sum_l += W_L[ii][j][k] * Eigen_R[i][ii][j][k];
-                            sum_r += W_R[ii][j][k] * Eigen_R[i][ii][j][k+1];
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                        
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];
+                            conserr[k][i][j] += Chara_R[m][k];
                         }
-                        conserl[i][j][k] = sum_l;
-                        conserr[i][j][k] = sum_r;
                     }
                 }
             }
         }
         
-        free(Pri); free(Chara_Var); free(Eigen_L); free(Eigen_R); free(W_L); free(W_R);
+        // Free allocated memory for characteristic decomposition
+        free(Pri); 
+        free(Eigen_L); 
+        free(Eigen_R);
     } 
     else {
+        // Standard reconstruction without characteristic decomposition
+        // Direct TVD reconstruction in conservative variable space
+        
         if (dir == 1) {
+            // X-direction reconstruction using minmod limiter
+            // 5-point stencil: [i-2, i-1, i, i+1, i+2, i+3] for boundary handling
+            
             #pragma omp parallel for collapse(3)
-            for (int j = GC - 1; j < rows - GC; j++) {
-                for (int k = GC; k < cols - GC; k++) {
-                    for (int i = 0; i < var; i++) {
-                        double fu[6];
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k
+                        double fu[6];  // Stencil: fu[0]=i-2, fu[1]=i-1, fu[2]=i, fu[3]=i+1, fu[4]=i+2, fu[5]=i+3
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j - 2 + nn][k];
+                            fu[nn] = y[k][i - 2 + nn][j];
                         }
-                        conserl[i][j][k] = TVD_vanleer_L(&fu[2], delta_x);
-                        conserr[i][j][k] = TVD_vanleer_R(&fu[2], delta_x);
+                        
+                        // Apply TVD reconstruction using minmod limiter
+                        // &fu[2] points to the central 3-point stencil [i-1, i, i+1]
+                        conserl[k][i][j] = TVD_minmod_L(&fu[2], delta_x);  // Left state at interface i+1/2
+                        conserr[k][i][j] = TVD_minmod_R(&fu[2], delta_x);  // Right state at interface i+1/2
                     }
                 }
             }
-        } else if (dir == 2) {
+        } 
+        else if (dir == 2) {
+            // Y-direction reconstruction using minmod limiter
+            
             #pragma omp parallel for collapse(3)
-            for (int j = GC; j < rows - GC; j++) {
-                for (int k = GC - 1; k < cols - GC; k++) {
-                    for (int i = 0; i < var; i++) {
-                        double fu[6];
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k in y-direction
+                        double fu[6];  // Stencil: fu[0]=j-2, fu[1]=j-1, fu[2]=j, fu[3]=j+1, fu[4]=j+2, fu[5]=j+3
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j][k - 2 + nn];
+                            fu[nn] = y[k][i][j - 2 + nn];
                         }
-                        conserl[i][j][k] = TVD_vanleer_L(&fu[2], delta_y);
-                        conserr[i][j][k] = TVD_vanleer_R(&fu[2], delta_y);
+                        
+                        // Apply TVD reconstruction using minmod limiter
+                        // &fu[2] points to the central 3-point stencil [j-1, j, j+1]
+                        conserl[k][i][j] = TVD_minmod_L(&fu[2], delta_y);  // Left state at interface j+1/2
+                        conserr[k][i][j] = TVD_minmod_R(&fu[2], delta_y);  // Right state at interface j+1/2
                     }
                 }
             }
         }
     }
-    
 }
 
 /*                                      ******************                                          */
 /*                                               WENO                                               */
 /*                                      ******************                                          */
-// 三阶WENO重构
-static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC,
+
+/**
+ * Third-order WENO (Weighted Essentially Non-Oscillatory) reconstruction
+ * Reconstructs left and right states at cell interfaces using WENO-3 scheme
+ * Can perform reconstruction in characteristic variables for better shock capturing
+ * 
+ * @param dir Direction of reconstruction: 1 for x-direction, 2 for y-direction
+ * @param var Number of variables (typically 4 for Euler equations)
+ * @param rows Number of rows in the grid (including ghost cells)
+ * @param cols Number of columns in the grid (including ghost cells)
+ * @param GC Number of ghost cells
+ * @param y Input conservative variables array [var][rows][cols]
+ * @param conserl Output: left reconstructed states at cell interfaces
+ * @param conserr Output: right reconstructed states at cell interfaces
+ */
+static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC, 
+                                      double (*y)[rows][cols],
+                                      double (*conserl)[rows][cols], 
+                                      double (*conserr)[rows][cols]) {
+    
+    // Check if characteristic decomposition is enabled
+    if (Characteriz) {
+        // Dynamic memory allocation for characteristic decomposition arrays
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));        // Primitive variables
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Left eigenvectors
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Right eigenvectors
+        
+        // Check memory allocation
+        if (!Pri || !Eigen_L || !Eigen_R) {
+            fprintf(stderr, "Memory allocation failed in WENO3_Reconstruction\n");
+            free(Pri); free(Eigen_L); free(Eigen_R);
+            return;
+        }
+
+        // Convert conservative variables to primitive variables
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            // X-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=1.0, ny=0.0)
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in x-direction
+            #pragma omp parallel for
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Single characteristic variable (left)
+                    double Characteristic_Variable_R;  // Single characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [i-2, i-1, i, i+1, i+2, i+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil
+                        // uu array indices: 0=i-2, 1=i-1, 2=i, 3=i+1, 4=i+2, 5=i+3 (extended for WENO boundary handling)
+                        for (int nn = i - 2; nn <= i + 3; nn++) {
+                            uu[nn - i + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            // w_k = Σ_{m=0}^{3} (L_km * u_m) for each grid point nn
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - i + 2] += y[m][nn][j] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        // Apply WENO-3 reconstruction in characteristic space
+                        // Uses 3-point stencil centered at positions 1,2,3 of uu array (indices: i-1, i, i+1)
+                        Characteristic_Variable_L = WENO3_L(&uu[2]);  // Left interface value w_{i+1/2}^-
+                        Characteristic_Variable_R = WENO3_R(&uu[2]);  // Right interface value w_{i+1/2}^+
+
+                        // Transform reconstructed characteristic variables back to conservative space
+                        // u' = R * w, where w is the reconstructed characteristic variable
+                        for (int m = 0; m < var; m++) {
+                            // Chara_L[k][m] = contribution of k-th characteristic field to m-th conservative variable
+                            // = R_mk * w_k, where w_k = Characteristic_Variable_L
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                    
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        // u_k = Σ_{m=0}^{3} (Chara_L[m][k]) = Σ_{m=0}^{3} (R_km * w_m_L)
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];  // Left state: u_L = R * w_L
+                            conserr[k][i][j] += Chara_R[m][k];  // Right state: u_R = R * w_R
+                        }
+                    }
+                }
+            }
+        }
+        else if (dir == 2) {
+            // Y-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=0.0, ny=1.0)
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in y-direction
+            #pragma omp parallel for
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Characteristic variable (left)
+                    double Characteristic_Variable_R;  // Characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [j-2, j-1, j, j+1, j+2, j+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil in y-direction
+                        for (int nn = j - 2; nn <= j + 3; nn++) {
+                            uu[nn - j + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - j + 2] += y[m][i][nn] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        // Apply WENO-3 reconstruction in characteristic space
+                        Characteristic_Variable_L = WENO3_L(&uu[2]);  // Left interface value w_{j+1/2}^-
+                        Characteristic_Variable_R = WENO3_R(&uu[2]);  // Right interface value w_{j+1/2}^+
+
+                        // Transform back to conservative space: u' = R * w
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                        
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];
+                            conserr[k][i][j] += Chara_R[m][k];
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Free allocated memory for characteristic decomposition
+        free(Pri); 
+        free(Eigen_L); 
+        free(Eigen_R);
+    } 
+    else {
+        // Standard reconstruction without characteristic decomposition
+        // Direct WENO-3 reconstruction in conservative variable space
+        
+        if (dir == 1) {
+            // X-direction reconstruction using WENO-3 scheme
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k
+                        // fu array: [i-2, i-1, i, i+1, i+2, i+3] for boundary handling
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i - 2 + nn][j];
+                        }
+                        
+                        // Apply WENO-3 reconstruction using central 3-point stencil
+                        // &fu[2] points to the stencil [i-1, i, i+1] for WENO-3 reconstruction
+                        conserl[k][i][j] = WENO3_L(&fu[2]);  // Left state at interface i+1/2
+                        conserr[k][i][j] = WENO3_R(&fu[2]);  // Right state at interface i+1/2
+                    }
+                }
+            }
+        } 
+        else if (dir == 2) {
+            // Y-direction reconstruction using WENO-3 scheme
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k in y-direction
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i][j - 2 + nn];
+                        }
+                        
+                        // Apply WENO-3 reconstruction
+                        conserl[k][i][j] = WENO3_L(&fu[2]);  // Left state at interface j+1/2
+                        conserr[k][i][j] = WENO3_R(&fu[2]);  // Right state at interface j+1/2
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, int GC,
                                         double (*y)[rows][cols],
                                         double (*conserl)[rows][cols], 
                                         double (*conserr)[rows][cols]) {
@@ -378,7 +746,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
             return;
         }
 
-        // ========== 并行初始化 ==========
+        // ========== Parallel Initialization ==========
         #pragma omp parallel for collapse(3)
         for (i = 0; i < var; i++) {
             for (j = 0; j < rows; j++) {
@@ -410,7 +778,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
         if (dir == 1) {
             Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -423,7 +791,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -437,7 +805,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -455,7 +823,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
         else if (dir == 2) {
             Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -468,7 +836,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {
@@ -482,7 +850,7 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j <= rows-GC; j++) {
                     for (k = GC-1; k <= cols-GC; k++) {
@@ -533,17 +901,219 @@ static inline void WENO3_Reconstruction(int dir, int var, int rows, int cols, in
         }
     }
     
+}*/
+
+
+
+/**
+ * Fifth-order WENO (Weighted Essentially Non-Oscillatory) reconstruction
+ * Reconstructs left and right states at cell interfaces using WENO-5 scheme
+ * Provides higher-order accuracy while maintaining non-oscillatory properties near discontinuities
+ * 
+ * @param dir Direction of reconstruction: 1 for x-direction, 2 for y-direction
+ * @param var Number of variables (typically 4 for Euler equations)
+ * @param rows Number of rows in the grid (including ghost cells)
+ * @param cols Number of columns in the grid (including ghost cells)
+ * @param GC Number of ghost cells
+ * @param y Input conservative variables array [var][rows][cols]
+ * @param conserl Output: left reconstructed states at cell interfaces
+ * @param conserr Output: right reconstructed states at cell interfaces
+ */
+static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC, 
+                                      double (*y)[rows][cols],
+                                      double (*conserl)[rows][cols], 
+                                      double (*conserr)[rows][cols]) {
+    
+    // Check if characteristic decomposition is enabled
+    if (Characteriz) {
+        // Dynamic memory allocation for characteristic decomposition arrays
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));        // Primitive variables
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Left eigenvectors
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Right eigenvectors
+        
+        // Check memory allocation
+        if (!Pri || !Eigen_L || !Eigen_R) {
+            fprintf(stderr, "Memory allocation failed in WENO5_Reconstruction\n");
+            free(Pri); free(Eigen_L); free(Eigen_R);
+            return;
+        }
+
+        // Convert conservative variables to primitive variables
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            // X-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=1.0, ny=0.0)
+            Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in x-direction
+            #pragma omp parallel for
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Single characteristic variable (left)
+                    double Characteristic_Variable_R;  // Single characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [i-2, i-1, i, i+1, i+2, i+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil (WENO-5 requires 5 points)
+                        // uu array indices: 0=i-2, 1=i-1, 2=i, 3=i+1, 4=i+2, 5=i+3 (6 points for boundary handling)
+                        for (int nn = i - 2; nn <= i + 3; nn++) {
+                            uu[nn - i + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            // w_k = Σ_{m=0}^{3} (L_km * u_m) for each grid point nn
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - i + 2] += y[m][nn][j] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        // Apply WENO-5 reconstruction in characteristic space
+                        // Uses 5-point stencil centered at positions 0-4 of uu array (indices: i-2, i-1, i, i+1, i+2)
+                        Characteristic_Variable_L = WENO5_L(&uu[2]);  // Left interface value w_{i+1/2}^-
+                        Characteristic_Variable_R = WENO5_R(&uu[2]);  // Right interface value w_{i+1/2}^+
+
+                        // Transform reconstructed characteristic variables back to conservative space
+                        // u' = R * w, where w is the reconstructed characteristic variable
+                        for (int m = 0; m < var; m++) {
+                            // Chara_L[k][m] = contribution of k-th characteristic field to m-th conservative variable
+                            // = R_mk * w_k, where w_k = Characteristic_Variable_L
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                    
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        // u_k = Σ_{m=0}^{3} (Chara_L[m][k]) = Σ_{m=0}^{3} (R_km * w_m_L)
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];  // Left state: u_L = R * w_L
+                            conserr[k][i][j] += Chara_R[m][k];  // Right state: u_R = R * w_R
+                        }
+                    }
+                }
+            }
+        }
+        else if (dir == 2) {
+            // Y-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=0.0, ny=1.0)
+            Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in y-direction
+            #pragma omp parallel for
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Characteristic variable (left)
+                    double Characteristic_Variable_R;  // Characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [j-2, j-1, j, j+1, j+2, j+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil in y-direction
+                        for (int nn = j - 2; nn <= j + 3; nn++) {
+                            uu[nn - j + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - j + 2] += y[m][i][nn] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        // Apply WENO-5 reconstruction in characteristic space
+                        Characteristic_Variable_L = WENO5_L(&uu[2]);  // Left interface value w_{j+1/2}^-
+                        Characteristic_Variable_R = WENO5_R(&uu[2]);  // Right interface value w_{j+1/2}^+
+                    
+                        // Transform back to conservative space: u' = R * w
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+        
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];
+                            conserr[k][i][j] += Chara_R[m][k];
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Free allocated memory for characteristic decomposition
+        free(Pri); 
+        free(Eigen_L); 
+        free(Eigen_R);
+    } 
+    else {
+        // Standard reconstruction without characteristic decomposition
+        // Direct WENO-5 reconstruction in conservative variable space
+        
+        if (dir == 1) {
+            // X-direction reconstruction using WENO-5 scheme
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 6-point stencil for conservative variable k (5 points for WENO-5 + 1 for boundary)
+                        // fu array: [i-2, i-1, i, i+1, i+2, i+3]
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i - 2 + nn][j];
+                        }
+                        
+                        // Apply WENO-5 reconstruction using 5-point stencil
+                        // &fu[2] points to the stencil [i-2, i-1, i, i+1, i+2] for WENO-5 reconstruction
+                        // Note: WENO5_L and WENO5_R functions internally use 5-point stencil
+                        conserl[k][i][j] = WENO5_L(&fu[2]);  // Left state at interface i+1/2
+                        conserr[k][i][j] = WENO5_R(&fu[2]);  // Right state at interface i+1/2
+                    }
+                }
+            }
+        } 
+        else if (dir == 2) {
+            // Y-direction reconstruction using WENO-5 scheme
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 6-point stencil for conservative variable k in y-direction
+                        double fu[6];
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i][j - 2 + nn];
+                        }
+                        
+                        // Apply WENO-5 reconstruction
+                        conserl[k][i][j] = WENO5_L(&fu[2]);  // Left state at interface j+1/2
+                        conserr[k][i][j] = WENO5_R(&fu[2]);  // Right state at interface j+1/2
+                    }
+                }
+            }
+        }
+    }
 }
 
-
-
-// 五阶WENO重构
-static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC,
+/*static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, int GC,
                                         double (*y)[rows][cols],
                                         double (*conserl)[rows][cols], 
                                         double (*conserr)[rows][cols]) {
     int i, j, k;
-    
 
     if (Characteriz) {
         double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
@@ -591,7 +1161,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
         if (dir == 1) {
             Compute_Eigen_2D(1.0, 0.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -604,7 +1174,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -618,7 +1188,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC-1; j < rows-GC; j++) {
                     for (k = GC; k < cols-GC; k++) {
@@ -636,7 +1206,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
         else if (dir == 2) {
             Compute_Eigen_2D(0.0, 1.0, var, rows, cols, Pri, Eigen_L, Eigen_R);
             
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {
@@ -649,7 +1219,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {
@@ -663,7 +1233,7 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                 }
             }
 
-            #pragma omp parallel for collapse(3) private(i, j, k)
+            #pragma omp parallel for collapse(3) 
             for (i = 0; i < var; i++) {
                 for (j = GC; j < rows-GC; j++) {
                     for (k = GC-1; k < cols-GC; k++) {
@@ -683,38 +1253,39 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
     } 
     else {
         if (dir == 1) {
-            #pragma omp parallel for collapse(3)
-            for (i = 0; i < var; i++) {
-                for (j = GC-1; j < rows-GC; j++) {
-                    for (k = GC; k < cols-GC; k++) {
+            //#pragma omp parallel for collapse(3)
+            for (k = 0; k < var; k++) {
+                for (i = GC-1; i < rows-GC; i++) {
+                    for (j = GC; j < cols-GC; j++) {
                         double fu[6];
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j-2+nn][k];
+                            fu[nn] = y[k][i-2+nn][j];
                         }
-                        conserl[i][j][k] = WENO5_L(&fu[2]);
-                        conserr[i][j][k] = WENO5_R(&fu[2]);
+                        conserl[k][i][j] = WENO5_L(&fu[2]);
+                        conserr[k][i][j] = WENO5_R(&fu[2]);
                     }
                 }
             }
         }
         else if (dir == 2) {
-            #pragma omp parallel for collapse(3)
-            for (i = 0; i < var; i++) {
-                for (j = GC; j < rows-GC; j++) {
-                    for (k = GC-1; k < cols-GC; k++) {
-                        double fu[6];
+            //#pragma omp parallel for collapse(3)
+            for (int k = 0; k < var; k++) {
+                
+                    for (int j = GC-1; j < cols-GC; j++) {
+                        for (int i = GC; i < rows-GC; i++) {
+                        double gu[6];
                         for (int nn = 0; nn < 6; nn++) {
-                            fu[nn] = y[i][j][k-2+nn];
+                            gu[nn] = y[k][i][j-2+nn];
                         }
-                        conserl[i][j][k] = WENO5_L(&fu[2]);
-                        conserr[i][j][k] = WENO5_R(&fu[2]);
+                        conserl[k][i][j] = WENO5_L(&gu[2]);
+                        conserr[k][i][j] = WENO5_R(&gu[2]);
                     }
                 }
             }
         }
     }
     
-}
+}*/
 
 
 
@@ -941,7 +1512,7 @@ static inline double WENO5_L(double *f)
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-6;
+    double epsilon = 1.0e-15;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i-2, i-1, i, i+1, i+2]
     k = 0;  // Stencil centered at cell i
@@ -962,9 +1533,9 @@ static inline double WENO5_L(double *f)
        + 0.25 * (3.0 * v3 - 4.0 * v4 + v5) * (3.0 * v3 - 4.0 * v4 + v5);
 
     // Compute nonlinear weights
-    a1 = 0.1 / pow(epsilon + s1, 2);
-    a2 = 0.6 / pow(epsilon + s2, 2);
-    a3 = 0.3 / pow(epsilon + s3, 2);
+    a1 = 0.1/(epsilon + s1)/(epsilon + s1);
+	a2 = 0.6/(epsilon + s2)/(epsilon + s2);
+	a3 = 0.3/(epsilon + s3)/(epsilon + s3);
 
     // Normalize weights
     w1 = a1 / (a1 + a2 + a3);
@@ -990,13 +1561,14 @@ static inline double WENO5_L(double *f)
  * @param f Pointer to array of cell-centered values [i+3, i+2, i+1, i, i-1]
  * @return Reconstructed value at right cell interface (i+1/2)
  */
+
 static inline double WENO5_R(double *f)
 {
     int k;
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-6;
+    double epsilon = 1.0e-15;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i+3, i+2, i+1, i, i-1]
     k = 1;  // Stencil centered at cell i+1 (mirrored for right interface)
@@ -1017,9 +1589,9 @@ static inline double WENO5_R(double *f)
        + 0.25 * (3.0 * v3 - 4.0 * v4 + v5) * (3.0 * v3 - 4.0 * v4 + v5);
 
     // Compute nonlinear weights
-    a1 = 0.1 / pow(epsilon + s1, 2);
-    a2 = 0.6 / pow(epsilon + s2, 2);
-    a3 = 0.3 / pow(epsilon + s3, 2);
+    a1 = 0.1/(epsilon + s1)/(epsilon + s1);
+	a2 = 0.6/(epsilon + s2)/(epsilon + s2);
+	a3 = 0.3/(epsilon + s3)/(epsilon + s3);
 
     // Normalize weights
     w1 = a1 / (a1 + a2 + a3);
@@ -1035,5 +1607,7 @@ static inline double WENO5_R(double *f)
          + w2 * (-v2 + 5.0 * v3 + 2.0 * v4) / 6.0
          + w3 * (2.0 * v3 + 5.0 * v4 - v5) / 6.0;
 }
+
+
 
 #endif  
