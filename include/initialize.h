@@ -875,7 +875,7 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
 }
 
 
-double L_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0}; 
+double L_fixed_value_state[4] = {1.4, (1.4)*3.0, 0.0, (1.0)/0.4 + 0.5 * (1.4) *3.0 *3.0}; 
 double R_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0}; 
 double B_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0}; 
 double T_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0};
@@ -893,7 +893,7 @@ static inline void initEulerpri2D_BackwardStep(int var, int rows, int cols, doub
     *Ly = 1.0;
 
     // Final simulation time: t = 4.0
-    *Time = 2.0;
+    *Time = 4.0;
 
     // Step geometric parameters
     double step_height = 0.2;

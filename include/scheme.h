@@ -6,6 +6,7 @@
 #include <omp.h>
 #include "Characteriz.h"
 #include "Golbal.h"
+#include "function.h"
 
 // 定义全局变量来累加 p_star - 2.926650
 static double p_star_accumulator = 0.0;
@@ -198,23 +199,7 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                             double (*x)[rows][cols], 
                             double (*y)[rows][cols], 
                             double (*z)[rows][cols]) {
-    
-    // Error checking for input parameters
-    if (dir != 1 && dir != 2) {
-        fprintf(stderr, "Error: Invalid direction parameter. dir must be 1 (x-direction) or 2 (y-direction).\n");
-        return;
-    }
-    
-    if (rows <= 2*GC || cols <= 2*GC) {
-        fprintf(stderr, "Error: Invalid domain size. rows/cols must be greater than 2*GC.\n");
-        return;
-    }
-    
-    if (GC < 1) {
-        fprintf(stderr, "Error: Invalid ghost cell count. GC must be at least 1.\n");
-        return;
-    }
-    
+
     // Check for NULL pointers
     if (x == NULL || y == NULL || z == NULL) {
         fprintf(stderr, "Error: NULL pointer passed to HLL_Flux function.\n");
@@ -264,8 +249,11 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 const double v_R_sq = v_R * v_R;
                 
                 // Compute pressure using ideal gas law
-                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
-                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+                double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
+                double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+
+                //p_L = max_of_two(p_L, 1e-10);
+                //p_R = max_of_two(p_R, 1e-10);
                 
                 // Check for negative pressure
                 if (p_L <= 0.0 || p_R <= 0.0) {
@@ -341,16 +329,6 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_F = (sright * rhoe_FL - sleft * rhoe_FR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff;
                 }
                 
-                // Final sanity check before storing results
-                if (isnan(rho_F) || isnan(rhou_F) || isnan(rhov_F) || isnan(rhoe_F)) {
-                    fprintf(stderr, "Error: NaN flux detected at cell (%d, %d)\n", i, j);
-                    // Optionally set to zero or use upwind flux as fallback
-                    rho_F = 0.5 * (rho_FL + rho_FR);
-                    rhou_F = 0.5 * (rhou_FL + rhou_FR);
-                    rhov_F = 0.5 * (rhov_FL + rhov_FR);
-                    rhoe_F = 0.5 * (rhoe_FL + rhoe_FR);
-                }
-
                 // Store computed fluxes
                 z[0][i][j] = rho_F; 
                 z[1][i][j] = rhou_F; 
@@ -402,8 +380,11 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 const double v_R_sq = v_R * v_R;
                 
                 // Compute pressure using ideal gas law
-                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
-                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+                double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
+                double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+
+                //p_L = max_of_two(p_L, 1e-10);
+                //p_R = max_of_two(p_R, 1e-10);
                 
                 // Check for negative pressure
                 if (p_L <= 0.0 || p_R <= 0.0) {
@@ -478,15 +459,6 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_G = (sright * rhoe_GL - sleft * rhoe_GR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff;
                 }
                 
-                // Final sanity check before storing results
-                if (isnan(rho_G) || isnan(rhou_G) || isnan(rhov_G) || isnan(rhoe_G)) {
-                    fprintf(stderr, "Error: NaN flux detected at cell (%d, %d)\n", i, j);
-                    // Optionally set to zero or use upwind flux as fallback
-                    rho_G = 0.5 * (rho_GL + rho_GR);
-                    rhou_G = 0.5 * (rhou_GL + rhou_GR);
-                    rhov_G = 0.5 * (rhov_GL + rhov_GR);
-                    rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
-                }
 
                 // Store computed fluxes
                 z[0][i][j] = rho_G; 

@@ -374,7 +374,7 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
     }
     else if (strcmp(boundary_type, R) == 0) {
         // Right boundary wall reflection: x-velocity reverses sign, y-velocity unchanged
-        #pragma omp parallel for collapse(2)
+        /*#pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int k = Ghost_cell; k < cols - Ghost_cell; k++){
                 if (i == 1) { // x-momentum (normal velocity component for right boundary)
@@ -389,11 +389,26 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
                     x[i][rows - Ghost_cell + 3][k] = x[i][rows - Ghost_cell - 4][k];
                 }
             }                   
+        }*/
+        for (int i = 0; i < var; i++){
+            for (int k = Ghost_cell; k < cols - Ghost_cell; k++){
+                if (i == 1) { // x-momentum (normal velocity component for right boundary)
+                    x[i][rows - Ghost_cell][k] = -x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 1][k] = -x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 2][k] = -x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 3][k] = -x[i][rows - Ghost_cell - 1][k];
+                } else { // Density, y-momentum, energy remain unchanged
+                    x[i][rows - Ghost_cell][k] = x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 1][k] = x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 2][k] = x[i][rows - Ghost_cell - 1][k];
+                    x[i][rows - Ghost_cell + 3][k] = x[i][rows - Ghost_cell - 1][k];
+                }
+            }                   
         }
     }
     else if (strcmp(boundary_type, B) == 0) {
         // Bottom boundary wall reflection: y-velocity reverses sign, x-velocity unchanged
-        #pragma omp parallel for collapse(2)
+        /*#pragma omp parallel for collapse(2)
         for (int i = 0; i < var; i++){
             for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
                 if (i == 2) { // y-momentum (normal velocity component for bottom boundary)
@@ -406,6 +421,21 @@ static inline void BC_Reflection_2D(int var, int rows, int cols, double (*x)[row
                     x[i][j][Ghost_cell-2] = x[i][j][Ghost_cell+1];
                     x[i][j][Ghost_cell-3] = x[i][j][Ghost_cell+2];
                     x[i][j][Ghost_cell-4] = x[i][j][Ghost_cell+3];
+                }
+            }                   
+        }*/
+       for (int i = 0; i < var; i++){
+            for (int j = Ghost_cell; j < rows - Ghost_cell; j++){
+                if (i == 2) { // y-momentum (normal velocity component for bottom boundary)
+                    x[i][j][Ghost_cell-1] = -x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-2] = -x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-3] = -x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-4] = -x[i][j][Ghost_cell];
+                } else { // Density, x-momentum, energy remain unchanged
+                    x[i][j][Ghost_cell-1] = x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-2] = x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-3] = x[i][j][Ghost_cell];
+                    x[i][j][Ghost_cell-4] = x[i][j][Ghost_cell];
                 }
             }                   
         }
@@ -943,16 +973,6 @@ static inline void Boundary_Conditions(int var, int rows, int cols, double (*y)[
     for (int i = 0; i < 4; i++) {
         bc_funcs[bc_types[i]](var, rows, cols, y, sides[i], GC);
     }
-
-    //Assign Values To The Four Corner Points To Prevent Calculation Errors
-    for (int k = 0; k < var; k++){
-        y[k][GhostCell-1][GhostCell-1] = y[k][GhostCell][GhostCell];
-        y[k][rows - GhostCell][GhostCell-1] = y[k][rows - GhostCell-1][GhostCell];
-        y[k][GhostCell-1][cols - GhostCell] = y[k][GhostCell][cols - GhostCell-1];
-        y[k][rows - GhostCell][cols - GhostCell] = y[k][rows - GhostCell-1][cols - GhostCell-1];
-
-    }
-    
     
 }
 

@@ -167,17 +167,8 @@ static inline void RK1_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
             for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
                 for (k = 0; k < var; k++) {
-                    BlockU[k][i][j] = BlockU[k][i][j] + dt * BlockSI[k][i][j];
-                }
-            }
-        }
-
-        // Copy updated block data back to global array
-        #pragma omp parallel for collapse(3)
-        for (k = 0; k < var; k++) {
-            for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
-                for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
-                    y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] = BlockU[k][i][j];
+                    y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] 
+                        = y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] + dt * BlockSI[k][i][j];
                 }
             }
         }
@@ -415,22 +406,13 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         Space_Discrete_Item(var, BGP.LNX_NGC[Blockn], BGP.LNY_NGC[Blockn], GC, dx, dy,
                            BlockF, BlockG, BlockS, BlockSI);
 
-        // Stage 1 update: U1 = y + dt * SI
+        // Stage 1 update: U1 = y + dt * LU
         #pragma omp parallel for collapse(3)
         for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
             for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
                 for (k = 0; k < var; k++) {
-                    BlockU[k][i][j] = BlockU[k][i][j] + dt * BlockSI[k][i][j];
-                }
-            }
-        }
-
-        // Copy updated block data to stage 1 global array
-        #pragma omp parallel for collapse(3)
-        for (k = 0; k < var; k++) {
-            for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
-                for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
-                    Conser_U1[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] = BlockU[k][i][j];
+                    Conser_U1[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] 
+                        = y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] + dt * BlockSI[k][i][j];
                 }
             }
         }
@@ -529,21 +511,13 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
             for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
                 for (k = 0; k < var; k++) {
-                    BlockU[k][i][j] = (3.0/4.0) * y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] + 
-                                      (1.0/4.0) * (Conser_U1[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] + dt * BlockSI[k][i][j]);
+                    Conser_U2[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]]
+                            = (3.0/4.0) * y[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]]
+                            + (1.0/4.0) * (Conser_U1[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] + dt * BlockSI[k][i][j]);
                 }
             }
         }
 
-        // Copy updated block data to stage 2 global array
-        #pragma omp parallel for collapse(3)
-        for (k = 0; k < var; k++) {
-            for (i = GC; i < BGP.LNX[Blockn] + GC; i++) {
-                for (j = GC; j < BGP.LNY[Blockn] + GC; j++) {
-                    Conser_U2[k][i + BGP.start_i[Blockn]][j + BGP.start_j[Blockn]] = BlockU[k][i][j];
-                }
-            }
-        }
 
         // Free block arrays after stage 2
         free(BlockU); free(BlockSI); free(BlockF); free(BlockG); free(BlockS);

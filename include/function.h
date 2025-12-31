@@ -27,13 +27,12 @@ static inline double test_function3(double x) {
 
 
 static inline int sgn(double num) {
-    if (num > 0) {
+    if (num > 0) 
         return 1;
-    } else if (num < 0) {
+    else if (num < 0)
         return -1;
-    } else {
+    else 
         return 0;
-    }
 }
 
 
@@ -71,15 +70,26 @@ static inline double min_mod(double a, double b){
 }
 
 static inline double van_leer(double a, double b){
-    double epsilo = 1e-10;
-	return ((sgn(a)+sgn(b)) * a * b)/(fabs(a)+fabs(b) + epsilo);
+    double epsilo = 1.0e-6;
+	return ((sgn(a)+sgn(b)) * a * b) / (fabs(a)+fabs(b)+epsilo);
+    
 }
 
 
 static inline double van_albada(double a, double b){
     double epsilo = 1e-6;
-	return (fmax(a*b,0) * (a+b))/(pow(a,2)+pow(b,2)+epsilo);
+	return (fmax(a*b,0) * (a+b))/(pow(a,2)+pow(b,2));
 }
+
+static inline double SuperBee(double a, double b){
+    double epsilo = 1e-6;
+	return 0.5 * (sgn(a) + sgn(b)) * max_of_two(min_of_two(2. * fabs(a), fabs(b)), min_of_two(fabs(a), 2. * fabs(b)));
+}
+
+/*static inline double UltraBee(double a, double b){
+    double epsilo = 1e-6;
+	return (sgn(a) + sgn(b)) * min_of_two(fabs(a) / (fabs(c) + epsm), abs(y) / (1 - abs(c) + epsm));
+}*/
 
 
 static inline double Get_Delta_T(int rows, int cols,double (*x)[cols], double dx) {

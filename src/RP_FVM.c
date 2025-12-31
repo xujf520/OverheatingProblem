@@ -96,9 +96,9 @@ int main(int argc, char *argv[]) {
         printf("Using default parameters (no control file specified)\n");
         // Set Default Control Parameters
         ctrl_params.test_case = TEST_BACKWARD_STEP;
-        ctrl_params.L_nx = 60;
-        ctrl_params.L_ny = 20;
-        ctrl_params.Time_ADM = 1;
+        ctrl_params.L_nx = 120;
+        ctrl_params.L_ny = 40;
+        ctrl_params.Time_ADM = 3;
         ctrl_params.scheme = 1;
         ctrl_params.M_gamma = 1.4;
         ctrl_params.Source = false;

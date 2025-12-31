@@ -45,10 +45,10 @@ static int GhostCell = 4;
 /*                                           Declare global variables                           */
 /*                                            *********                                          */
 // Program computational parameters
-static double CFL = 0.1;
+static double CFL = 0.4;
 // Reconstruction method control variable {0 is 0th order, 2 is 2nd order TVD scheme; 3 is 3rd order WENO, 5 is 5th order WENO reconstruction}
 // TVD includes Vanleer Limiter, Minmod limiter, etc. Modify in CFD_convection.h: 
-static int Recon_Accur = 5;
+static int Recon_Accur = 2;
 // Whether to use characteristic reconstruction
 static bool Characteriz = true;
 // Whether to enable gravity:
