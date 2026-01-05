@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
         ctrl_params.L_nx = 120;
         ctrl_params.L_ny = 40;
         ctrl_params.Time_ADM = 3;
-        ctrl_params.scheme = 1;
+        ctrl_params.scheme = 10;  // 改为ExactRiemann
         ctrl_params.M_gamma = 1.4;
         ctrl_params.Source = false;
         ctrl_params.Gravity = 1.0;
@@ -107,6 +107,8 @@ int main(int argc, char *argv[]) {
         ctrl_params.Tmax = 0.1;
         ctrl_params.Control_Compution = 0;
         ctrl_params.Control_output = 2;
+        ctrl_params.Recon_Accur = 2;        // 添加默认值
+        ctrl_params.Characteriz = false;    // 添加默认值
         strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
     }
     // Set Global Parameters According To The Control File
@@ -328,23 +330,22 @@ void ReadControlFile(const char* filename) {
     char line[256];
     char key[100];
     char value[150];
-    char test_case_name[100];
     
     // 设置默认值
     ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
     ctrl_params.L_nx = 100;
     ctrl_params.L_ny = 400;
     ctrl_params.Time_ADM = 3;
-    ctrl_params.scheme = 1;
-    ctrl_params.M_gamma = 1.667;
-    ctrl_params.Source = true;
+    ctrl_params.scheme = 1;  // 默认使用HLL
+    ctrl_params.M_gamma = 1.4;
+    ctrl_params.Source = false;
     ctrl_params.Gravity = 1.0;
     ctrl_params.CFL = 0.4;
     ctrl_params.Tmax = 1.0;
     ctrl_params.Control_Compution = 0;
     ctrl_params.Control_output = 2;
-    ctrl_params.Recon_Accur = 5;        // 新增：默认5阶WENO重构
-    ctrl_params.Characteriz = false;    // 新增：默认不开启特征重构
+    ctrl_params.Recon_Accur = 2;        // 默认2阶TVD
+    ctrl_params.Characteriz = false;    // 默认不使用特征重构
     strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
     
     while (fgets(line, sizeof(line), file)) {
@@ -370,53 +371,76 @@ void ReadControlFile(const char* filename) {
                 value_trim[strlen(value_trim)-1] = 0;
             
             if (strcmp(key_trim, "TestCase") == 0) {
-                if (strcmp(value_trim, "Sod_Shocktube") == 0) ctrl_params.test_case = TEST_1D_SHOCKTUBE;
-                else if (strcmp(value_trim, "Riemann_Case1") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE1;
-                else if (strcmp(value_trim, "Riemann_Case2") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE2;
-                else if (strcmp(value_trim, "Riemann_Case3") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE3;
-                else if (strcmp(value_trim, "Riemann_Case4") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE4;
-                else if (strcmp(value_trim, "Riemann_Case5") == 0) ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE5;
-                else if (strcmp(value_trim, "Taylor_Green_Vortex") == 0) ctrl_params.test_case = TEST_TAYLOR_GREEN_VORTEX;
-                else if (strcmp(value_trim, "Gaussian_Pulse") == 0) ctrl_params.test_case = TEST_GAUSSIAN_PULSE;
-                else if (strcmp(value_trim, "Kelvin_Helmholtz") == 0) ctrl_params.test_case = TEST_KELVIN_HELMHOLTZ;
-                else if (strcmp(value_trim, "Rayleigh_Taylor") == 0) ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
-                else if (strcmp(value_trim, "Double_Mach_Reflection") == 0) ctrl_params.test_case = TEST_DOUBLE_MACH_REFLECTION;
-                else if (strcmp(value_trim, "Backward_Step") == 0) ctrl_params.test_case = TEST_BACKWARD_STEP;
-                else if (strcmp(value_trim, "Blast_Wave") == 0) ctrl_params.test_case = TEST_BLAST_WAVE;
-                else if (strcmp(value_trim, "Noh_Problem") == 0) ctrl_params.test_case = TEST_NOH_PROBLEM;
+                if (strcmp(value_trim, "Sod_Shocktube") == 0) 
+                    ctrl_params.test_case = TEST_1D_SHOCKTUBE;
+                else if (strcmp(value_trim, "Riemann_Case1") == 0) 
+                    ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE1;
+                else if (strcmp(value_trim, "Riemann_Case2") == 0) 
+                    ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE2;
+                else if (strcmp(value_trim, "Riemann_Case3") == 0) 
+                    ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE3;
+                else if (strcmp(value_trim, "Riemann_Case4") == 0) 
+                    ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE4;
+                else if (strcmp(value_trim, "Riemann_Case5") == 0) 
+                    ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE5;
+                else if (strcmp(value_trim, "Taylor_Green_Vortex") == 0) 
+                    ctrl_params.test_case = TEST_TAYLOR_GREEN_VORTEX;
+                else if (strcmp(value_trim, "Gaussian_Pulse") == 0) 
+                    ctrl_params.test_case = TEST_GAUSSIAN_PULSE;
+                else if (strcmp(value_trim, "Kelvin_Helmholtz") == 0) 
+                    ctrl_params.test_case = TEST_KELVIN_HELMHOLTZ;
+                else if (strcmp(value_trim, "Rayleigh_Taylor") == 0) 
+                    ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
+                else if (strcmp(value_trim, "Double_Mach_Reflection") == 0) 
+                    ctrl_params.test_case = TEST_DOUBLE_MACH_REFLECTION;
+                else if (strcmp(value_trim, "Backward_Step") == 0) 
+                    ctrl_params.test_case = TEST_BACKWARD_STEP;
+                else if (strcmp(value_trim, "Blast_Wave") == 0) 
+                    ctrl_params.test_case = TEST_BLAST_WAVE;
+                else if (strcmp(value_trim, "Noh_Problem") == 0) 
+                    ctrl_params.test_case = TEST_NOH_PROBLEM;
                 else {
                     fprintf(stderr, "Warning: Unknown test case '%s', using default Rayleigh_Taylor\n", value_trim);
                 }
             }
-            else if (strcmp(key_trim, "L_nx") == 0) ctrl_params.L_nx = atoi(value_trim);
-            else if (strcmp(key_trim, "L_ny") == 0) ctrl_params.L_ny = atoi(value_trim);
-            else if (strcmp(key_trim, "Time_ADM") == 0) ctrl_params.Time_ADM = atoi(value_trim);
-            else if (strcmp(key_trim, "scheme") == 0) ctrl_params.scheme = atoi(value_trim);
-            else if (strcmp(key_trim, "M_gamma") == 0) ctrl_params.M_gamma = atof(value_trim);
+            else if (strcmp(key_trim, "L_nx") == 0) 
+                ctrl_params.L_nx = atoi(value_trim);
+            else if (strcmp(key_trim, "L_ny") == 0) 
+                ctrl_params.L_ny = atoi(value_trim);
+            else if (strcmp(key_trim, "Time_ADM") == 0) 
+                ctrl_params.Time_ADM = atoi(value_trim);
+            else if (strcmp(key_trim, "scheme") == 0) 
+                ctrl_params.scheme = atoi(value_trim);
+            else if (strcmp(key_trim, "M_gamma") == 0) 
+                ctrl_params.M_gamma = atof(value_trim);
             else if (strcmp(key_trim, "Source") == 0) {
                 if (strcmp(value_trim, "true") == 0 || strcmp(value_trim, "1") == 0) 
                     ctrl_params.Source = true;
                 else 
                     ctrl_params.Source = false;
             }
-            else if (strcmp(key_trim, "Gravity") == 0) ctrl_params.Gravity = atof(value_trim);
-            else if (strcmp(key_trim, "CFL") == 0) ctrl_params.CFL = atof(value_trim);
-            else if (strcmp(key_trim, "Tmax") == 0) ctrl_params.Tmax = atof(value_trim);
-            else if (strcmp(key_trim, "Control_Compution") == 0) ctrl_params.Control_Compution = atoi(value_trim);
-            else if (strcmp(key_trim, "Control_output") == 0) ctrl_params.Control_output = atoi(value_trim);
-            else if (strcmp(key_trim, "output_dir") == 0) strcpy(ctrl_params.output_dir, value_trim);
-            // 新增：重构精度参数
+            else if (strcmp(key_trim, "Gravity") == 0) 
+                ctrl_params.Gravity = atof(value_trim);
+            else if (strcmp(key_trim, "CFL") == 0) 
+                ctrl_params.CFL = atof(value_trim);
+            else if (strcmp(key_trim, "Tmax") == 0) 
+                ctrl_params.Tmax = atof(value_trim);
+            else if (strcmp(key_trim, "Control_Compution") == 0) 
+                ctrl_params.Control_Compution = atoi(value_trim);
+            else if (strcmp(key_trim, "Control_output") == 0) 
+                ctrl_params.Control_output = atoi(value_trim);
+            else if (strcmp(key_trim, "output_dir") == 0) 
+                strcpy(ctrl_params.output_dir, value_trim);
             else if (strcmp(key_trim, "Recon_Accur") == 0) {
                 int recon_val = atoi(value_trim);
                 // 验证重构精度值的有效性
                 if (recon_val == 1 || recon_val == 2 || recon_val == 3 || recon_val == 5) {
                     ctrl_params.Recon_Accur = recon_val;
                 } else {
-                    fprintf(stderr, "Warning: Invalid Recon_Accur value %d. Valid values are 1, 2, 3, 5. Using default 5.\n", recon_val);
-                    ctrl_params.Recon_Accur = 5;
+                    fprintf(stderr, "Warning: Invalid Recon_Accur value %d. Valid values are 1, 2, 3, 5. Using default 2.\n", recon_val);
+                    ctrl_params.Recon_Accur = 2;
                 }
             }
-            // 新增：特征重构参数
             else if (strcmp(key_trim, "Characteriz") == 0) {
                 if (strcmp(value_trim, "true") == 0 || strcmp(value_trim, "1") == 0) 
                     ctrl_params.Characteriz = true;
@@ -426,6 +450,9 @@ void ReadControlFile(const char* filename) {
                     fprintf(stderr, "Warning: Invalid Characteriz value '%s'. Using default false.\n", value_trim);
                     ctrl_params.Characteriz = false;
                 }
+            }
+            else {
+                fprintf(stderr, "Warning: Unknown parameter '%s' in control file\n", key_trim);
             }
         }
     }
@@ -439,30 +466,45 @@ void ReadControlFile(const char* filename) {
     printf("║ Test Case:         %-30s ║\n", getTestCaseName(ctrl_params.test_case));
     printf("║ Grid Size (nx×ny): %-5d × %-5d               ║\n", ctrl_params.L_nx, ctrl_params.L_ny);
     printf("║ Time Integration:  %-30s ║\n", ctrl_params.Time_ADM == 1 ? "RK1" : "RK3");
-    printf("║ Riemann Solver:    %-30s ║\n", 
-           ctrl_params.scheme == 1 ? "HLL" : 
-           ctrl_params.scheme == 2 ? "HLLC" : 
-           ctrl_params.scheme == 3 ? "Roe" : 
-           ctrl_params.scheme == 11 ? "HLLHC" : 
-           ctrl_params.scheme == 22 ? "HLLCHC" : 
-           ctrl_params.scheme == 33 ? "RoeHC" : "ExactRiemann");
+    
+    // Riemann求解器显示
+    const char* scheme_name;
+    switch (ctrl_params.scheme) {
+        case 1: scheme_name = "HLL"; break;
+        case 2: scheme_name = "HLLC"; break;
+        case 3: scheme_name = "Roe"; break;
+        case 11: scheme_name = "HLL with Heat Conduction"; break;
+        case 22: scheme_name = "HLLC with Heat Conduction"; break;
+        case 33: scheme_name = "Roe with Heat Conduction"; break;
+        default: scheme_name = "Exact Riemann"; break;
+    }
+    printf("║ Riemann Solver:    %-30s ║\n", scheme_name);
+    
     printf("║ Gamma (γ):         %-30.3f ║\n", ctrl_params.M_gamma);
     printf("║ Gravity Source:    %-30s ║\n", ctrl_params.Source ? "ON" : "OFF");
     printf("║ Gravity Constant:  %-30.3f ║\n", ctrl_params.Gravity);
     printf("║ CFL Number:        %-30.3f ║\n", ctrl_params.CFL);
     printf("║ Final Time (Tmax): %-30.3f ║\n", ctrl_params.Tmax);
-    printf("║ Output Steps:      %-30d ║\n", ctrl_params.Control_output);
+    printf("║ Control Mode:      %-30s ║\n", 
+           ctrl_params.Control_Compution == 0 ? "Time Control" : "Step Control");
+    printf("║ Output Interval:   %-30d ║\n", ctrl_params.Control_output);
     printf("║ Output Directory:  %-30s ║\n", ctrl_params.output_dir);
-    // 新增：重构参数显示
-    printf("║ Reconstruction:    %-30s ║\n", 
-           ctrl_params.Recon_Accur == 1 ? "0th Order (Constant)" :
-           ctrl_params.Recon_Accur == 2 ? "2nd Order TVD" :
-           ctrl_params.Recon_Accur == 3 ? "3rd Order WENO" :
-           ctrl_params.Recon_Accur == 5 ? "5th Order WENO" : "Unknown");
-    printf("║ Characteristic:    %-30s ║\n", ctrl_params.Characteriz ? "Characteristic" : "Primitive");
+    
+    // 重构参数显示
+    const char* recon_name;
+    switch (ctrl_params.Recon_Accur) {
+        case 1: recon_name = "1st Order (Constant)"; break;
+        case 2: recon_name = "2nd Order TVD"; break;
+        case 3: recon_name = "3rd Order WENO"; break;
+        case 5: recon_name = "5th Order WENO"; break;
+        default: recon_name = "Unknown"; break;
+    }
+    printf("║ Reconstruction:    %-30s ║\n", recon_name);
+    
+    printf("║ Characteristic:    %-30s ║\n", 
+           ctrl_params.Characteriz ? "Characteristic" : "Primitive");
     printf("╚═══════════════════════════════════════════════════╝\n\n");
 }
-
 // 读取控制文件的函数
 void set_material_parameters(double gamma, bool source, double gravity, double cfl) {
 

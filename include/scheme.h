@@ -45,55 +45,80 @@ static inline void restore2(double*u1,double*u2,double*u3,int n,double*roarr,dou
 /*                                      ******************                                          */
 /*                                   在固定参考系下的黎曼解法器                                        */
 /*                                      ******************                                          */
-//Flux计算方法
-
+/**
+ * LLF (Local Lax-Friedrichs) Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using Local Lax-Friedrichs (Rusanov) scheme
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param Flux Output flux arrays
+ */
 static inline void LLF_Flux(int dir, int var, int rows, int cols, int GC, 
-                            double (*x)[rows][cols], 
-                            double (*y)[rows][cols], 
-                            double (*z)[rows][cols]) {
+                            double (*L_state)[rows][cols], 
+                            double (*R_state)[rows][cols], 
+                            double (*Flux)[rows][cols]) {
+    
+    // Precompute constant for efficiency (gamma-1 is frequently used)
+    const double gamma_minus_one = M_gamma - 1.0;
     
     if (dir == 1) {
-        // X Direction Flux Calculation Fully Parallelized
+        // X-direction flux calculation - fully parallelized
+        // LLF flux formula: F_LLF = 0.5*(F_L + F_R) - 0.5*α*(U_R - U_L)
+        // where α = max(|u_L|+a_L, |u_R|+a_R) is the maximum wave speed
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // Read Left And Right Raw Variables
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables (density, momentum, energy)
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // Calculate Raw Variables Using Division Optimization
+                // Compute primitive variables using division optimization
+                // Instead of dividing multiple times, compute reciprocal once
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right
                 
+                // Compute squares of velocities for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
-                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
-                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
+                // This converts total energy to pressure
+                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_one;
+                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_one;
                 
-                // Calculate The Speed Of Sound
+                // Compute speed of sound: a = sqrt(γ * p / ρ)
                 const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
                 const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
 
-                // Calculate Total Enthalpy H
-                const double gamma_ratio = M_gamma / (M_gamma - 1.0);
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
+                // Enthalpy is needed for energy flux calculation
+                const double gamma_ratio = M_gamma / gamma_minus_one;
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // Calculate The Left And Right Conserved Variables And Fluxes
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu
+                // F(ρu) = ρu² + p
+                // F(ρv) = ρuv
+                // F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -103,33 +128,36 @@ static inline void LLF_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
             
-                //Calculate Local Maximum Speed Of Sound
-                const double splus = max_of_two(fabs(u_L) + a_L ,abs(u_R) + a_R);
+                // Calculate maximum wave speed for numerical dissipation
+                // α = max(|u_L|+a_L, |u_R|+a_R) ensures numerical stability
+                const double splus = max_of_two(fabs(u_L) + a_L, fabs(u_R) + a_R);
 
-                // Store Results
-                z[0][j][k] = 0.5 *(rho_FL + rho_FR) - 0.5 * splus * (rho_R - rho_L); 
-                z[1][j][k] = 0.5 *(rhou_FL + rhou_FR) - 0.5 * splus * (rhou_R - rhou_L); 
-                z[2][j][k] = 0.5 *(rhov_FL + rhov_FR) - 0.5 * splus * (rhov_R - rhov_L);
-                z[3][j][k] = 0.5 *(rhoe_FL + rhoe_FR) - 0.5 * splus * (rhoe_R - rhoe_L);
+                // Compute LLF flux using central flux plus dissipation term:
+                // F_LLF = 0.5*(F_L + F_R) - 0.5*α*(U_R - U_L)
+                Flux[0][j][k] = 0.5 * (rho_FL + rho_FR) - 0.5 * splus * (rho_R - rho_L); 
+                Flux[1][j][k] = 0.5 * (rhou_FL + rhou_FR) - 0.5 * splus * (rhou_R - rhou_L); 
+                Flux[2][j][k] = 0.5 * (rhov_FL + rhov_FR) - 0.5 * splus * (rhov_R - rhov_L);
+                Flux[3][j][k] = 0.5 * (rhoe_FL + rhoe_FR) - 0.5 * splus * (rhoe_R - rhoe_L);
             }
         }
     }
     else if (dir == 2) {
-        // y方向通量计算 - 完全并行化
+        // Y-direction flux calculation - fully parallelized
+        // Same LLF formula but using y-direction velocities and fluxes
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -138,24 +166,30 @@ static inline void LLF_Flux(int dir, int var, int rows, int cols, int GC,
                 const double v_L = rhov_L * inv_rho_L;
                 const double v_R = rhov_R * inv_rho_R;
                 
+                // Velocity squares for kinetic energy
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
-                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
-                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
+                // Compute pressure from energy equation
+                const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_one;
+                const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_one;
 
-                 // Calculate The Speed Of Sound
+                // Compute speed of sound in y-direction
                 const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
                 const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
 
-                // Calculate Total Enthalpy H
-                const double gamma_ratio = M_gamma / (M_gamma - 1.0);
+                // Compute total enthalpy for energy flux
+                const double gamma_ratio = M_gamma / gamma_minus_one;
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右守恒变量和通量
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv
+                // G(ρu) = ρuv
+                // G(ρv) = ρv² + p
+                // G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -165,14 +199,14 @@ static inline void LLF_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
             
-                 //Calculate Local Maximum Speed Of Sound
-                const double splus = max_of_two(fabs(v_L) + a_L ,abs(v_R) + a_R);
+                // Maximum wave speed for y-direction: α = max(|v_L|+a_L, |v_R|+a_R)
+                const double splus = max_of_two(fabs(v_L) + a_L, fabs(v_R) + a_R);
 
-                // Store Results
-                z[0][j][k] = 0.5 *(rho_GL + rho_GR) - 0.5 * splus * (rho_R - rho_L); 
-                z[1][j][k] = 0.5 *(rhou_GL + rhou_GR) - 0.5 * splus * (rhou_R - rhou_L); 
-                z[2][j][k] = 0.5 *(rhov_GL + rhov_GR) - 0.5 * splus * (rhov_R - rhov_L);
-                z[3][j][k] = 0.5 *(rhoe_GL + rhoe_GR) - 0.5 * splus * (rhoe_R - rhoe_L);
+                // Compute LLF flux in y-direction
+                Flux[0][j][k] = 0.5 * (rho_GL + rho_GR) - 0.5 * splus * (rho_R - rho_L); 
+                Flux[1][j][k] = 0.5 * (rhou_GL + rhou_GR) - 0.5 * splus * (rhou_R - rhou_L); 
+                Flux[2][j][k] = 0.5 * (rhov_GL + rhov_GR) - 0.5 * splus * (rhov_R - rhov_L);
+                Flux[3][j][k] = 0.5 * (rhoe_GL + rhoe_GR) - 0.5 * splus * (rhoe_R - rhoe_L);
             }
         }
     }
@@ -191,35 +225,35 @@ static inline void LLF_Flux(int dir, int var, int rows, int cols, int GC,
  * @param rows Number of rows in the computational domain
  * @param cols Number of columns in the computational domain
  * @param GC Number of ghost cells
- * @param x Left state variables (conservative form)
- * @param y Right state variables (conservative form)
- * @param z Output flux arrays
+ * @param L_state Left state variables (conservative form)
+ * @param R_state Right state variables (conservative form)
+ * @param Flux Output flux arrays
  */
 static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC, 
-                            double (*x)[rows][cols], 
-                            double (*y)[rows][cols], 
-                            double (*z)[rows][cols]) {
+                            double (*L_state)[rows][cols], 
+                            double (*R_state)[rows][cols], 
+                            double (*Flux)[rows][cols]) {
 
     // Check for NULL pointers
-    if (x == NULL || y == NULL || z == NULL) {
+    if (L_state == NULL || R_state == NULL || Flux == NULL) {
         fprintf(stderr, "Error: NULL pointer passed to HLL_Flux function.\n");
         return;
     }
     
     if (dir == 1) {
         // x-direction flux calculation - fully parallelized
-        //#pragma omp parallel for collapse(2)
+        #pragma omp parallel for collapse(2)
         for (int i = GC-1; i < rows-GC; i++) {
             for (int j = GC; j < cols-GC; j++) {
                 // Read left and right conservative variables
-                const double rho_L = x[0][i][j];
-                const double rho_R = y[0][i][j];
-                const double rhou_L = x[1][i][j];
-                const double rhou_R = y[1][i][j];
-                const double rhov_L = x[2][i][j];
-                const double rhov_R = y[2][i][j];
-                const double rhoe_L = x[3][i][j];
-                const double rhoe_R = y[3][i][j];
+                const double rho_L = L_state[0][i][j];
+                const double rho_R = R_state[0][i][j];
+                const double rhou_L = L_state[1][i][j];
+                const double rhou_R = R_state[1][i][j];
+                const double rhov_L = L_state[2][i][j];
+                const double rhov_R = R_state[2][i][j];
+                const double rhoe_L = L_state[3][i][j];
+                const double rhoe_R = R_state[3][i][j];
                 
                 // Error checking for density
                 if (rho_L <= 0.0 || rho_R <= 0.0) {
@@ -252,9 +286,6 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
                 double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
 
-                //p_L = max_of_two(p_L, 1e-10);
-                //p_R = max_of_two(p_R, 1e-10);
-                
                 // Check for negative pressure
                 if (p_L <= 0.0 || p_R <= 0.0) {
                     fprintf(stderr, "Warning: Non-positive pressure at cell (%d, %d): p_L=%e, p_R=%e\n", 
@@ -266,6 +297,10 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 const double gamma_ratio = M_gamma / (M_gamma - 1.0);
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
+
+                //Calculate The Left And Right Sound Speed Values
+                const double a_L = sqrt((M_gamma - 1.0) * (H_L - 0.5 * (u_L_sq + v_L_sq)));
+                const double a_R = sqrt((M_gamma - 1.0) * (H_R - 0.5 * (u_R_sq + v_R_sq)));
 
                 // Compute left and right flux vectors in x-direction
                 const double rho_FL = rho_L * u_L;
@@ -285,21 +320,22 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 
                 const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // Compute approximate wave speeds using Roe-averaged variables
+                // Compute approximate wave speeds using Roe-averaged variables, following Einfeldt's approach to Roe eigenvalue estimation.
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt((M_gamma - 1.0) * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R /(sum_sqrt*sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L *a_L*a_L + sqrt_rho_R * a_R*a_R)*inv_sum_sqrt + eta_sq*(u_R-u_L)*(u_R-u_L));
                 
                 // Check for valid wave speeds
-                if (isnan(cbar)) {
+                if (isnan(sqrt_d_sq)) {
                     fprintf(stderr, "Error: Invalid Roe-averaged speed of sound at cell (%d, %d)\n", i, j);
                     continue;
                 }
                 
-                const double sleft = ubar - cbar;
-                const double sright = ubar + cbar;
+                const double sleft = ubar - sqrt_d_sq;
+                const double sright = ubar + sqrt_d_sq;
 
                 // Determine HLL numerical flux based on wave speeds
                 double rho_F, rhou_F, rhov_F, rhoe_F;
@@ -330,27 +366,27 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 }
                 
                 // Store computed fluxes
-                z[0][i][j] = rho_F; 
-                z[1][i][j] = rhou_F; 
-                z[2][i][j] = rhov_F;
-                z[3][i][j] = rhoe_F;
+                Flux[0][i][j] = rho_F; 
+                Flux[1][i][j] = rhou_F; 
+                Flux[2][i][j] = rhov_F;
+                Flux[3][i][j] = rhoe_F;
             }
         }
     }
     else if (dir == 2) {
         // y-direction flux calculation - fully parallelized
-        //#pragma omp parallel for collapse(2)
+        #pragma omp parallel for collapse(2)
         for (int i = GC; i < rows-GC; i++) {
             for (int j = GC-1; j < cols-GC; j++) {
                 // Read left and right conservative variables
-                const double rho_L = x[0][i][j];
-                const double rho_R = y[0][i][j];
-                const double rhou_L = x[1][i][j];
-                const double rhou_R = y[1][i][j];
-                const double rhov_L = x[2][i][j];
-                const double rhov_R = y[2][i][j];
-                const double rhoe_L = x[3][i][j];
-                const double rhoe_R = y[3][i][j];
+                const double rho_L = L_state[0][i][j];
+                const double rho_R = R_state[0][i][j];
+                const double rhou_L = L_state[1][i][j];
+                const double rhou_R = R_state[1][i][j];
+                const double rhov_L = L_state[2][i][j];
+                const double rhov_R = R_state[2][i][j];
+                const double rhoe_L = L_state[3][i][j];
+                const double rhoe_R = R_state[3][i][j];
                 
                 // Error checking for density
                 if (rho_L <= 0.0 || rho_R <= 0.0) {
@@ -382,9 +418,6 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 // Compute pressure using ideal gas law
                 double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * (M_gamma - 1.0);
                 double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * (M_gamma - 1.0);
-
-                //p_L = max_of_two(p_L, 1e-10);
-                //p_R = max_of_two(p_R, 1e-10);
                 
                 // Check for negative pressure
                 if (p_L <= 0.0 || p_R <= 0.0) {
@@ -396,6 +429,8 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 const double gamma_ratio = M_gamma / (M_gamma - 1.0);
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
+                const double a_L = sqrt((M_gamma - 1.0) * (H_L - 0.5 * (u_L_sq + v_L_sq)));
+                const double a_R = sqrt((M_gamma - 1.0) * (H_R - 0.5 * (u_R_sq + v_R_sq)));
 
                 // Compute left and right flux vectors in y-direction
                 const double rho_GL = rho_L * v_L;
@@ -415,21 +450,22 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                 
                 const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // Compute approximate wave speeds using Roe-averaged variables
+                // Compute approximate wave speeds using Roe-averaged variables, following Einfeldt's approach to Roe eigenvalue estimation.
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt((M_gamma - 1.0) * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R /(sum_sqrt*sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L *a_L*a_L + sqrt_rho_R * a_R*a_R)*inv_sum_sqrt + eta_sq*(v_R-v_L)*(v_R-v_L));
                 
                 // Check for valid wave speeds
-                if (isnan(cbar)) {
+                if (isnan(sqrt_d_sq)) {
                     fprintf(stderr, "Error: Invalid Roe-averaged speed of sound at cell (%d, %d)\n", i, j);
                     continue;
                 }
                 
-                const double sleft = vbar - cbar;
-                const double sright = vbar + cbar;
+                const double sleft = vbar - sqrt_d_sq;
+                const double sright = vbar + sqrt_d_sq;
 
                 // Determine HLL numerical flux based on wave speeds
                 double rho_G, rhou_G, rhov_G, rhoe_G;
@@ -459,67 +495,90 @@ static inline void HLL_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_G = (sright * rhoe_GL - sleft * rhoe_GR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff;
                 }
                 
-
                 // Store computed fluxes
-                z[0][i][j] = rho_G; 
-                z[1][i][j] = rhou_G; 
-                z[2][i][j] = rhov_G;
-                z[3][i][j] = rhoe_G;
+                Flux[0][i][j] = rho_G; 
+                Flux[1][i][j] = rhou_G; 
+                Flux[2][i][j] = rhov_G;
+                Flux[3][i][j] = rhoe_G;
             }
         }
     }
 }
 
-
+/**
+ * HLLC (Harten-Lax-van Leer Contact) Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using HLLC approximate Riemann solver with Einfeldt's wave speed estimate
+ * HLLC solver captures contact discontinuities better than HLL by including intermediate wave
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param Flux Output flux arrays
+ */
 static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC, 
-                             double (*x)[rows][cols], 
-                             double (*y)[rows][cols], 
-                             double (*z)[rows][cols]) {
+                             double (*L_state)[rows][cols], 
+                             double (*R_state)[rows][cols], 
+                             double (*Flux)[rows][cols]) {
     
+    // Precompute frequently used constants
     const double gamma_minus_1 = M_gamma - 1.0;
-    const double gamma_ratio = M_gamma / gamma_minus_1;
+    const double gamma_ratio = M_gamma / gamma_minus_1;  // γ/(γ-1) for enthalpy calculation
 
     if (dir == 1) {
-        // Flux Calculation In The X Direction Fully Parallelized
+        // X-direction flux calculation - fully parallelized
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables using division optimization
+                // Compute reciprocal once to avoid multiple divisions
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left state
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right state
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left state
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right state
                 
+                // Compute velocity squares for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
                 
-                // 计算声速
-                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
-                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+                // Compute speed of sound: a = sqrt(γ * p / ρ)
+                //const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                //const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
 
-                // 计算总焓H
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
+                // Enthalpy is conserved across shocks and used in flux calculation
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右守恒变量和通量
+
+                //Calculate The Left And Right Sound Speed Values
+                const double a_L = sqrt((M_gamma - 1.0) * (H_L - 0.5 * (u_L_sq + v_L_sq)));
+                const double a_R = sqrt((M_gamma - 1.0) * (H_R - 0.5 * (u_R_sq + v_R_sq)));
+
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu, F(ρu) = ρu² + p, F(ρv) = ρuv, F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -529,7 +588,8 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
             
-                // 计算Roe平均
+                // Compute Roe-averaged variables for intermediate state estimation
+                // Roe averages provide a consistent linearization of the Euler equations
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -539,21 +599,39 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // 利用Roe平均的变量计算近似波速
+                // Compute approximate wave speeds using Roe-averaged variables, 
+                // following Einfeldt's approach to Roe eigenvalue estimation
+                // This provides more robust wave speed estimates, especially for strong shocks
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = ubar - cbar;
-                const double sright = ubar + cbar;
+                
+                // Compute Einfeldt's correction term for better wave speed estimation
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (u_R - u_L) * (u_R - u_L));
+                
+                // Check for valid wave speeds (avoid numerical issues)
+                if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average if Einfeldt's method fails
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }
+                
+                // Wave speeds: s_left = ubar - â, s_right = ubar + â
+                // where â is the modified sound speed from Einfeldt's method
+                const double sleft = ubar - sqrt_d_sq;
+                const double sright = ubar + sqrt_d_sq;
             
-                // 计算中间波速 s_star 和压力 p_star
+                // Compute intermediate wave speed s_star and pressure p_star
+                // s_star represents the speed of the contact discontinuity
                 double rho_F, rhou_F, rhov_F, rhoe_F;
                 
-                // 处理 denom 可能为0的情况
+                // Handle potential division by zero in s_star calculation
                 const double denom = rho_L * (sleft - u_L) - rho_R * (sright - u_R);
                 
                 if (fabs(denom) < 1e-12) {
-                    // 特殊情况：使用HLL通量作为后备
+                    // Special case: fall back to HLL flux when denominator is near zero
+                    // This provides numerical stability in degenerate cases
                     const double inv_sdiff = 1.0 / (sright - sleft);
                     const double sleft_sright = sleft * sright;
                     
@@ -563,37 +641,49 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_F = (sright * rhoe_FL - sleft * rhoe_FR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff;
                 }
                 else {
-                    const double s_star = (p_R - p_L + rho_L * u_L * (sleft - u_L) - rho_R * u_R * (sright - u_R)) / denom;
+                    // Compute intermediate wave speed (contact discontinuity speed)
+                    // Toro's formula: s_star = [p_R - p_L + ρ_L u_L(sleft - u_L) - ρ_R u_R(sright - u_R)] / denom
+                    const double s_star = (p_R - p_L + rho_L * u_L * (sleft - u_L) 
+                                         - rho_R * u_R * (sright - u_R)) / denom;
                     
+                    // Compute intermediate pressure (constant across contact discontinuity)
                     const double p_star = p_L + rho_L * (sleft - u_L) * (s_star - u_L);
+                    
+                    // Compute intermediate state densities (star region)
                     const double u_stat_L = rho_L * (sleft - u_L) / (sleft - s_star);
                     const double u_stat_R = rho_R * (sright - u_R) / (sright - s_star);
 
-                    const double fe_star_L = rhoe_L * inv_rho_L + (s_star - u_L) * (s_star + p_L / (rho_L * (sleft - u_L)));
-                    const double fe_star_R = rhoe_R * inv_rho_R + (s_star - u_R) * (s_star + p_R / (rho_R * (sright - u_R)));
+                    // Compute intermediate state energy fluxes
+                    const double fe_star_L = rhoe_L * inv_rho_L + (s_star - u_L) 
+                                           * (s_star + p_L / (rho_L * (sleft - u_L)));
+                    const double fe_star_R = rhoe_R * inv_rho_R + (s_star - u_R) 
+                                           * (s_star + p_R / (rho_R * (sright - u_R)));
                     
-                    // 确定HLLC数值通量
+                    // Determine HLLC numerical flux based on wave speeds
+                    // Four possible cases depending on wave positions relative to zero
                     if (sleft >= 0.0) {
+                        // Entirely left-going waves: use left flux
                         rho_F = rho_FL;
                         rhou_F = rhou_FL;
                         rhov_F = rhov_FL;
                         rhoe_F = rhoe_FL;
                     }
                     else if (sright <= 0.0) {
+                        // Entirely right-going waves: use right flux
                         rho_F = rho_FR;
                         rhou_F = rhou_FR;
                         rhov_F = rhov_FR;
                         rhoe_F = rhoe_FR;
                     }
                     else if (s_star >= 0.0) {
-                        // sleft < 0 && s_star >= 0
+                        // Left and star region: sleft < 0 ≤ s_star
                         rho_F = rho_FL + sleft * (u_stat_L - rho_L);
                         rhou_F = rhou_FL + sleft * (u_stat_L * s_star - rhou_L);
                         rhov_F = rhov_FL + sleft * (u_stat_L * v_L - rhov_L);
                         rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L - rhoe_L);
                     }
                     else {
-                        // s_star < 0 && sright > 0
+                        // Star and right region: s_star < 0 < sright
                         rho_F = rho_FR + sright * (u_stat_R - rho_R);
                         rhou_F = rhou_FR + sright * (u_stat_R * s_star - rhou_R);
                         rhov_F = rhov_FR + sright * (u_stat_R * v_R - rhov_R);
@@ -601,30 +691,31 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                     }
                 }
 
-                // 存储结果
-                z[0][j][k] = rho_F; 
-                z[1][j][k] = rhou_F; 
-                z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F;
+                // Store computed fluxes in output array
+                Flux[0][j][k] = rho_F; 
+                Flux[1][j][k] = rhou_F; 
+                Flux[2][j][k] = rhov_F;
+                Flux[3][j][k] = rhoe_F;
             }
         }
     }
     else if (dir == 2) {
-        // y方向通量计算 - 完全并行化
+        // Y-direction flux calculation - fully parallelized
+        // Same algorithm as x-direction but with velocities and fluxes rotated
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -633,19 +724,26 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double v_L = rhov_L * inv_rho_L;
                 const double v_R = rhov_R * inv_rho_R;
                 
+                // Velocity squares for kinetic energy
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算总焓H
+                // Compute speed of sound
+                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+
+                // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右守恒变量和通量
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv, G(ρu) = ρuv, G(ρv) = ρv² + p, G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -655,7 +753,7 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
             
-                // 计算Roe平均
+                // Compute Roe-averaged variables
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -665,21 +763,35 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // 利用Roe平均的变量计算近似波速
+                // Compute approximate wave speeds using Roe-averaged variables,
+                // following Einfeldt's approach for y-direction
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = vbar - cbar;
-                const double sright = vbar + cbar;
+                
+                // Einfeldt's correction term for y-direction wave speeds
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (v_R - v_L) * (v_R - v_L));
+                
+                // Check for valid wave speeds
+                if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }
+                
+                // Wave speeds for y-direction: based on vbar instead of ubar
+                const double sleft = vbar - sqrt_d_sq;
+                const double sright = vbar + sqrt_d_sq;
             
-                // 计算中间波速 s_star 和压力 p_star
+                // Compute intermediate wave speed and pressure for y-direction
                 double rho_G, rhou_G, rhov_G, rhoe_G;
                 
-                // 处理 denom 可能为0的情况
+                // Handle potential division by zero
                 const double denom = rho_L * (sleft - v_L) - rho_R * (sright - v_R);
                 
                 if (fabs(denom) < 1e-12) {
-                    // 特殊情况：使用HLL通量作为后备
+                    // Fall back to HLL flux
                     const double inv_sdiff = 1.0 / (sright - sleft);
                     const double sleft_sright = sleft * sright;
                     
@@ -689,16 +801,20 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_G = (sright * rhoe_GL - sleft * rhoe_GR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff;
                 }
                 else {
-                    const double s_star = (p_R - p_L + rho_L * v_L * (sleft - v_L) - rho_R * v_R * (sright - v_R)) / denom;
+                    // Compute contact discontinuity speed for y-direction
+                    const double s_star = (p_R - p_L + rho_L * v_L * (sleft - v_L) 
+                                         - rho_R * v_R * (sright - v_R)) / denom;
                     
                     const double p_star = p_L + rho_L * (sleft - v_L) * (s_star - v_L);
                     const double v_stat_L = rho_L * (sleft - v_L) / (sleft - s_star);
                     const double v_stat_R = rho_R * (sright - v_R) / (sright - s_star);
 
-                    const double fe_star_L = rhoe_L * inv_rho_L + (s_star - v_L) * (s_star + p_L / (rho_L * (sleft - v_L)));
-                    const double fe_star_R = rhoe_R * inv_rho_R + (s_star - v_R) * (s_star + p_R / (rho_R * (sright - v_R)));
+                    const double fe_star_L = rhoe_L * inv_rho_L + (s_star - v_L) 
+                                           * (s_star + p_L / (rho_L * (sleft - v_L)));
+                    const double fe_star_R = rhoe_R * inv_rho_R + (s_star - v_R) 
+                                           * (s_star + p_R / (rho_R * (sright - v_R)));
                     
-                    // 确定HLLC数值通量
+                    // Determine HLLC numerical flux based on wave speeds
                     if (sleft >= 0.0) {
                         rho_G = rho_GL;
                         rhou_G = rhou_GL;
@@ -712,14 +828,14 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                         rhoe_G = rhoe_GR;
                     }
                     else if (s_star >= 0.0) {
-                        // sleft < 0 && s_star >= 0
+                        // Left and star region
                         rho_G = rho_GL + sleft * (v_stat_L - rho_L);
                         rhou_G = rhou_GL + sleft * (v_stat_L * u_L - rhou_L);
                         rhov_G = rhov_GL + sleft * (v_stat_L * s_star - rhov_L);
                         rhoe_G = rhoe_GL + sleft * (v_stat_L * fe_star_L - rhoe_L);
                     }
                     else {
-                        // s_star < 0 && sright > 0
+                        // Star and right region
                         rho_G = rho_GR + sright * (v_stat_R - rho_R);
                         rhou_G = rhou_GR + sright * (v_stat_R * u_R - rhou_R);
                         rhov_G = rhov_GR + sright * (v_stat_R * s_star - rhov_R);
@@ -727,62 +843,85 @@ static inline void HLLC_Flux(int dir, int var, int rows, int cols, int GC,
                     }
                 }
 
-                // 存储结果
-                z[0][j][k] = rho_G; 
-                z[1][j][k] = rhou_G; 
-                z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G;
+                // Store computed fluxes
+                Flux[0][j][k] = rho_G; 
+                Flux[1][j][k] = rhou_G; 
+                Flux[2][j][k] = rhov_G;
+                Flux[3][j][k] = rhoe_G;
             }
         }
     }
 }
 
 
+/**
+ * Roe Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using Roe's approximate Riemann solver with entropy fix
+ * Roe solver provides exact resolution of isolated shock and contact discontinuities
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param flux Output flux arrays
+ */
 static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC, 
-                            double (*x)[rows][cols], 
-                            double (*y)[rows][cols], 
-                            double (*z)[rows][cols]) {
+                            double (*L_state)[rows][cols], 
+                            double (*R_state)[rows][cols], 
+                            double (*flux)[rows][cols]) {
+    
+    // Parameters for entropy fix (prevents expansion shocks)
     const double epsilon = 1e-6;
     const double epsilon2 = epsilon * epsilon;
-    const double gamma_minus_1 = M_gamma - 1.0;
-    const double gamma_ratio = M_gamma / gamma_minus_1;
     
-    if (dir == 1) { // x方向通量
+    // Precompute frequently used constants
+    const double gamma_minus_1 = M_gamma - 1.0;
+    const double gamma_ratio = M_gamma / gamma_minus_1;  // γ/(γ-1)
+    
+    if (dir == 1) { // x-direction flux calculation
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables using division optimization
+                // Compute reciprocal once to avoid multiple divisions
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left state
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right state
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left state
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right state
                 
+                // Compute velocity squares for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算总焓H
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
+                // Enthalpy is conserved across shocks and used in flux calculation
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右通量 (x方向)
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu, F(ρu) = ρu² + p, F(ρv) = ρuv, F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -792,100 +931,109 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for the intermediate state
+                // Roe averages satisfy the "property U" (conservation and consistency)
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
                 const double inv_sum_sqrt = 1.0 / sum_sqrt;
                 
-                const double rhobar = sqrt_rho_L * sqrt_rho_R;
-                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
-                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
-                const double q2bar = ubar*ubar + vbar*vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));
+                const double rhobar = sqrt_rho_L * sqrt_rho_R;          // Roe-averaged density
+                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;  // Roe-averaged x-velocity
+                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;  // Roe-averaged y-velocity
+                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;  // Roe-averaged enthalpy
+                const double q2bar = ubar * ubar + vbar * vbar;         // Roe-averaged velocity magnitude squared
+                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));  // Roe-averaged speed of sound
 
-                // 计算特征值
-                double lambda[4];
-                lambda[0] = ubar - cbar;
-                lambda[1] = ubar;
-                lambda[2] = ubar;
-                lambda[3] = ubar + cbar;
+                // Compute eigenvalues of the Roe matrix
+                // For x-direction: λ₁ = ubar-cbar, λ₂ = ubar, λ₃ = ubar, λ₄ = ubar+cbar
+                double eigenvalues[4];
+                eigenvalues[0] = ubar - cbar;
+                eigenvalues[1] = ubar;
+                eigenvalues[2] = ubar;
+                eigenvalues[3] = ubar + cbar;
 
-                // 熵修正（优化版）
+                // Apply entropy fix (Harten's entropy correction)
+                // Prevents expansion shocks and ensures entropy condition is satisfied
                 const double two_epsilon = 2.0 * epsilon;
                 for (int i = 0; i < 4; i++) {
-                    const double abs_lambda = fabs(lambda[i]);
+                    const double abs_lambda = fabs(eigenvalues[i]);
                     if (abs_lambda < epsilon) {
-                        lambda[i] = (lambda[i]*lambda[i] + epsilon2) / two_epsilon;
+                        // Smooth transition near zero eigenvalues
+                        eigenvalues[i] = (eigenvalues[i] * eigenvalues[i] + epsilon2) / two_epsilon;
                     } else {
-                        lambda[i] = abs_lambda;
+                        eigenvalues[i] = abs_lambda;
                     }
                 }
 
-                // 计算波强（预计算公共项）
-                const double drho = rho_R - rho_L;
-                const double du = u_R - u_L;
-                const double dv = v_R - v_L;
-                const double dp = p_R - p_L;
+                // Compute wave strengths (α coefficients) for characteristic decomposition
+                const double drho = rho_R - rho_L;      // Density jump
+                const double du = u_R - u_L;            // x-velocity jump
+                const double dv = v_R - v_L;            // y-velocity jump
+                const double dp = p_R - p_L;            // Pressure jump
                 
                 const double cbar_sq = cbar * cbar;
                 const double inv_2cbar_sq = 1.0 / (2.0 * cbar_sq);
                 const double inv_cbar_sq = 1.0 / cbar_sq;
 
-                const double alpha1 = (dp - rhobar * cbar * du) * inv_2cbar_sq;
-                const double alpha2 = drho - dp * inv_cbar_sq;
-                const double alpha3 = rhobar * dv;
-                const double alpha4 = (dp + rhobar * cbar * du) * inv_2cbar_sq;
+                // Wave strengths (α) from the jump in characteristic variables
+                const double alpha1 = (dp - rhobar * cbar * du) * inv_2cbar_sq;  // Left acoustic wave
+                const double alpha2 = drho - dp * inv_cbar_sq;                   // Entropy wave
+                const double alpha3 = rhobar * dv;                               // Shear wave
+                const double alpha4 = (dp + rhobar * cbar * du) * inv_2cbar_sq;  // Right acoustic wave
 
-                // 特征向量 (x方向) - 使用数组提高缓存效率
+                // Right eigenvectors of the Roe matrix for x-direction
+                // These form a basis for the characteristic decomposition
                 const double eigenvectors[4][4] = {
-                    {1.0, ubar-cbar, vbar, Hbar-ubar*cbar},
-                    {1.0, ubar, vbar, 0.5*q2bar},
-                    {0.0, 0.0, 1.0, vbar},
-                    {1.0, ubar+cbar, vbar, Hbar+ubar*cbar}
+                    {1.0, ubar - cbar, vbar, Hbar - ubar * cbar},  // Left acoustic wave
+                    {1.0, ubar, vbar, 0.5 * q2bar},                // Entropy wave
+                    {0.0, 0.0, 1.0, vbar},                         // Shear wave
+                    {1.0, ubar + cbar, vbar, Hbar + ubar * cbar}   // Right acoustic wave
                 };
 
-                // 首先计算中心项
+                // Compute Roe numerical flux: F_Roe = 0.5*(F_L + F_R) - 0.5*Σ|λ|αR
+                // Central part (average of left and right fluxes)
                 double rho_F = 0.5 * (rho_FL + rho_FR);
                 double rhou_F = 0.5 * (rhou_FL + rhou_FR);
                 double rhov_F = 0.5 * (rhov_FL + rhov_FR);
                 double rhoe_F = 0.5 * (rhoe_FL + rhoe_FR);
 
-                // 添加耗散项（展开循环以优化性能）
-                const double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                // Add dissipation term (characteristic-based upwinding)
+                const double wave_strengths[4] = {alpha1, alpha2, alpha3, alpha4};
                 
-                // 使用展开的循环减少分支预测开销
+                // Loop over all characteristic waves
                 for (int i = 0; i < 4; i++) {
-                    const double term = 0.5 * lambda[i] * alphas[i];
+                    const double term = 0.5 * eigenvalues[i] * wave_strengths[i];
                     rho_F -= term * eigenvectors[i][0];
                     rhou_F -= term * eigenvectors[i][1];
                     rhov_F -= term * eigenvectors[i][2];
                     rhoe_F -= term * eigenvectors[i][3];
                 }
 
-                z[0][j][k] = rho_F;
-                z[1][j][k] = rhou_F;
-                z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F;
+                // Store computed fluxes in output array
+                flux[0][j][k] = rho_F;
+                flux[1][j][k] = rhou_F;
+                flux[2][j][k] = rhov_F;
+                flux[3][j][k] = rhoe_F;
             }
         }
     }
-    else if (dir == 2) { // y方向通量
+    else if (dir == 2) { // y-direction flux calculation
+        // Similar to x-direction but with velocities and eigenvectors rotated
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取上下原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -894,19 +1042,22 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double v_L = rhov_L * inv_rho_L;
                 const double v_R = rhov_R * inv_rho_R;
                 
+                // Velocity squares for kinetic energy
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算总焓H
+                // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右通量 (y方向)
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv, G(ρu) = ρuv, G(ρv) = ρv² + p, G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -916,7 +1067,7 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for y-direction
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -926,28 +1077,29 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
-                const double q2bar = ubar*ubar + vbar*vbar;
+                const double q2bar = ubar * ubar + vbar * vbar;
                 const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));
 
-                // 计算特征值 (y方向)
-                double lambda[4];
-                lambda[0] = vbar - cbar;
-                lambda[1] = vbar;
-                lambda[2] = vbar;
-                lambda[3] = vbar + cbar;
+                // Compute eigenvalues for y-direction
+                // For y-direction: λ₁ = vbar-cbar, λ₂ = vbar, λ₃ = vbar, λ₄ = vbar+cbar
+                double eigenvalues[4];
+                eigenvalues[0] = vbar - cbar;
+                eigenvalues[1] = vbar;
+                eigenvalues[2] = vbar;
+                eigenvalues[3] = vbar + cbar;
 
-                // 熵修正（优化版）
+                // Apply entropy fix
                 const double two_epsilon = 2.0 * epsilon;
                 for (int i = 0; i < 4; i++) {
-                    const double abs_lambda = fabs(lambda[i]);
+                    const double abs_lambda = fabs(eigenvalues[i]);
                     if (abs_lambda < epsilon) {
-                        lambda[i] = (lambda[i]*lambda[i] + epsilon2) / two_epsilon;
+                        eigenvalues[i] = (eigenvalues[i] * eigenvalues[i] + epsilon2) / two_epsilon;
                     } else {
-                        lambda[i] = abs_lambda;
+                        eigenvalues[i] = abs_lambda;
                     }
                 }
 
-                // 计算波强（预计算公共项）
+                // Compute wave strengths for y-direction
                 const double drho = rho_R - rho_L;
                 const double du = u_R - u_L;
                 const double dv = v_R - v_L;
@@ -957,40 +1109,42 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double inv_2cbar_sq = 1.0 / (2.0 * cbar_sq);
                 const double inv_cbar_sq = 1.0 / cbar_sq;
 
-                const double alpha1 = (dp - rhobar * cbar * dv) * inv_2cbar_sq;
-                const double alpha2 = drho - dp * inv_cbar_sq;
-                const double alpha3 = rhobar * du;
-                const double alpha4 = (dp + rhobar * cbar * dv) * inv_2cbar_sq;
+                // Note: du and dv swapped compared to x-direction
+                const double alpha1 = (dp - rhobar * cbar * dv) * inv_2cbar_sq;  // Left acoustic wave
+                const double alpha2 = drho - dp * inv_cbar_sq;                   // Entropy wave
+                const double alpha3 = rhobar * du;                               // Shear wave
+                const double alpha4 = (dp + rhobar * cbar * dv) * inv_2cbar_sq;  // Right acoustic wave
 
-                // 特征向量 (y方向) - 使用数组提高缓存效率
+                // Right eigenvectors of the Roe matrix for y-direction
                 const double eigenvectors[4][4] = {
-                    {1.0, ubar, vbar-cbar, Hbar-vbar*cbar},
-                    {1.0, ubar, vbar, 0.5*q2bar},
-                    {0.0, 1.0, 0.0, ubar},
-                    {1.0, ubar, vbar+cbar, Hbar+vbar*cbar}
+                    {1.0, ubar, vbar - cbar, Hbar - vbar * cbar},  // Left acoustic wave
+                    {1.0, ubar, vbar, 0.5 * q2bar},                // Entropy wave
+                    {0.0, 1.0, 0.0, ubar},                         // Shear wave
+                    {1.0, ubar, vbar + cbar, Hbar + vbar * cbar}   // Right acoustic wave
                 };
 
-                // Roe数值通量中心项
+                // Compute Roe numerical flux for y-direction
                 double rho_G = 0.5 * (rho_GL + rho_GR);
                 double rhou_G = 0.5 * (rhou_GL + rhou_GR);
                 double rhov_G = 0.5 * (rhov_GL + rhov_GR);
                 double rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
 
-                // 添加耗散项
-                const double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                // Add dissipation term
+                const double wave_strengths[4] = {alpha1, alpha2, alpha3, alpha4};
                 
                 for (int i = 0; i < 4; i++) {
-                    const double term = 0.5 * lambda[i] * alphas[i];
+                    const double term = 0.5 * eigenvalues[i] * wave_strengths[i];
                     rho_G -= term * eigenvectors[i][0];
                     rhou_G -= term * eigenvectors[i][1];
                     rhov_G -= term * eigenvectors[i][2];
                     rhoe_G -= term * eigenvectors[i][3];
                 }
 
-                z[0][j][k] = rho_G;
-                z[1][j][k] = rhou_G;
-                z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G;
+                // Store computed fluxes
+                flux[0][j][k] = rho_G;
+                flux[1][j][k] = rhou_G;
+                flux[2][j][k] = rhov_G;
+                flux[3][j][k] = rhoe_G;
             }
         }
     }
@@ -1518,57 +1672,75 @@ double ExactRieamnna_ustar(double p_star, double rhol, double rhor, double ul,do
 /*                                      ******************                                          */
 /*                                  具有人工热传导的Riemann Solver                                   */
 /*                                      ******************                                          */
-//Flux计算方法
-
-
+/**
+ * HLLHC (Harten-Lax-van Leer with Heat Capacity correction) Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using HLL approximate Riemann solver with heat capacity correction term
+ * HLLHC adds an energy correction term to improve accuracy for flows with significant heat transfer
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param flux Output flux arrays
+ */
 static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC, 
-                              double (*x)[rows][cols], 
-                              double (*y)[rows][cols], 
-                              double (*z)[rows][cols]) {
+                              double (*L_state)[rows][cols], 
+                              double (*R_state)[rows][cols], 
+                              double (*flux)[rows][cols]) {
     
+    // Precompute frequently used constants
     const double gamma_minus_1 = M_gamma - 1.0;
-    const double gamma_ratio = M_gamma / gamma_minus_1;
+    const double gamma_ratio = M_gamma / gamma_minus_1;      // γ/(γ-1) for enthalpy
+    const double inv_gamma_minus_1 = 1.0 / gamma_minus_1;    // 1/(γ-1) for internal energy
     
     if (dir == 1) {
+        // X-direction flux calculation - fully parallelized
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables using division optimization
+                // Compute reciprocal once to avoid multiple divisions
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left state
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right state
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left state
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right state
                 
+                // Compute velocity squares for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
                 
-                // 计算声速
+                // Compute speed of sound: a = sqrt(γ * p / ρ)
                 const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
                 const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
                 
-                // 计算总焓H
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算通量
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu, F(ρu) = ρu² + p, F(ρv) = ρuv, F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -1578,78 +1750,107 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
                 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for wave speed estimation
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
                 const double inv_sum_sqrt = 1.0 / sum_sqrt;
                 
-                const double rhobar = sqrt_rho_L * sqrt_rho_R;
-                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
-                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
-                
-                // 利用Roe平均的变量计算近似波速
+                const double rhobar = sqrt_rho_L * sqrt_rho_R;          // Roe-averaged density
+                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;  // Roe-averaged x-velocity
+                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;  // Roe-averaged y-velocity
+                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;  // Roe-averaged enthalpy
+
+                // Compute approximate wave speeds using Roe-averaged variables,
+                // following Einfeldt's approach to Roe eigenvalue estimation
+                // This provides more robust wave speed estimates, especially for strong shocks
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = ubar - cbar;
-                const double sright = ubar + cbar;
 
-                const double denom = rho_L * (sleft - u_L) - rho_R * (sright - u_R);
+                // Einfeldt's correction term for better wave speed estimation
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R * inv_sum_sqrt * inv_sum_sqrt;
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (u_R - u_L) * (u_R - u_L));
                 
-                // 计算能量项
-                const double e_L = inv_rho_L * p_L * (1.0 / gamma_minus_1);
-                const double e_R = inv_rho_R * p_R * (1.0 / gamma_minus_1);
+                // Check for valid wave speeds (avoid numerical issues)
+                /*if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average if Einfeldt's method fails
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }*/
                 
-                // 确定HLL数值通量
+                // Wave speeds: s_left = ubar - â, s_right = ubar + â
+                // where â is the modified sound speed from Einfeldt's method
+                const double sleft = ubar - sqrt_d_sq;
+                const double sright = ubar + sqrt_d_sq;
+
+                // Compute denominator for heat capacity correction term
+                //const double denom = rho_L * (sleft - u_L) - rho_R * (sright - u_R);
+                const double rho_HLL = (sright*rho_R - sleft*rho_L + rho_FL - rho_FR)/(sright-sleft);
+               // const double denom = 0.0;
+                
+                // Compute internal energy per unit mass: e = p/(ρ(γ-1))
+                const double e_L = p_L * inv_rho_L * inv_gamma_minus_1;
+                const double e_R = p_R * inv_rho_R * inv_gamma_minus_1;
+                
+                // Determine HLLHC numerical flux based on wave speeds
+                // HLLHC adds a heat capacity correction term to the energy flux
                 double rho_F, rhou_F, rhov_F, rhoe_F;
                 
                 if (sleft >= 0.0) {
+                    // Entirely left-going waves: use left flux
                     rho_F = rho_FL;
                     rhou_F = rhou_FL;
                     rhov_F = rhov_FL;
                     rhoe_F = rhoe_FL;
                 }
                 else if (sright <= 0.0) {
+                    // Entirely right-going waves: use right flux
                     rho_F = rho_FR;
                     rhou_F = rhou_FR;
                     rhov_F = rhov_FR;
                     rhoe_F = rhoe_FR;
                 }
-                else { // sleft < 0 && sright > 0
+                else { 
+                    // Intermediate region (sleft < 0 && sright > 0): use HLLHC flux formula
+                    // HLLHC adds a correction term to energy flux for better heat transfer accuracy
                     const double inv_sdiff = 1.0 / (sright - sleft);
                     const double sleft_sright = sleft * sright;
                     
+                    // Standard HLL flux for mass and momentum
                     rho_F = (sright * rho_FL - sleft * rho_FR + sleft_sright * (rho_R - rho_L)) * inv_sdiff;
                     rhou_F = (sright * rhou_FL - sleft * rhou_FR + sleft_sright * (rhou_R - rhou_L)) * inv_sdiff;
                     rhov_F = (sright * rhov_FL - sleft * rhov_FR + sleft_sright * (rhov_R - rhov_L)) * inv_sdiff;
-                    rhoe_F = (sright * rhoe_FL - sleft * rhoe_FR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff + 
-                             (sleft_sright * inv_sdiff) * (e_R - e_L) * denom;
+                    
+                    // HLLHC energy flux: adds heat capacity correction term (e_R - e_L) * denom
+                    rhoe_F = (sright * rhoe_FL - sleft * rhoe_FR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff 
+                             + (sleft_sright * inv_sdiff) * (e_R - e_L) * rho_HLL;
                 }
 
-                z[0][j][k] = rho_F; 
-                z[1][j][k] = rhou_F; 
-                z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F; 
+                // Store computed fluxes in output array
+                flux[0][j][k] = rho_F; 
+                flux[1][j][k] = rhou_F; 
+                flux[2][j][k] = rhov_F;
+                flux[3][j][k] = rhoe_F; 
             }
         }   
     }
     else if (dir == 2) {
+        // Y-direction flux calculation - fully parallelized
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -1666,11 +1867,16 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算总焓H
+                // Compute speed of sound: a = sqrt(γ * p / ρ)
+                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+
+                // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右守恒变量和通量
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv, G(ρu) = ρuv, G(ρv) = ρv² + p, G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -1680,7 +1886,7 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
             
-                // 计算Roe平均
+                // Compute Roe-averaged variables
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -1691,20 +1897,37 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // 利用Roe平均的变量计算近似波速
+                // Compute approximate wave speeds using Roe-averaged variables,
+                // following Einfeldt's approach for y-direction
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = vbar - cbar;
-                const double sright = vbar + cbar;
 
-                const double denom = rho_L * (sleft - v_L) - rho_R * (sright - v_R);
+                // Einfeldt's correction term for y-direction wave speeds
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R * inv_sum_sqrt * inv_sum_sqrt;
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (v_R - v_L) * (v_R - v_L));
                 
-                // 计算能量项
-                const double e_L = inv_rho_L * p_L * (1.0 / gamma_minus_1);
-                const double e_R = inv_rho_R * p_R * (1.0 / gamma_minus_1);
+                // Check for valid wave speeds
+                if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }
+                
+                // Wave speeds for y-direction: based on vbar instead of ubar
+                const double sleft = vbar - sqrt_d_sq;
+                const double sright = vbar + sqrt_d_sq;
 
-                // 确定HLL数值通量
+                // Compute denominator for heat capacity correction term (y-direction)
+                //const double denom = rho_L * (sleft - v_L) - rho_R * (sright - v_R);
+                const double rho_HLL = (sright*rho_R - sleft*rho_L + rho_GL - rho_GR)/(sright-sleft);
+               //const double denom = 0.0;
+                
+                // Compute internal energy per unit mass
+                const double e_L = p_L * inv_rho_L * inv_gamma_minus_1;
+                const double e_R = p_R * inv_rho_R * inv_gamma_minus_1;
+
+                // Determine HLLHC numerical flux based on wave speeds
                 double rho_G, rhou_G, rhov_G, rhoe_G;
                 
                 if (sleft >= 0.0) {
@@ -1719,76 +1942,101 @@ static inline void HLLHC_Flux(int dir, int var, int rows, int cols, int GC,
                     rhov_G = rhov_GR;
                     rhoe_G = rhoe_GR;
                 }
-                else { // sleft < 0 && sright > 0
+                else { 
+                    // Intermediate region: use HLLHC flux formula
                     const double inv_sdiff = 1.0 / (sright - sleft);
                     const double sleft_sright = sleft * sright;
                     
                     rho_G = (sright * rho_GL - sleft * rho_GR + sleft_sright * (rho_R - rho_L)) * inv_sdiff;
                     rhou_G = (sright * rhou_GL - sleft * rhou_GR + sleft_sright * (rhou_R - rhou_L)) * inv_sdiff;
                     rhov_G = (sright * rhov_GL - sleft * rhov_GR + sleft_sright * (rhov_R - rhov_L)) * inv_sdiff;
-                    rhoe_G = (sright * rhoe_GL - sleft * rhoe_GR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff + 
-                             (sleft_sright * inv_sdiff) * (e_R - e_L) * denom;
+                    rhoe_G = (sright * rhoe_GL - sleft * rhoe_GR + sleft_sright * (rhoe_R - rhoe_L)) * inv_sdiff 
+                             + (sleft_sright * inv_sdiff) * (e_R - e_L) * rho_HLL;
                 }
 
-                z[0][j][k] = rho_G; 
-                z[1][j][k] = rhou_G; 
-                z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G; 
+                // Store computed fluxes
+                flux[0][j][k] = rho_G; 
+                flux[1][j][k] = rhou_G; 
+                flux[2][j][k] = rhov_G;
+                flux[3][j][k] = rhoe_G; 
             }
         }
     }
 }
 
 
+/**
+ * HLLCHC (Harten-Lax-van Leer Contact with Heat Capacity correction) Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using HLLC approximate Riemann solver with heat capacity correction term
+ * Combines the contact discontinuity capturing ability of HLLC with improved energy accuracy
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param flux Output flux arrays
+ */
 static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC, 
-                               double (*x)[rows][cols], 
-                               double (*y)[rows][cols], 
-                               double (*z)[rows][cols]) {
+                               double (*L_state)[rows][cols], 
+                               double (*R_state)[rows][cols], 
+                               double (*flux)[rows][cols]) {
     
+    // Precompute frequently used constants
     const double gamma_minus_1 = M_gamma - 1.0;
-    const double gamma_ratio = M_gamma / gamma_minus_1;
-    const double inv_gamma_minus_1 = 1.0 / gamma_minus_1;
+    const double gamma_ratio = M_gamma / gamma_minus_1;      // γ/(γ-1) for enthalpy
+    const double inv_gamma_minus_1 = 1.0 / gamma_minus_1;    // 1/(γ-1) for internal energy
     
     if (dir == 1) {
+        // X-direction flux calculation - fully parallelized
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables using division optimization
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left state
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right state
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left state
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right state
                 
+                // Compute velocity squares for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
                 
-                // 计算声速
-                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
-                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+                // Compute speed of sound: a = sqrt(γ * p / ρ)
+                //const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                //const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
                 
-                // 计算总焓H
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
+
+                //Calculate The Left And Right Sound Speed Values
+                const double a_L = sqrt((M_gamma - 1.0) * (H_L - 0.5 * (u_L_sq + v_L_sq)));
+                const double a_R = sqrt((M_gamma - 1.0) * (H_R - 0.5 * (u_R_sq + v_R_sq)));
                 
-                // 计算左右守恒变量和通量
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu, F(ρu) = ρu² + p, F(ρv) = ρuv, F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -1798,91 +2046,126 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
                 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for intermediate state estimation
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
                 const double inv_sum_sqrt = 1.0 / sum_sqrt;
                 
-                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
-                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
+                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;  // Roe-averaged x-velocity
+                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;  // Roe-averaged y-velocity
+                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;  // Roe-averaged enthalpy
                 
-                // 利用Roe平均的变量计算近似波速
+                // Compute approximate wave speeds using Roe-averaged variables,
+                // following Einfeldt's approach to Roe eigenvalue estimation
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = ubar - cbar;
-                const double sright = ubar + cbar;
-            
-                // 计算中间波速 s_star 和压力 p_star
-                const double denom = rho_L * (sleft - u_L) - rho_R * (sright - u_R);
-                const double s_star = (p_R - p_L + rho_L * u_L * (sleft - u_L) - rho_R * u_R * (sright - u_R)) / denom;
+
+                // Einfeldt's correction term for better wave speed estimation
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (u_R - u_L) * (u_R - u_L));
                 
+                // Check for valid wave speeds (avoid numerical issues)
+                if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average if Einfeldt's method fails
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }
+                
+                // Wave speeds: s_left = ubar - â, s_right = ubar + â
+                // where â is the modified sound speed from Einfeldt's method
+                const double sleft = ubar - sqrt_d_sq;
+                const double sright = ubar + sqrt_d_sq;
+            
+                // Compute intermediate wave speed s_star and pressure p_star
+                // s_star represents the speed of the contact discontinuity
+                const double denom = rho_L * (sleft - u_L) - rho_R * (sright - u_R);
+                const double s_star = (p_R - p_L + rho_L * u_L * (sleft - u_L) 
+                                     - rho_R * u_R * (sright - u_R)) / denom;
+                
+                // Compute intermediate pressure (constant across contact discontinuity)
                 const double p_star = p_L + rho_L * (sleft - u_L) * (s_star - u_L);
+                
+                // Compute intermediate state densities (star region)
                 const double u_stat_L = rho_L * (sleft - u_L) / (sleft - s_star);
                 const double u_stat_R = rho_R * (sright - u_R) / (sright - s_star);
 
-                const double fe_star_L = rhoe_L * inv_rho_L + (s_star - u_L) * (s_star + p_L / (rho_L * (sleft - u_L)));
-                const double fe_star_R = rhoe_R * inv_rho_R + (s_star - u_R) * (s_star + p_R / (rho_R * (sright - u_R)));
+                // Compute intermediate state energy fluxes
+                const double fe_star_L = rhoe_L * inv_rho_L + (s_star - u_L) 
+                                       * (s_star + p_L / (rho_L * (sleft - u_L)));
+                const double fe_star_R = rhoe_R * inv_rho_R + (s_star - u_R) 
+                                       * (s_star + p_R / (rho_R * (sright - u_R)));
 
-                // 计算能量项
+                // Compute internal energy per unit mass: e = p/(ρ(γ-1))
                 const double e_L = inv_rho_L * p_L * inv_gamma_minus_1;
                 const double e_R = inv_rho_R * p_R * inv_gamma_minus_1;
+                
+                // Precompute terms for energy correction
                 const double inv_sdiff = 1.0 / (sright - sleft);
                 const double sleft_sright = sleft * sright;
                 const double energy_corr_term = sleft_sright * inv_sdiff * (e_R - e_L);
 
-                // 确定HLLC数值通量 - 初始化变量
+                // Initialize flux variables
                 double rho_F = 0.0, rhou_F = 0.0, rhov_F = 0.0, rhoe_F = 0.0;
                 
+                // Determine HLLCHC numerical flux based on wave speeds
+                // HLLCHC adds a heat capacity correction term to HLLC's energy flux
                 if (sleft >= 0.0) {
+                    // Entirely left-going waves: use left flux
                     rho_F = rho_FL;
                     rhou_F = rhou_FL;
                     rhov_F = rhov_FL;
                     rhoe_F = rhoe_FL;
                 }
                 else if (sleft < 0.0 && s_star >= 0.0) {
+                    // Left and star region: sleft < 0 ≤ s_star
                     rho_F = rho_FL + sleft * (u_stat_L - rho_L);
                     rhou_F = rhou_FL + sleft * (u_stat_L * s_star - rhou_L);
                     rhov_F = rhov_FL + sleft * (u_stat_L * v_L - rhov_L);
+                    // Add energy correction term for improved heat transfer accuracy
                     rhoe_F = rhoe_FL + sleft * (u_stat_L * fe_star_L - rhoe_L) + energy_corr_term * u_stat_L;
                 }
                 else if (s_star < 0.0 && sright > 0.0) {
+                    // Star and right region: s_star < 0 < sright
                     rho_F = rho_FR + sright * (u_stat_R - rho_R);
                     rhou_F = rhou_FR + sright * (u_stat_R * s_star - rhou_R);
                     rhov_F = rhov_FR + sright * (u_stat_R * v_R - rhov_R);
+                    // Add energy correction term for improved heat transfer accuracy
                     rhoe_F = rhoe_FR + sright * (u_stat_R * fe_star_R - rhoe_R) + energy_corr_term * u_stat_R;
                 }
                 else {  // sright <= 0.0
+                    // Entirely right-going waves: use right flux
                     rho_F = rho_FR;
                     rhou_F = rhou_FR;
                     rhov_F = rhov_FR;
                     rhoe_F = rhoe_FR;
                 }
                 
-                z[0][j][k] = rho_F; 
-                z[1][j][k] = rhou_F; 
-                z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F; 
+                // Store computed fluxes in output array
+                flux[0][j][k] = rho_F; 
+                flux[1][j][k] = rhou_F; 
+                flux[2][j][k] = rhov_F;
+                flux[3][j][k] = rhoe_F; 
             }
         }   
     }
     else if (dir == 2) {
+        // Y-direction flux calculation - fully parallelized
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -1899,11 +2182,20 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算总焓H
+                 // Compute speed of sound: a = sqrt(γ * p / ρ)
+                //const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                //const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+
+                // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右守恒变量和通量
+                //Calculate The Left And Right Sound Speed Values
+                const double a_L = sqrt((M_gamma - 1.0) * (H_L - 0.5 * (u_L_sq + v_L_sq)));
+                const double a_R = sqrt((M_gamma - 1.0) * (H_R - 0.5 * (u_R_sq + v_R_sq)));
+
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv, G(ρu) = ρuv, G(ρv) = ρv² + p, G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -1913,7 +2205,7 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
             
-                // 计算Roe平均
+                // Compute Roe-averaged variables
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -1923,34 +2215,54 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
 
-                // 利用Roe平均的变量计算近似波速
+                // Compute approximate wave speeds using Roe-averaged variables,
+                // following Einfeldt's approach for y-direction
                 const double ubar_sq = ubar * ubar;
                 const double vbar_sq = vbar * vbar;
-                const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
-                const double sleft = vbar - cbar;
-                const double sright = vbar + cbar;
+
+                // Einfeldt's correction term for y-direction wave speeds
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (v_R - v_L) * (v_R - v_L));
+                
+                // Check for valid wave speeds
+                /*if (isnan(sqrt_d_sq)) {
+                    // Fall back to simple Roe average
+                    const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * (ubar_sq + vbar_sq)));
+                    sqrt_d_sq = cbar;
+                }*/
+                
+                // Wave speeds for y-direction: based on vbar instead of ubar
+                const double sleft = vbar - sqrt_d_sq;
+                const double sright = vbar + sqrt_d_sq;
             
-                // 计算中间波速 s_star 和压力 p_star
+                // Compute intermediate wave speed and pressure for y-direction
                 const double denom = rho_L * (sleft - v_L) - rho_R * (sright - v_R);
-                const double s_star = (p_R - p_L + rho_L * v_L * (sleft - v_L) - rho_R * v_R * (sright - v_R)) / denom;
+                const double s_star = (p_R - p_L + rho_L * v_L * (sleft - v_L) 
+                                     - rho_R * v_R * (sright - v_R)) / denom;
                 
                 const double p_star = p_L + rho_L * (sleft - v_L) * (s_star - v_L);
                 const double v_stat_L = rho_L * (sleft - v_L) / (sleft - s_star);
                 const double v_stat_R = rho_R * (sright - v_R) / (sright - s_star);
 
-                const double fe_star_L = rhoe_L * inv_rho_L + (s_star - v_L) * (s_star + p_L / (rho_L * (sleft - v_L)));
-                const double fe_star_R = rhoe_R * inv_rho_R + (s_star - v_R) * (s_star + p_R / (rho_R * (sright - v_R)));
+                const double fe_star_L = rhoe_L * inv_rho_L + (s_star - v_L) 
+                                       * (s_star + p_L / (rho_L * (sleft - v_L)));
+                const double fe_star_R = rhoe_R * inv_rho_R + (s_star - v_R) 
+                                       * (s_star + p_R / (rho_R * (sright - v_R)));
 
-                // 计算能量项
+                // Compute internal energy per unit mass for y-direction
                 const double e_L = inv_rho_L * p_L * inv_gamma_minus_1;
                 const double e_R = inv_rho_R * p_R * inv_gamma_minus_1;
+                
+                // Precompute terms for energy correction (y-direction)
                 const double inv_sdiff = 1.0 / (sright - sleft);
                 const double sleft_sright = sleft * sright;
                 const double energy_corr_term = sleft_sright * inv_sdiff * (e_R - e_L);
 
-                // 确定HLLC数值通量 - 初始化变量
+                // Initialize flux variables for y-direction
                 double rho_G = 0.0, rhou_G = 0.0, rhov_G = 0.0, rhoe_G = 0.0;
                 
+                // Determine HLLCHC numerical flux based on wave speeds (y-direction)
                 if (sleft >= 0.0) {
                     rho_G = rho_GL;
                     rhou_G = rhou_GL;
@@ -1976,69 +2288,92 @@ static inline void HLLCHC_Flux(int dir, int var, int rows, int cols, int GC,
                     rhoe_G = rhoe_GR;
                 }
                 
-                z[0][j][k] = rho_G; 
-                z[1][j][k] = rhou_G; 
-                z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G; 
+                // Store computed fluxes for y-direction
+                flux[0][j][k] = rho_G; 
+                flux[1][j][k] = rhou_G; 
+                flux[2][j][k] = rhov_G;
+                flux[3][j][k] = rhoe_G; 
             }
         }
     }    
 }
 
-
+/**
+ * RoeHC (Roe with Heat Capacity correction) Flux Calculator for Euler Equations (2D)
+ * Computes numerical fluxes using Roe's approximate Riemann solver with heat capacity correction
+ * for improved energy conservation in flows with significant heat transfer
+ * 
+ * @param dir Direction: 1 for x-direction fluxes, 2 for y-direction fluxes
+ * @param var Number of variables (currently fixed at 4)
+ * @param rows Number of grid points in y-direction
+ * @param cols Number of grid points in x-direction
+ * @param GC Number of ghost cells
+ * @param L_state Left state conservative variables at cell interfaces
+ * @param R_state Right state conservative variables at cell interfaces
+ * @param flux Output flux arrays
+ */
 static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC, 
-                              double (*x)[rows][cols], 
-                              double (*y)[rows][cols], 
-                              double (*z)[rows][cols]) {
+                              double (*L_state)[rows][cols], 
+                              double (*R_state)[rows][cols], 
+                              double (*flux)[rows][cols]) {
     
+    // Parameters for entropy fix (Harten's entropy correction)
     const double epsilon = 1e-6;
     const double epsilon2 = epsilon * epsilon;
     const double two_epsilon = 2.0 * epsilon;
-    const double gamma_minus_1 = M_gamma - 1.0;
-    const double gamma_ratio = M_gamma / gamma_minus_1;
-    const double inv_gamma_minus_1 = 1.0 / gamma_minus_1;
-    const double eps = 1e-12; // 防止除零的小量
     
-    if (dir == 1) { // x方向通量
+    // Small value to prevent division by zero
+    const double eps = 1e-12;
+    
+    // Precompute frequently used constants
+    const double gamma_minus_1 = M_gamma - 1.0;
+    const double gamma_ratio = M_gamma / gamma_minus_1;      // γ/(γ-1) for enthalpy
+    const double inv_gamma_minus_1 = 1.0 / gamma_minus_1;    // 1/(γ-1) for internal energy
+    
+    if (dir == 1) { // x-direction flux calculation
         #pragma omp parallel for collapse(2)
         for (int j = GC-1; j < rows-GC; j++) {
             for (int k = GC; k < cols-GC; k++) {
-                // 读取左右原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables using division optimization
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
-                const double u_L = rhou_L * inv_rho_L;
-                const double u_R = rhou_R * inv_rho_R;
-                const double v_L = rhov_L * inv_rho_L;
-                const double v_R = rhov_R * inv_rho_R;
+                const double u_L = rhou_L * inv_rho_L;      // x-velocity left state
+                const double u_R = rhou_R * inv_rho_R;      // x-velocity right state
+                const double v_L = rhov_L * inv_rho_L;      // y-velocity left state
+                const double v_R = rhov_R * inv_rho_R;      // y-velocity right state
                 
+                // Compute velocity squares for kinetic energy calculation
                 const double u_L_sq = u_L * u_L;
                 const double u_R_sq = u_R * u_R;
                 const double v_L_sq = v_L * v_L;
                 const double v_R_sq = v_R * v_R;
                 
+                // Compute pressure using ideal gas law: p = (ρe - 0.5ρ(u²+v²)) * (γ-1)
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
-                // 计算能量项
+                // Compute internal energy per unit mass: e = p/(ρ(γ-1))
+                // Used for heat capacity correction term
                 const double e_L = inv_rho_L * p_L * inv_gamma_minus_1;
                 const double e_R = inv_rho_R * p_R * inv_gamma_minus_1;
 
-                // 计算总焓H
+                // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右通量 (x方向)
+                // Compute Euler fluxes in x-direction:
+                // F(ρ) = ρu, F(ρu) = ρu² + p, F(ρv) = ρuv, F(ρe) = ρHu
                 const double rho_FL = rho_L * u_L;
                 const double rho_FR = rho_R * u_R;
                 const double rhou_FL = rho_L * u_L_sq + p_L;
@@ -2048,102 +2383,111 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_FL = rho_L * H_L * u_L;
                 const double rhoe_FR = rho_R * H_R * u_R;
 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for intermediate state estimation
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
                 const double inv_sum_sqrt = 1.0 / sum_sqrt;
                 
-                const double rhobar = sqrt_rho_L * sqrt_rho_R;
-                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
-                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
-                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
-                const double q2bar = ubar*ubar + vbar*vbar;
+                const double rhobar = sqrt_rho_L * sqrt_rho_R;          // Roe-averaged density
+                const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;  // Roe-averaged x-velocity
+                const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;  // Roe-averaged y-velocity
+                const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;  // Roe-averaged enthalpy
+                const double q2bar = ubar * ubar + vbar * vbar;         // Roe-averaged velocity magnitude squared
+                
+                // Compute Roe-averaged speed of sound: cbar = √[(γ-1)(Hbar - 0.5*q2bar)]
                 const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));
 
-                // 计算特征值
-                double lambda[4];
-                lambda[0] = ubar - cbar;
-                lambda[1] = ubar;
-                lambda[2] = ubar;
-                lambda[3] = ubar + cbar;
+                // Compute eigenvalues using Roe-averaged variables
+                // For x-direction: λ₁ = ubar-cbar, λ₂ = ubar, λ₃ = ubar, λ₄ = ubar+cbar
+                double eigenvalues[4];
+                eigenvalues[0] = ubar - cbar;  // Left acoustic wave
+                eigenvalues[1] = ubar;         // Entropy wave
+                eigenvalues[2] = ubar;         // Shear wave
+                eigenvalues[3] = ubar + cbar;  // Right acoustic wave
 
-                // 熵修正（优化版）
+                // Apply entropy fix (Harten's entropy correction)
+                // Prevents expansion shocks and ensures entropy condition is satisfied
                 for (int i = 0; i < 4; i++) {
-                    const double abs_lambda = fabs(lambda[i]);
+                    const double abs_lambda = fabs(eigenvalues[i]);
                     if (abs_lambda < epsilon) {
-                        lambda[i] = (lambda[i]*lambda[i] + epsilon2) / two_epsilon;
+                        // Smooth transition near zero eigenvalues
+                        eigenvalues[i] = (eigenvalues[i] * eigenvalues[i] + epsilon2) / two_epsilon;
                     } else {
-                        lambda[i] = abs_lambda;
+                        eigenvalues[i] = abs_lambda;
                     }
                 }
 
-                // 计算波强（预计算公共项）
-                const double drho = rho_R - rho_L;
-                const double du = u_R - u_L;
-                const double dv = v_R - v_L;
-                const double dp = p_R - p_L;
+                // Compute wave strengths (α coefficients) for characteristic decomposition
+                const double drho = rho_R - rho_L;      // Density jump
+                const double du = u_R - u_L;            // x-velocity jump
+                const double dv = v_R - v_L;            // y-velocity jump
+                const double dp = p_R - p_L;            // Pressure jump
                 
                 const double cbar_sq = cbar * cbar;
                 const double inv_2cbar_sq = 1.0 / (2.0 * cbar_sq + eps);
                 const double inv_cbar_sq = 1.0 / (cbar_sq + eps);
 
-                const double alpha1 = (dp - rhobar * cbar * du) * inv_2cbar_sq;
-                const double alpha2 = drho - dp * inv_cbar_sq;
-                const double alpha3 = rhobar * dv;
-                const double alpha4 = (dp + rhobar * cbar * du) * inv_2cbar_sq;
+                // Wave strengths (α) from the jump in characteristic variables
+                const double alpha1 = (dp - rhobar * cbar * du) * inv_2cbar_sq;  // Left acoustic wave
+                const double alpha2 = drho - dp * inv_cbar_sq;                   // Entropy wave
+                const double alpha3 = rhobar * dv;                               // Shear wave
+                const double alpha4 = (dp + rhobar * cbar * du) * inv_2cbar_sq;  // Right acoustic wave
 
-                // 特征向量 (x方向) - 使用数组提高缓存效率
+                // Right eigenvectors of the Roe matrix for x-direction
                 const double eigenvectors[4][4] = {
-                    {1.0, ubar-cbar, vbar, Hbar-ubar*cbar},
-                    {1.0, ubar, vbar, 0.5*q2bar},
-                    {0.0, 0.0, 1.0, vbar},
-                    {1.0, ubar+cbar, vbar, Hbar+ubar*cbar}
+                    {1.0, ubar - cbar, vbar, Hbar - ubar * cbar},  // Left acoustic wave
+                    {1.0, ubar, vbar, 0.5 * q2bar},                // Entropy wave
+                    {0.0, 0.0, 1.0, vbar},                         // Shear wave
+                    {1.0, ubar + cbar, vbar, Hbar + ubar * cbar}   // Right acoustic wave
                 };
 
-                // 首先计算中心项
+                // Compute Roe numerical flux: F_Roe = 0.5*(F_L + F_R) - 0.5*Σ|λ|αR
+                // Central part (average of left and right fluxes)
                 double rho_F = 0.5 * (rho_FL + rho_FR);
                 double rhou_F = 0.5 * (rhou_FL + rhou_FR);
                 double rhov_F = 0.5 * (rhov_FL + rhov_FR);
                 double rhoe_F = 0.5 * (rhoe_FL + rhoe_FR);
 
-                // 添加耗散项（使用展开的循环）
-                const double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                // Add dissipation term (characteristic-based upwinding)
+                const double wave_strengths[4] = {alpha1, alpha2, alpha3, alpha4};
                 
-                // 展开循环以减少分支预测开销
+                // Loop over all characteristic waves
                 for (int i = 0; i < 4; i++) {
-                    const double term = 0.5 * lambda[i] * alphas[i];
+                    const double term = 0.5 * eigenvalues[i] * wave_strengths[i];
                     rho_F -= term * eigenvectors[i][0];
                     rhou_F -= term * eigenvectors[i][1];
                     rhov_F -= term * eigenvectors[i][2];
                     rhoe_F -= term * eigenvectors[i][3];
                 }
 
-                // 添加能量修正项
-                const double energy_correction = 0.5 * lambda[3] * (e_R - e_L) * rhobar;
+                // Add heat capacity correction term to energy flux
+                // This term improves energy conservation for flows with significant heat transfer
+                const double energy_correction = 0.5 * eigenvalues[3] * (e_R - e_L) * rhobar;
                 
-                z[0][j][k] = rho_F;
-                z[1][j][k] = rhou_F;
-                z[2][j][k] = rhov_F;
-                z[3][j][k] = rhoe_F - energy_correction;
+                // Store computed fluxes with energy correction
+                flux[0][j][k] = rho_F;
+                flux[1][j][k] = rhou_F;
+                flux[2][j][k] = rhov_F;
+                flux[3][j][k] = rhoe_F - energy_correction;
             }
         }
     }
-    else if (dir == 2) { // y方向通量
+    else if (dir == 2) { // y-direction flux calculation
         #pragma omp parallel for collapse(2)
         for (int j = GC; j < rows-GC; j++) {
             for (int k = GC-1; k < cols-GC; k++) {
-                // 读取上下原始变量
-                const double rho_L = x[0][j][k];
-                const double rho_R = y[0][j][k];
-                const double rhou_L = x[1][j][k];
-                const double rhou_R = y[1][j][k];
-                const double rhov_L = x[2][j][k];
-                const double rhov_R = y[2][j][k];
-                const double rhoe_L = x[3][j][k];
-                const double rhoe_R = y[3][j][k];
+                // Read left and right conservative variables
+                const double rho_L = L_state[0][j][k];
+                const double rho_R = R_state[0][j][k];
+                const double rhou_L = L_state[1][j][k];
+                const double rhou_R = R_state[1][j][k];
+                const double rhov_L = L_state[2][j][k];
+                const double rhov_R = R_state[2][j][k];
+                const double rhoe_L = L_state[3][j][k];
+                const double rhoe_R = R_state[3][j][k];
 
-                // 计算原始变量（使用除法优化）
+                // Compute primitive variables
                 const double inv_rho_L = 1.0 / rho_L;
                 const double inv_rho_R = 1.0 / rho_R;
                 
@@ -2160,15 +2504,16 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
                 
-                // 计算能量项
+                // Compute internal energy per unit mass
                 const double e_L = inv_rho_L * p_L * inv_gamma_minus_1;
                 const double e_R = inv_rho_R * p_R * inv_gamma_minus_1;
 
-                // 计算总焓H
+                // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
 
-                // 计算左右通量 (y方向)
+                // Compute Euler fluxes in y-direction:
+                // G(ρ) = ρv, G(ρu) = ρuv, G(ρv) = ρv² + p, G(ρe) = ρHv
                 const double rho_GL = rho_L * v_L;
                 const double rho_GR = rho_R * v_R;
                 const double rhou_GL = rho_L * u_L * v_L;
@@ -2178,7 +2523,7 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double rhoe_GL = rho_L * H_L * v_L;
                 const double rhoe_GR = rho_R * H_R * v_R;
 
-                // 计算Roe平均
+                // Compute Roe-averaged variables for y-direction
                 const double sqrt_rho_L = sqrt(rho_L);
                 const double sqrt_rho_R = sqrt(rho_R);
                 const double sum_sqrt = sqrt_rho_L + sqrt_rho_R;
@@ -2188,27 +2533,30 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double ubar = (sqrt_rho_L * u_L + sqrt_rho_R * u_R) * inv_sum_sqrt;
                 const double vbar = (sqrt_rho_L * v_L + sqrt_rho_R * v_R) * inv_sum_sqrt;
                 const double Hbar = (sqrt_rho_L * H_L + sqrt_rho_R * H_R) * inv_sum_sqrt;
-                const double q2bar = ubar*ubar + vbar*vbar;
+                const double q2bar = ubar * ubar + vbar * vbar;
+                
+                // Compute Roe-averaged speed of sound for y-direction
                 const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));
 
-                // 计算特征值 (y方向)
-                double lambda[4];
-                lambda[0] = vbar - cbar;
-                lambda[1] = vbar;
-                lambda[2] = vbar;
-                lambda[3] = vbar + cbar;
+                // Compute eigenvalues for y-direction
+                // For y-direction: λ₁ = vbar-cbar, λ₂ = vbar, λ₃ = vbar, λ₄ = vbar+cbar
+                double eigenvalues[4];
+                eigenvalues[0] = vbar - cbar;
+                eigenvalues[1] = vbar;
+                eigenvalues[2] = vbar;
+                eigenvalues[3] = vbar + cbar;
 
-                // 熵修正（优化版）
+                // Apply entropy fix
                 for (int i = 0; i < 4; i++) {
-                    const double abs_lambda = fabs(lambda[i]);
+                    const double abs_lambda = fabs(eigenvalues[i]);
                     if (abs_lambda < epsilon) {
-                        lambda[i] = (lambda[i]*lambda[i] + epsilon2) / two_epsilon;
+                        eigenvalues[i] = (eigenvalues[i] * eigenvalues[i] + epsilon2) / two_epsilon;
                     } else {
-                        lambda[i] = abs_lambda;
+                        eigenvalues[i] = abs_lambda;
                     }
                 }
 
-                // 计算波强（预计算公共项）
+                // Compute wave strengths for y-direction
                 const double drho = rho_R - rho_L;
                 const double du = u_R - u_L;
                 const double dv = v_R - v_L;
@@ -2218,49 +2566,49 @@ static inline void RoeHC_Flux(int dir, int var, int rows, int cols, int GC,
                 const double inv_2cbar_sq = 1.0 / (2.0 * cbar_sq + eps);
                 const double inv_cbar_sq = 1.0 / (cbar_sq + eps);
 
-                const double alpha1 = (dp - rhobar * cbar * dv) * inv_2cbar_sq;
-                const double alpha2 = drho - dp * inv_cbar_sq;
-                const double alpha3 = rhobar * du;
-                const double alpha4 = (dp + rhobar * cbar * dv) * inv_2cbar_sq;
+                // Wave strengths for y-direction (note: du and dv swapped compared to x-direction)
+                const double alpha1 = (dp - rhobar * cbar * dv) * inv_2cbar_sq;  // Left acoustic wave
+                const double alpha2 = drho - dp * inv_cbar_sq;                   // Entropy wave
+                const double alpha3 = rhobar * du;                               // Shear wave
+                const double alpha4 = (dp + rhobar * cbar * dv) * inv_2cbar_sq;  // Right acoustic wave
 
-                // 特征向量 (y方向) - 使用数组提高缓存效率
+                // Right eigenvectors of the Roe matrix for y-direction
                 const double eigenvectors[4][4] = {
-                    {1.0, ubar, vbar-cbar, Hbar-vbar*cbar},
-                    {1.0, ubar, vbar, 0.5*q2bar},
-                    {0.0, 1.0, 0.0, ubar},
-                    {1.0, ubar, vbar+cbar, Hbar+vbar*cbar}
+                    {1.0, ubar, vbar - cbar, Hbar - vbar * cbar},  // Left acoustic wave
+                    {1.0, ubar, vbar, 0.5 * q2bar},                // Entropy wave
+                    {0.0, 1.0, 0.0, ubar},                         // Shear wave
+                    {1.0, ubar, vbar + cbar, Hbar + vbar * cbar}   // Right acoustic wave
                 };
 
-                // Roe数值通量中心项
+                // Compute Roe numerical flux for y-direction
                 double rho_G = 0.5 * (rho_GL + rho_GR);
                 double rhou_G = 0.5 * (rhou_GL + rhou_GR);
                 double rhov_G = 0.5 * (rhov_GL + rhov_GR);
                 double rhoe_G = 0.5 * (rhoe_GL + rhoe_GR);
 
-                // 添加耗散项
-                const double alphas[4] = {alpha1, alpha2, alpha3, alpha4};
+                // Add dissipation term
+                const double wave_strengths[4] = {alpha1, alpha2, alpha3, alpha4};
                 
                 for (int i = 0; i < 4; i++) {
-                    const double term = 0.5 * lambda[i] * alphas[i];
+                    const double term = 0.5 * eigenvalues[i] * wave_strengths[i];
                     rho_G -= term * eigenvectors[i][0];
                     rhou_G -= term * eigenvectors[i][1];
                     rhov_G -= term * eigenvectors[i][2];
                     rhoe_G -= term * eigenvectors[i][3];
                 }
 
-                // 添加能量修正项
-                const double energy_correction = 0.5 * lambda[3] * (e_R - e_L) * rhobar;
+                // Add heat capacity correction term to energy flux (y-direction)
+                const double energy_correction = 0.5 * eigenvalues[3] * (e_R - e_L) * rhobar;
                 
-                z[0][j][k] = rho_G;
-                z[1][j][k] = rhou_G;
-                z[2][j][k] = rhov_G;
-                z[3][j][k] = rhoe_G - energy_correction;
+                // Store computed fluxes with energy correction
+                flux[0][j][k] = rho_G;
+                flux[1][j][k] = rhou_G;
+                flux[2][j][k] = rhov_G;
+                flux[3][j][k] = rhoe_G - energy_correction;
             }
         }
     }
 }
-
-
 
 
 static inline void HLL_Flux_HeatConduction(int var, int rows, int GC, double (*x)[rows], double (*y)[rows] ,double (*z)[rows], double u_point) {
