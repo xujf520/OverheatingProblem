@@ -875,6 +875,103 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
 }
 
 
+// Case 6: Odd-Even Decoupling Test (Based on Quirk 1994)
+static inline void initEulerpri2D_OddEvenDecoupling(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 2D Odd-Even Decoupling Test (Quirk 1994) ===\n");
+
+    // 边界条件：出流（模拟管道）
+    bc_config.left = BC_OUTFLOW;      
+    bc_config.right = BC_OUTFLOW;     
+    bc_config.bottom = BC_OUTFLOW;    
+    bc_config.top = BC_OUTFLOW;       
+
+    int i, j;
+    *Lx = 20.0;    // 管道长度（足够长以观察激波传播）
+    *Ly = 1.0;     // 管道宽度
+
+    // 激波参数：强激波 M=6，γ=1.4
+    double gamma = 1.4;
+    double Ms = 6.0;  // 激波马赫数
+    
+    // 激波前状态（右侧）
+    double rho_pre = 1.0;
+    double u_pre = 0.0;    // 激波前静止
+    double v_pre = 0.0;
+    double p_pre = 1.0;
+    double a_pre = sqrt(gamma * p_pre / rho_pre);  // 声速
+    
+    // 计算激波后状态（左侧，使用Rankine-Hugoniot关系）
+    double rho_post = rho_pre * ((gamma + 1.0) * Ms * Ms) / ((gamma - 1.0) * Ms * Ms + 2.0);
+    double p_post = p_pre * (2.0 * gamma * Ms * Ms - (gamma - 1.0)) / (gamma + 1.0);
+    double u_post = Ms * a_pre * (1.0 - rho_pre / rho_post);  // 激波后速度（向右为正）
+    
+    printf("Shock parameters: M=%.2f, γ=%.2f\n", Ms, gamma);
+    printf("Pre-shock state: ρ=%.4f, u=%.4f, p=%.4f\n", rho_pre, u_pre, p_pre);
+    printf("Post-shock state: ρ=%.4f, u=%.4f, p=%.4f\n", rho_post, u_post, p_post);
+    
+    // 奇偶扰动幅度（非常小，模拟数值误差或网格扰动）
+    double perturbation = 1e-6;
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
+            
+            // 激波位置：初始时刻位于 x = Lx/4 处
+            double x_pos = (double)i / rows * (*Lx);
+            double y_pos = (double)j / cols * (*Ly);
+            
+            if (x_pos < (*Lx) * 0.25) {
+                // 激波后区域（左侧）
+                x[0][i][j] = rho_post;
+                x[1][i][j] = u_post;
+                x[2][i][j] = v_pre;
+                x[3][i][j] = p_post;
+            } else {
+                // 激波前区域（右侧）
+                x[0][i][j] = rho_pre;
+                x[1][i][j] = u_pre;
+                x[2][i][j] = v_pre;
+                x[3][i][j] = p_pre;
+            }
+            
+            // 关键步骤：在激波后区域施加奇偶扰动（仅对密度和压力）
+            // 模拟Quirk论文中的网格中心线扰动
+            if (x_pos < (*Lx) * 0.25) {
+                if (j % 2 == 0) {  // 偶数网格点
+                    x[0][i][j] += perturbation;
+                    x[3][i][j] += perturbation;
+                } else {           // 奇数网格点
+                    x[0][i][j] -= perturbation;
+                    x[3][i][j] -= perturbation;
+                }
+            }
+            
+            // 可选：在激波前区域也施加微小扰动，模拟网格不完美
+            // 这会更接近Quirk的实际情况
+            // if (x_pos >= (*Lx) * 0.25) {
+            //     if ((i + j) % 2 == 0) {  // 另一种奇偶模式
+            //         x[0][i][j] += perturbation * 0.1;
+            //         x[3][i][j] += perturbation * 0.1;
+            //     } else {
+            //         x[0][i][j] -= perturbation * 0.1;
+            //         x[3][i][j] -= perturbation * 0.1;
+            //     }
+            // }
+        }
+    }
+
+    *Time = 2.0;  // 足够的时间让激波传播并发展出失耦现象
+    printf("Computational domain: Lx = %.2f, Ly = %.2f\n", *Lx, *Ly);
+    printf("Final simulation time: t = %.2f\n", *Time);
+    printf("Odd-Even perturbation amplitude: %e\n", perturbation);
+    printf("Boundary Conditions: All outflow\n");
+    printf("Initial shock at x = %.2f\n", *Lx * 0.25);
+    printf("Note: This test is designed to reveal Odd-Even Decoupling with Roe-type solvers.\n");
+}
+
+
+
 double L_fixed_value_state[4] = {1.4, (1.4)*3.0, 0.0, (1.0)/0.4 + 0.5 * (1.4) *3.0 *3.0}; 
 double R_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0}; 
 double B_fixed_value_state[4] = {1.4, 1.4*3.0, 0.0, 1.0/0.4 + 0.5 * 1.4 *3.0 *3.0}; 
@@ -1098,6 +1195,10 @@ static inline void initEulerTestCase(TestCase2D test_case,
             initEulerpri2D_BackwardStep(var, rows, cols, x, Lx, Ly, Time);
             break;
 
+        case TEST_OddEven_Decoupling :
+            initEulerpri2D_OddEvenDecoupling(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
         default:
             printf("Error: Unknown test case selected!\n");
             // Default Use Of 1 D Shock Tube
@@ -1138,6 +1239,7 @@ static inline void Init_Euler_2D(TestCase2D test_case,
         case TEST_BLAST_WAVE: printf("Blast Wave (Spherical Explosion)\n"); break;
         case TEST_NOH_PROBLEM: printf("Noh Problem (Converging Shock)\n"); break;
         case TEST_BACKWARD_STEP: printf("Backward Step Flow\n"); break;
+        case TEST_OddEven_Decoupling: printf("Odd Even Decoupling\n"); break;
     }
     
     // Call A Unified Initialization Function
@@ -1167,6 +1269,7 @@ static inline const char* getTestCaseDescription(TestCase2D test_case) {
         case TEST_BLAST_WAVE: return "Blast wave - strong spherical explosion";
         case TEST_NOH_PROBLEM: return "Noh problem - infinite strength converging shock";
         case TEST_BACKWARD_STEP: return "Backward step flow - supersonic flow with separation";
+        case TEST_OddEven_Decoupling: return "Odd Even Decoupling  - Test Riemann Problem";
         default: return "Unknown test case";
     }
 }

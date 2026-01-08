@@ -915,6 +915,11 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
+                 // Compute speed of sound
+                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+
+
                 // Compute total enthalpy: H = 0.5(u²+v²) + γ/(γ-1) * p/ρ
                 // Enthalpy is conserved across shocks and used in flux calculation
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
@@ -945,13 +950,19 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double q2bar = ubar * ubar + vbar * vbar;         // Roe-averaged velocity magnitude squared
                 const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));  // Roe-averaged speed of sound
 
+                // Compute Einfeldt's correction term for better wave speed estimation
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (u_R - u_L) * (u_R - u_L));
+
+
                 // Compute eigenvalues of the Roe matrix
                 // For x-direction: λ₁ = ubar-cbar, λ₂ = ubar, λ₃ = ubar, λ₄ = ubar+cbar
                 double eigenvalues[4];
-                eigenvalues[0] = ubar - cbar;
+                eigenvalues[0] = ubar - sqrt_d_sq;
                 eigenvalues[1] = ubar;
                 eigenvalues[2] = ubar;
-                eigenvalues[3] = ubar + cbar;
+                eigenvalues[3] = ubar + sqrt_d_sq;
 
                 // Apply entropy fix (Harten's entropy correction)
                 // Prevents expansion shocks and ensures entropy condition is satisfied
@@ -1052,6 +1063,11 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double p_L = (rhoe_L - 0.5 * rho_L * (u_L_sq + v_L_sq)) * gamma_minus_1;
                 const double p_R = (rhoe_R - 0.5 * rho_R * (u_R_sq + v_R_sq)) * gamma_minus_1;
 
+                 // Compute speed of sound
+                const double a_L = sqrt(M_gamma * p_L * inv_rho_L);
+                const double a_R = sqrt(M_gamma * p_R * inv_rho_R);
+
+
                 // Compute total enthalpy
                 const double H_L = 0.5 * (u_L_sq + v_L_sq) + gamma_ratio * (p_L * inv_rho_L);
                 const double H_R = 0.5 * (u_R_sq + v_R_sq) + gamma_ratio * (p_R * inv_rho_R);
@@ -1080,13 +1096,19 @@ static inline void Roe_Flux(int dir, int var, int rows, int cols, int GC,
                 const double q2bar = ubar * ubar + vbar * vbar;
                 const double cbar = sqrt(gamma_minus_1 * (Hbar - 0.5 * q2bar));
 
+
+                // Compute Einfeldt's correction term for better wave speed estimation
+                double eta_sq = 0.5 * sqrt_rho_L * sqrt_rho_R / (sum_sqrt * sum_sqrt);
+                double sqrt_d_sq = sqrt((sqrt_rho_L * a_L * a_L + sqrt_rho_R * a_R * a_R) * inv_sum_sqrt 
+                                      + eta_sq * (v_R - v_L) * (v_R - v_L));
+
                 // Compute eigenvalues for y-direction
                 // For y-direction: λ₁ = vbar-cbar, λ₂ = vbar, λ₃ = vbar, λ₄ = vbar+cbar
                 double eigenvalues[4];
-                eigenvalues[0] = vbar - cbar;
+                eigenvalues[0] = vbar - sqrt_d_sq;
                 eigenvalues[1] = vbar;
                 eigenvalues[2] = vbar;
-                eigenvalues[3] = vbar + cbar;
+                eigenvalues[3] = vbar + sqrt_d_sq;
 
                 // Apply entropy fix
                 const double two_epsilon = 2.0 * epsilon;

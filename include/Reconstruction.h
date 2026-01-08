@@ -1072,7 +1072,7 @@ static inline double WENO5_L(double *f)
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-15;
+    double epsilon = 1.0e-6;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i-2, i-1, i, i+1, i+2]
     k = 0;  // Stencil centered at cell i
@@ -1128,7 +1128,7 @@ static inline double WENO5_R(double *f)
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-15;
+    double epsilon = 1.0e-6;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i+3, i+2, i+1, i, i-1]
     k = 1;  // Stencil centered at cell i+1 (mirrored for right interface)

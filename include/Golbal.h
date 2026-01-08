@@ -19,6 +19,7 @@ typedef enum {
     TEST_DOUBLE_MACH_REFLECTION,// Double Mach reflection
     TEST_BLAST_WAVE,           // Spherical blast wave
     TEST_NOH_PROBLEM,           // Noh problem
+    TEST_OddEven_Decoupling,    //Odd Even Decoupling
     TEST_BACKWARD_STEP         // Backward step flow
 } TestCase2D;
 
@@ -48,7 +49,7 @@ static int GhostCell = 4;
 static double CFL = 0.2;
 // Reconstruction method control variable {0 is 0th order, 2 is 2nd order TVD scheme; 3 is 3rd order WENO, 5 is 5th order WENO reconstruction}
 // TVD includes Vanleer Limiter, Minmod limiter, etc. Modify in CFD_convection.h: 
-static int Recon_Accur = 2;
+static int Recon_Accur = 5;
 // Whether to use characteristic reconstruction
 static bool Characteriz = true;
 // Whether to enable gravity:

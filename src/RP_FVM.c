@@ -95,19 +95,19 @@ int main(int argc, char *argv[]) {
     } else {
         printf("Using default parameters (no control file specified)\n");
         // Set Default Control Parameters
-        ctrl_params.test_case = TEST_BACKWARD_STEP;
-        ctrl_params.L_nx = 120;
-        ctrl_params.L_ny = 40;
+        ctrl_params.test_case = TEST_OddEven_Decoupling;
+        ctrl_params.L_nx = 200;
+        ctrl_params.L_ny = 10;
         ctrl_params.Time_ADM = 3;
-        ctrl_params.scheme = 10;  // 改为ExactRiemann
+        ctrl_params.scheme = 10; 
         ctrl_params.M_gamma = 1.4;
         ctrl_params.Source = false;
         ctrl_params.Gravity = 1.0;
         ctrl_params.CFL = 0.4;
         ctrl_params.Tmax = 0.1;
         ctrl_params.Control_Compution = 0;
-        ctrl_params.Control_output = 2;
-        ctrl_params.Recon_Accur = 2;        // 添加默认值
+        ctrl_params.Control_output = 4;
+        ctrl_params.Recon_Accur = 1;        // 添加默认值
         ctrl_params.Characteriz = false;    // 添加默认值
         strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
     }
@@ -162,12 +162,19 @@ int main(int argc, char *argv[]) {
     
     switch (ctrl_params.Control_Compution) {
         case 0:
+        {
+            // Declare variables inside the case block with braces
+            int last_percent = -1; // Record last percentage to avoid duplicate printing
+            double progress_prev = 0.0;
+            char spinner[4] = {'|', '/', '-', '\\'};
+            int spinner_index = 0;
+            
             for (Time = 0.0; Time < Tmax; Time = Time + Delta_T) {
-                // Record Single Step Start Time
+                // Record start time of current step
                 double step_start_time = omp_get_wtime();
                 Delta_T = Get_Delta_T_2D(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
                 
-                // Ensure It Does Not Exceed The Next Output Time Point Or Tmax
+                // Ensure we don't exceed next output time point or Tmax
                 if (Time + Delta_T > next_output_time) {
                     Delta_T = next_output_time - Time;
                 }
@@ -178,11 +185,10 @@ int main(int argc, char *argv[]) {
                 switch (ctrl_params.Time_ADM) {
                     case 1:
                         RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
-                        //RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         break;
                     case 3:
-                        //RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
-                        RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        //RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     default:
                         fprintf(stderr, "Error: Invalid time advancement method\n");
@@ -191,35 +197,68 @@ int main(int argc, char *argv[]) {
 
                 double currentTime = Time + Delta_T;
                 
-                // 记录单步结束时间并累加
+                // Record end time of current step and accumulate
                 double step_end_time = omp_get_wtime();
                 double step_wall_time = step_end_time - step_start_time;
                 total_wall_time += step_wall_time;
-
-                // 检查是否到达输出时间点
+                
+                // Calculate progress percentage
+                double progress = currentTime / Tmax * 100.0;
+                
+                // Simple animated progress bar - update each step
+                int bar_width = 30;
+                int pos = (int)(bar_width * progress / 100.0);
+                
+                // Update spinner animation
+                spinner_index = (spinner_index + 1) % 4;
+                
+                // Display progress bar (overwrites same line using carriage return)
+                printf("\r[");
+                for (int i = 0; i < bar_width; ++i) {
+                    if (i < pos) printf("█");
+                    else if (i == pos) printf("%c", spinner[spinner_index]);
+                    else printf(" ");
+                }
+                printf("] %.2f%% (Step: %d, Time: %.4f)", progress, Ite, currentTime);
+                fflush(stdout); // Force flush output buffer
+                
+                // Check if we've reached output time point
                 if (fabs(currentTime - next_output_time) < 1e-10 * output_time) {
-                    // 计算平均每步耗时
+                    // Calculate average time per step
                     if (Ite > 0) {
                         average_time_per_step = total_wall_time / Ite;
-                        printf("Step = %d     Time = %.6f     Wall time per step = %.6f seconds", 
-                               Ite, currentTime, average_time_per_step);
-                        printf(" (Threads: %d)\n", omp_get_max_threads());
+                        
+                        // Print detailed information on new line
+                        printf("\n");
+                        printf("Step %d completed | Time: %.6f | Avg time/step: %.6f s\n", 
+                            Ite, currentTime, average_time_per_step);
+                        
+                        // Save data
+                        Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
+                        OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, 
+                                        mesh_x, mesh_y, U, FU, pri, currentTime, ctrl_params.scheme);
+                        printf("Data saved.\n");
+                        
+                        // Reset progress bar display
+                        printf("\n"); // New line for next progress bar
                     } else {
-                        printf("Step = %d     Time = %.6f  \n", Ite, currentTime);
+                        printf("\nStep = %d     Time = %.6f  \n", Ite, currentTime);
+                        printf("Calculation of step %d is completed \n", Ite);
                     }
                     
-                    printf("Calculation of step %d is completed \n", Ite);
-                    
-                    Con_to_Pri_2D(var, LNX_ngc, LNY_ngc, pri, U);
-                    OutputData_file_2D(Control_Out, LNX_ngc, LNY_ngc, GhostCell, 
-                                       mesh_x, mesh_y, U, FU, pri, currentTime, ctrl_params.scheme);
-                    // 更新下一个输出时间点
+                    // Update next output time point
                     next_output_time += output_time;
                 }
 
                 Ite++;
             }
+            
+            // Display after simulation completion
+            printf("\r[");
+            for (int i = 0; i < 30; ++i) printf("█");
+            printf("] 100.00%% (Simulation completed!)\n");
             break;
+        }
             
         case 1:
             // 迭代步数控制
@@ -393,6 +432,8 @@ void ReadControlFile(const char* filename) {
                     ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
                 else if (strcmp(value_trim, "Double_Mach_Reflection") == 0) 
                     ctrl_params.test_case = TEST_DOUBLE_MACH_REFLECTION;
+                else if (strcmp(value_trim, "Odd_Even_Decoupling") == 0) 
+                    ctrl_params.test_case = TEST_OddEven_Decoupling;
                 else if (strcmp(value_trim, "Backward_Step") == 0) 
                     ctrl_params.test_case = TEST_BACKWARD_STEP;
                 else if (strcmp(value_trim, "Blast_Wave") == 0) 
@@ -541,6 +582,7 @@ const char* getTestCaseName(TestCase2D test_case) {
         case TEST_RAYLEIGH_TAYLOR: return "Rayleigh_Taylor";
         case TEST_DOUBLE_MACH_REFLECTION: return "Double_Mach_Reflection";
         case TEST_BACKWARD_STEP: return "Backward_Step";
+        case TEST_OddEven_Decoupling: return "OddEven_DEcouple";
         case TEST_BLAST_WAVE: return "Blast_Wave";
         case TEST_NOH_PROBLEM: return "Noh_Problem";
         default: return "Unknown_Case";
@@ -562,6 +604,7 @@ const char* getTestCaseShortName(TestCase2D test_case) {
         case TEST_RAYLEIGH_TAYLOR: return "RT";
         case TEST_DOUBLE_MACH_REFLECTION: return "DMR";
         case TEST_BACKWARD_STEP: return "BackStep";
+        case TEST_OddEven_Decoupling: return "OEdeCouple";
         case TEST_BLAST_WAVE: return "Blast";
         case TEST_NOH_PROBLEM: return "Noh";
         default: return "Unknown";
@@ -754,6 +797,9 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
             break;
         case TEST_RAYLEIGH_TAYLOR: 
             case_name = "RT"; 
+            break;
+        case TEST_OddEven_Decoupling: 
+            case_name = "OEDC"; 
             break;
         default: 
             case_name = "UNKNOWN";
