@@ -181,96 +181,13 @@ static inline void RK1_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         free(BlockS);
     }
 
+    //角点纠正：
+    Fix_Corner(var, rows, cols, GC, y,BGP.LNX[1]+GC, BGP.LNY[1]+GC);
+
     // Clean up: free decomposition structures
     free_block_decomposition(&BGP);
     free(Lap_U);  
 }
-
-
-
-/*static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
-    int i,j,k;
-
-    double (*Conser_U1)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Conser_U2)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Flux_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    double (*Source_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
-    // 检查内存分配是否成功
-    if (Flux_F == NULL || Flux_G == NULL) {
-        fprintf(stderr, "Memory allocation failed in RK3_TimeAd\n");
-        // 释放已分配的内存
-        free(Conser_U1);
-        free(Conser_U2);
-        free(Flux_F);
-        free(Flux_G);
-        free(Source_G);
-        return;
-    }    
-    //初始化参数
-    for ( k = 0; k < var; k++){
-        for ( i = 0; i < rows; i++){
-            for ( j = 0; j < cols; j++){
-                Conser_U1[k][i][j] = Conser_U2[k][i][j] = 0.0;
-                Flux_F[k][i][j] = Flux_G[k][i][j] = 0.0;
-                Source_G[k][i][j] = 0.0;
-            }
-        }
-    }
-
-    
-    // 第一步计算
-    if (Source)
-        Source_Gravity(var,rows,cols,GC,y,Source_G); 
-//    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
-    Boundary_Conditions(var, rows, cols, y, GC);
-    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
-
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
-                Conser_U1[k][i][j] = y[k][i][j] - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
-                                            - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]; 
-
-
-    //第二步计算
-    if (Source)
-        Source_Gravity(var,rows,cols,GC,Conser_U1,Source_G); 
-//    BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
-    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
-    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
-
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
-                Conser_U2[k][i][j] = (3.0/4.0) * y[k][i][j] +  (1.0/4.0) * (Conser_U1[i][j][k] \
-                                            - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
-                                            - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]);
-    
-    
-    //第三步计算
-    if (Source)
-        Source_Gravity(var,rows,cols,GC,Conser_U2,Source_G); 
-//    BC_DoubleMach_2D(var, rows, cols, Conser_U2, GC,Time); 
-    Boundary_Conditions(var, rows, cols, Conser_U2, GC);
-    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
-
-    for ( k = 0; k < var; k++)
-        for ( i = GC; i <= rows-GC-1; i++)
-            for ( j = GC; j <= cols-GC-1; j++)
-                y[k][i][j] = (1.0/2.0) * y[k][i][j] +  (2.0/3.0) * (Conser_U2[i][j][k] \
-                                                    - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
-                                                    - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]);
-
-
-
-    free(Conser_U1);
-    free(Conser_U2);
-    free(Flux_F);
-    free(Flux_G);
-    free(Source_G); 
-
-}*/
 
 
 static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols, int GC,
@@ -421,6 +338,8 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         free(BlockU); free(BlockSI); free(BlockF); free(BlockG); free(BlockS);
     }
 
+    Fix_Corner(var, rows, cols, GC, Conser_U1,BGP.LNX[1]+GC, BGP.LNY[1]+GC);
+
     // ==================== RK3 Stage 2 ====================
     // Update overlap buffer from stage 1 solution
     #pragma omp parallel for collapse(3)
@@ -523,6 +442,8 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         free(BlockU); free(BlockSI); free(BlockF); free(BlockG); free(BlockS);
     }
 
+    Fix_Corner(var, rows, cols, GC, Conser_U2,BGP.LNX[1]+GC, BGP.LNY[1]+GC);
+
     // ==================== RK3 Stage 3 ====================
     // Update overlap buffer from stage 2 solution
     #pragma omp parallel for collapse(3)
@@ -624,6 +545,8 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
         free(BlockU); free(BlockSI); free(BlockF); free(BlockG); free(BlockS);
     }
 
+    Fix_Corner(var, rows, cols, GC,y,BGP.LNX[1]+GC, BGP.LNY[1]+GC);
+
     // Clean up allocated memory
     free_block_decomposition(&BGP);
     free(Lap_U);
@@ -631,12 +554,9 @@ static inline void RK3_TimeAd_Unified(int AR_scheme, int var, int rows, int cols
     free(Conser_U2);
 }
 
-
-
-static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
+/*static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
     int i,j,k;
 
-    double (*Space_Item)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
     double (*Conser_U1)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
     double (*Conser_U2)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
     double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
@@ -646,7 +566,6 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     if (Flux_F == NULL || Flux_G == NULL) {
         fprintf(stderr, "Memory allocation failed in RK3_TimeAd\n");
         // 释放已分配的内存
-        free(Space_Item);
         free(Conser_U1);
         free(Conser_U2);
         free(Flux_F);
@@ -655,35 +574,30 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
         return;
     }    
     //初始化参数
-
-    #pragma omp parallel for collapse(3)
     for ( k = 0; k < var; k++){
         for ( i = 0; i < rows; i++){
             for ( j = 0; j < cols; j++){
                 Conser_U1[k][i][j] = Conser_U2[k][i][j] = 0.0;
                 Flux_F[k][i][j] = Flux_G[k][i][j] = 0.0;
-                Space_Item[k][i][j] = 0.0;
                 Source_G[k][i][j] = 0.0;
             }
         }
     }
 
+    
     // 第一步计算
     if (Source)
         Source_Gravity(var,rows,cols,GC,y,Source_G); 
 //    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
     Boundary_Conditions(var, rows, cols, y, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
-    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    #pragma omp parallel for collapse(3)
-    for ( k = 0; k < var; k++){
-        for ( i = GC; i <= rows-GC-1; i++){
-            for ( j = GC; j <= cols-GC-1; j++){
-                Conser_U1[k][i][j] = y[k][i][j] + dt * Space_Item[k][i][j];
-            }
-        }
-    }
+    for ( k = 0; k < var; k++)
+        for ( i = GC; i <= rows-GC-1; i++)
+            for ( j = GC; j <= cols-GC-1; j++)
+                Conser_U1[k][i][j] = y[k][i][j] - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
+                                            - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]; 
+
 
     //第二步计算
     if (Source)
@@ -691,43 +605,38 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
 //    BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
     Boundary_Conditions(var, rows, cols, Conser_U1, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
-    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    #pragma omp parallel for collapse(3)
-    for ( k = 0; k < var; k++){
-        for ( i = GC; i <= rows-GC-1; i++){
-            for ( j = GC; j <= cols-GC-1; j++){
-                Conser_U2[k][i][j] = (3.0/4.0) * y[k][i][j] +  (1.0/4.0) * (Conser_U1[k][i][j] + dt * Space_Item[k][i][j]);
-            }
-        }
-    }
+    for ( k = 0; k < var; k++)
+        for ( i = GC; i <= rows-GC-1; i++)
+            for ( j = GC; j <= cols-GC-1; j++)
+                Conser_U2[k][i][j] = (3.0/4.0) * y[k][i][j] +  (1.0/4.0) * (Conser_U1[i][j][k] \
+                                            - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
+                                            - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]);
+    
     
     //第三步计算
     if (Source)
         Source_Gravity(var,rows,cols,GC,Conser_U2,Source_G); 
-    // 施加边界条件
 //    BC_DoubleMach_2D(var, rows, cols, Conser_U2, GC,Time); 
     Boundary_Conditions(var, rows, cols, Conser_U2, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
-    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
-    for ( k = 0; k < var; k++){
-        for ( i = GC; i <= rows-GC-1; i++){
-            for ( j = GC; j <= cols-GC-1; j++){
-                y[k][i][j] = (1.0/3.0) * y[k][i][j] +  (2.0/3.0) * (Conser_U2[k][i][j] + dt * Space_Item[k][i][j]);
-            }
-        }
-    }
+    for ( k = 0; k < var; k++)
+        for ( i = GC; i <= rows-GC-1; i++)
+            for ( j = GC; j <= cols-GC-1; j++)
+                y[k][i][j] = (1.0/2.0) * y[k][i][j] +  (2.0/3.0) * (Conser_U2[i][j][k] \
+                                                    - dt * (Flux_F[i][j][k]-Flux_F[i][j-1][k])/dx \
+                                                    - dt * (Flux_G[i][j][k]-Flux_G[i][j][k-1])/dy + dt * Source_G[k][i][j]);
 
 
-    free(Space_Item);
+
     free(Conser_U1);
     free(Conser_U2);
     free(Flux_F);
     free(Flux_G);
     free(Source_G); 
 
-}
+}*/
 
 
                            /*First Order Euler Time Stepping Method*/
@@ -770,9 +679,16 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
    // 第一步计算
     // 施加边界条件
     Boundary_Conditions(var, rows, cols, y, GC); 
-//    BC_BackwardStep_2D(var, rows, cols, y, GC,Time); 
+//    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
-    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    //Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    /*if (Time_Step == 0)
+        Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    else
+        Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Time_Step++;*/
+   
 
 
     #pragma omp parallel for collapse(3)
@@ -790,6 +706,181 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     free(Flux_G);
     free(Source_G);
 }
+
+
+static inline void RK2_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
+    int i,j,k;
+
+    double (*Space_Item)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Conser_U1)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Source_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    // 检查内存分配是否成功
+    if (Flux_F == NULL || Flux_G == NULL) {
+        fprintf(stderr, "Memory allocation failed in RK3_TimeAd\n");
+        // 释放已分配的内存
+        free(Space_Item);
+        free(Conser_U1);
+        free(Flux_F);
+        free(Flux_G);
+        free(Source_G);
+        return;
+    }    
+    //初始化参数
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = 0; i < rows; i++){
+            for ( j = 0; j < cols; j++){
+                Conser_U1[k][i][j] = 0.0;
+                Flux_F[k][i][j] = Flux_G[k][i][j] = 0.0;
+                Space_Item[k][i][j] = 0.0;
+                Source_G[k][i][j] = 0.0;
+            }
+        }
+    }
+
+    // Step One Calculation
+    if (Source)
+        Source_Gravity(var,rows,cols,GC,y,Source_G); 
+//    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
+    Boundary_Conditions(var, rows, cols, y, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
+    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+//    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
+                Conser_U1[k][i][j] = y[k][i][j] + dt * Space_Item[k][i][j];
+            }
+        }
+    }
+
+    //Step Two Calculation
+    if (Source)
+        Source_Gravity(var,rows,cols,GC,Conser_U1,Source_G); 
+//    BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
+    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
+//    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
+                y[k][i][j] = 0.5 * y[k][i][j] + 0.5 * (Conser_U1[k][i][j] + dt * Space_Item[k][i][j]);
+            }
+        }
+    }
+    free(Space_Item);
+    free(Conser_U1);
+    free(Flux_F);
+    free(Flux_G);
+    free(Source_G); 
+
+}
+
+
+static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt,double dx, double dy) {
+    int i,j,k;
+
+    double (*Space_Item)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Conser_U1)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Conser_U2)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_F)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Flux_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    double (*Source_G)[rows][cols] = malloc(var * sizeof(double[rows][cols]));
+    // 检查内存分配是否成功
+    if (Flux_F == NULL || Flux_G == NULL) {
+        fprintf(stderr, "Memory allocation failed in RK3_TimeAd\n");
+        // 释放已分配的内存
+        free(Space_Item);
+        free(Conser_U1);
+        free(Conser_U2);
+        free(Flux_F);
+        free(Flux_G);
+        free(Source_G);
+        return;
+    }    
+    //初始化参数
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = 0; i < rows; i++){
+            for ( j = 0; j < cols; j++){
+                Conser_U1[k][i][j] = Conser_U2[k][i][j] = 0.0;
+                Flux_F[k][i][j] = Flux_G[k][i][j] = 0.0;
+                Space_Item[k][i][j] = 0.0;
+                Source_G[k][i][j] = 0.0;
+            }
+        }
+    }
+
+    // 第一步计算
+    if (Source)
+        Source_Gravity(var,rows,cols,GC,y,Source_G); 
+    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
+//    Boundary_Conditions(var, rows, cols, y, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
+                Conser_U1[k][i][j] = y[k][i][j] + dt * Space_Item[k][i][j];
+            }
+        }
+    }
+
+    //第二步计算
+    if (Source)
+        Source_Gravity(var,rows,cols,GC,Conser_U1,Source_G); 
+   BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
+//    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+
+    #pragma omp parallel for collapse(3)
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
+                Conser_U2[k][i][j] = (3.0/4.0) * y[k][i][j] +  (1.0/4.0) * (Conser_U1[k][i][j] + dt * Space_Item[k][i][j]);
+            }
+        }
+    }
+    
+    //第三步计算
+    if (Source)
+        Source_Gravity(var,rows,cols,GC,Conser_U2,Source_G); 
+    // 施加边界条件
+    BC_DoubleMach_2D(var, rows, cols, Conser_U2, GC,Time); 
+//    Boundary_Conditions(var, rows, cols, Conser_U2, GC);
+    Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+
+    for ( k = 0; k < var; k++){
+        for ( i = GC; i <= rows-GC-1; i++){
+            for ( j = GC; j <= cols-GC-1; j++){
+                y[k][i][j] = (1.0/3.0) * y[k][i][j] +  (2.0/3.0) * (Conser_U2[k][i][j] + dt * Space_Item[k][i][j]);
+            }
+        }
+    }
+
+
+    free(Space_Item);
+    free(Conser_U1);
+    free(Conser_U2);
+    free(Flux_F);
+    free(Flux_G);
+    free(Source_G); 
+
+}
+
 
 
 static inline void RK1_TimeAd_BS(int AR_scheme, int var, int rows,int cols, int GC, double (*y)[rows][cols], double dt, double dx, double dy) {

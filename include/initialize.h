@@ -454,72 +454,104 @@ static inline void initEulerpri2D_GaussianPulse(int var, int rows, int cols, dou
 }
 
 
-// KH Instability Test Case
+// KH Instability with Sharp Interface (ICs A - Based on Springel 2009)
 static inline void initEulerpri2D_KelvinHelmholtz(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
-    printf("=== Kelvin-Helmholtz Instability Test Case ===\n");
-
-    // Set boundary conditions for KH instability
-    bc_config.left = BC_PERIODICITY;  
-    bc_config.right = BC_PERIODICITY;   
-    bc_config.bottom = BC_REFLECTION; 
-    bc_config.top = BC_REFLECTION; 
-
+    printf("=== KH Instability - Sharp Interface (ICs A - Springel 2009) ===\n");
+    
+    // Boundary conditions: Periodic in all directions for standard KH test
+    bc_config.left = BC_PERIODICITY;
+    bc_config.right = BC_PERIODICITY;
+    bc_config.bottom = BC_PERIODICITY;  // Changed from reflection to periodic
+    bc_config.top = BC_PERIODICITY;     // Changed from reflection to periodic
+    
     int i, j;
-    *Lx = 1.0;    
-    *Ly = 1.0; 
+    *Lx = 1.0;    // Domain length in x-direction
+    *Ly = 1.0;    // Domain length in y-direction (back to 1.0)
     
-    double rho1 = 2.0;    // Lower Fluid
-    double rho2 = 1.0;    // Upper Fluid
-    double u1 = -0.5;     
-    double u2 = 0.5;      
-    double p0 = 2.5;      // Background Pressure
-    double amplitude = 0.01;  // Perturbation Amplitude
-   
-    double y_pos, y_center, interface_position;
-    double nx = rows - 2 * GhostCell;
-    double ny = cols - 2 * GhostCell;
+    // Fluid properties (from Springel 2009)
+    double rho1 = 2.0;     // Central slab density (|y-0.5| < 0.25)
+    double rho2 = 1.0;     // Outer regions density (|y-0.5| > 0.25)
+    double u1 = 0.5;       // Central slab x-velocity
+    double u2 = -0.5;      // Outer regions x-velocity (opposite direction)
+    double p0 = 2.5;       // Uniform pressure
+    double gamma = 5.0/3.0; // Adiabatic index
     
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
-
-            // Calculate Physical Coordinate Position
-            y_pos = (double)j / ny * (*Ly);
-            y_center = 0.5 * (*Ly);                                                                 // Computation Domain Center
+    // Perturbation parameters (from equation 4 in the paper)
+    double w0 = 0.1;       // Perturbation amplitude
+    int n = 4;             // Mode number (n=4 for four wavelengths in domain)
+    double sigma = 0.05;   // Gaussian width for perturbation
+    
+    // Physical grid dimensions (excluding ghost cells)
+    int nx_phys = rows - 2 * GhostCell;
+    int ny_phys = cols - 2 * GhostCell;
+    
+    // Initialize flow field - only physical cells
+    for (i = GhostCell; i < rows - GhostCell; i++) {
+        for (j = GhostCell; j < cols - GhostCell; j++) {
+            // Calculate physical coordinates (0 to Lx, 0 to Ly)
+            // Using cell-centered coordinates
+            double x_pos = (double)(i - GhostCell + 0.5) / nx_phys * (*Lx);
+            double y_pos = (double)(j - GhostCell + 0.5) / ny_phys * (*Ly);
             
-            // Calculate Interface Position With Disturbance
-            interface_position = y_center + amplitude * sin(4.0 * M_PI * (double)i / nx * (*Lx));
-            
-            //Sharp Interface Direct Positioning
-            if (y_pos < interface_position) {
-                // Lower Fluid
-                x[0][i][j] = rho1;  
-                x[1][i][j] = u1;    
+            // SHARP INTERFACE: Central slab at |y-0.5| < 0.25
+            // This is the key feature of ICs A - discontinuous interface
+            if (fabs(y_pos - 0.5) < 0.25) {
+                // Central slab (denser fluid)
+                x[0][i][j] = rho1;  // Density = 2.0
+                x[1][i][j] = u1;    // x-velocity = 0.5 (to the right)
             } else {
-                // Upper Fluid
-                x[0][i][j] = rho2;  
-                x[1][i][j] = u2;    
+                // Outer regions (lighter fluid)
+                x[0][i][j] = rho2;  // Density = 1.0
+                x[1][i][j] = u2;    // x-velocity = -0.5 (to the left)
             }
             
-            x[2][i][j] = 0.0;       
-            x[3][i][j] = p0;        // 压力
+            // VERTICAL VELOCITY PERTURBATION (equation 4 from paper)
+            // Original form: v_y(x,y) = w0 * sin(nπx) * 
+            // [exp(-(y-0.25)^2/(2σ^2)) + exp(-(y-0.75)^2/(2σ^2))]
+            double vy_pert = w0 * sin(n * M_PI * x_pos);
+            double gaussian1 = exp(-pow(y_pos - 0.25, 2) / (2.0 * sigma * sigma));
+            double gaussian2 = exp(-pow(y_pos - 0.75, 2) / (2.0 * sigma * sigma));
+            x[2][i][j] = vy_pert * (gaussian1 + gaussian2);  // y-velocity perturbation
+            
+            x[3][i][j] = p0;  // Pressure (uniform throughout domain)
         }
     }
-
-    *Time = 1.0;
-    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
-    printf("Final simulation time: t = %f \n", *Time);
-    printf("Fluid Properties:\n");
-    printf("  Lower layer: density = %.1f, velocity = %.1f\n", rho1, u1);
-    printf("  Upper layer: density = %.1f, velocity = %.1f\n", rho2, u2);
-    printf("  Background pressure: %.1f\n", p0);
-    printf("  Perturbation amplitude: %.3f\n", amplitude);
-    printf("Boundary Conditions:\n");
-    printf("  Left:   Periodic\n");
-    printf("  Right:  Periodic\n");
-    printf("  Bottom: Reflective Wall\n");
-    printf("  Top:    Reflective Wall\n");
+    
+    *Time = 2.0;  // Simulation time as in Springel (2009)
+    
+    printf("Computational domain: Lx = %.2f, Ly = %.2f\n", *Lx, *Ly);
+    printf("Grid configuration:\n");
+    printf("  Total cells: %d x %d (including ghost cells)\n", rows, cols);
+    printf("  Physical cells: %d x %d\n", nx_phys, ny_phys);
+    printf("  Ghost cells: %d per side\n", GhostCell);
+    printf("Fluid Properties (Springel 2009 setup):\n");
+    printf("  Central slab (|y-0.5| < 0.25): ρ = %.1f, u = %.1f\n", rho1, u1);
+    printf("  Outer regions (|y-0.5| > 0.25): ρ = %.1f, u = %.1f\n", rho2, u2);
+    printf("  Velocity difference: Δu = u1 - u2 = %.1f - (%.1f) = %.1f\n", u1, u2, u1 - u2);
+    printf("  Density ratio: ρ1/ρ2 = %.1f/%.1f = %.1f\n", rho1, rho2, rho1/rho2);
+    printf("  Pressure: p = %.1f (uniform)\n", p0);
+    printf("  Adiabatic index: γ = %.3f\n", gamma);
+    printf("Mach numbers:\n");
+    double a1 = sqrt(gamma * p0 / rho1);  // Sound speed in dense fluid
+    double a2 = sqrt(gamma * p0 / rho2);  // Sound speed in light fluid
+    printf("  Central slab: M1 = |u1|/a1 = %.2f/%.2f = %.2f\n", fabs(u1), a1, fabs(u1)/a1);
+    printf("  Outer regions: M2 = |u2|/a2 = %.2f/%.2f = %.2f\n", fabs(u2), a2, fabs(u2)/a2);
+    printf("Perturbation (equation 4):\n");
+    printf("  Amplitude: w0 = %.2f\n", w0);
+    printf("  Mode number: n = %d (four wavelengths in domain)\n", n);
+    printf("  Gaussian width: σ = %.3f\n", sigma);
+    printf("  Wavenumber: kx = nπ = %.3f\n", n * M_PI);
+    printf("  Wavelength: λ = 2/n = %.2f\n", 2.0/n);
+    printf("Final simulation time: t = %.1f (as in Springel 2009)\n", *Time);
+    printf("Boundary Conditions: Periodic in both x and y directions\n");
+    printf("\nKey features of ICs A (Springel 2009):\n");
+    printf("1. SHARP interface at |y-0.5| = 0.25 (discontinuous density and velocity)\n");
+    printf("2. Central slab: ρ=2.0, u=0.5; Outer regions: ρ=1.0, u=-0.5\n");
+    printf("3. Perturbation localized at both interfaces (y=0.25 and y=0.75)\n");
+    printf("4. Uniform pressure: p=2.5, γ=5/3\n");
+    printf("5. Shown in Robertson et al. (2010) to exhibit Galilean non-invariance at low resolution\n");
+    printf("   due to numerical diffusion affecting small-scale modes\n");
 }
-
 
 
 static inline void initEulerpri2D_RayleighTaylor(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
@@ -580,7 +612,7 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
 
     double post_shock_state[4] = {8.0, 7.145, -4.125, 116.83333};
     double pre_shock_state[4] = {1.4, 0.0, 0.0, 1.0};
-    double shock_slope = 1.732;  // tan(60°)
+    double shock_slope = sqrt(3.0);  // tan(60°)
     double shock_start_x = 1.0/6.0;
     double current_time = 0.0;                                  // The Current Time Needs To Be Updated In The Main Loop
     printf("=== Double Mach Reflection Test Case ===\n");
@@ -588,8 +620,8 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
     // Set Boundary Conditions
     bc_config.left = BC_INFLOW;                
     bc_config.right = BC_OUTFLOW;               
-//    bc_config.bottom = BC_DOUBLE_MACH_BOTTOM;   
-//    bc_config.top = BC_DOUBLE_MACH_TOP;         
+    bc_config.bottom = BC_REFLECTION;   
+    bc_config.top = BC_REFLECTION;         
 
     // Set Computational Domain
     *Lx = 4.0;
@@ -598,16 +630,16 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
 
     // Set Shockwave State 
     post_shock_state[0] = 8.0;        
-    post_shock_state[1] = 7.145;        
+    post_shock_state[1] = 7.1447;        
     post_shock_state[2] = -4.125;       
-    post_shock_state[3] = 116.83333;    
+    post_shock_state[3] = 116.5;    
 
     pre_shock_state[0] = 1.4;         
     pre_shock_state[1] = 0.0;           
     pre_shock_state[2] = 0.0;           
     pre_shock_state[3] = 1.0;           
 
-    shock_slope = 1.732;          
+    //shock_slope = 1.732;          
     shock_start_x = 1.0/6.0;
 
     // Initialize The Flow Field
@@ -623,7 +655,7 @@ static inline void initEulerpri2D_DoubleMachReflection(int var, int rows, int co
             
             // Initialize The Flow Field Based On The Shock Wave Position
             // y = shock_slope * (x - shock_start_x)
-            if (y_pos <= shock_slope * (x_pos - shock_start_x)) {
+            if (y_pos < shock_slope * (x_pos - shock_start_x)) {
                 // Post Shock Region
                 x[0][i][j] = pre_shock_state[0];   
                 x[1][i][j] = pre_shock_state[1];   
@@ -875,101 +907,117 @@ static inline void initEulerpri2D_NohProblem(int var, int rows, int cols,
 }
 
 
-// Case 6: Odd-Even Decoupling Test (Based on Quirk 1994)
+// Case: Odd-Even Decoupling Test (Based on Quirk 1994)
 static inline void initEulerpri2D_OddEvenDecoupling(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
 
     printf("=== 2D Odd-Even Decoupling Test (Quirk 1994) ===\n");
 
-    // 边界条件：出流（模拟管道）
+    // Boundary conditions: Outflow (simulating a long duct)
     bc_config.left = BC_OUTFLOW;      
     bc_config.right = BC_OUTFLOW;     
-    bc_config.bottom = BC_OUTFLOW;    
-    bc_config.top = BC_OUTFLOW;       
+    bc_config.bottom = BC_REFLECTION;    
+    bc_config.top = BC_REFLECTION;       
 
     int i, j;
-    *Lx = 20.0;    // 管道长度（足够长以观察激波传播）
-    *Ly = 1.0;     // 管道宽度
+    *Lx = 20.0;    // Pipe Length Long Enough To Observe Shock Wave Propagation
+    *Ly = 1.0;     // Pipe Width
 
-    // 激波参数：强激波 M=6，γ=1.4
+    // Shock parameters: Strong shock M=6, γ=1.4
     double gamma = 1.4;
-    double Ms = 6.0;  // 激波马赫数
+    double Ms = 6.0;  // Shock Mach number
     
-    // 激波前状态（右侧）
-    double rho_pre = 1.0;
-    double u_pre = 0.0;    // 激波前静止
+    // Pre-shock state (right side of shock)
+    double rho_pre = 1.4;
+    double u_pre = 0.0;    // Fluid at rest before shock
     double v_pre = 0.0;
     double p_pre = 1.0;
-    double a_pre = sqrt(gamma * p_pre / rho_pre);  // 声速
+    double a_pre = sqrt(gamma * p_pre / rho_pre);  // Sound speed
     
-    // 计算激波后状态（左侧，使用Rankine-Hugoniot关系）
+    // Calculate post-shock state (left side, using Rankine-Hugoniot relations)
     double rho_post = rho_pre * ((gamma + 1.0) * Ms * Ms) / ((gamma - 1.0) * Ms * Ms + 2.0);
     double p_post = p_pre * (2.0 * gamma * Ms * Ms - (gamma - 1.0)) / (gamma + 1.0);
-    double u_post = Ms * a_pre * (1.0 - rho_pre / rho_post);  // 激波后速度（向右为正）
+    double u_post = Ms * a_pre * (1.0 - rho_pre / rho_post);  // Post-shock velocity (positive to right)
     
     printf("Shock parameters: M=%.2f, γ=%.2f\n", Ms, gamma);
     printf("Pre-shock state: ρ=%.4f, u=%.4f, p=%.4f\n", rho_pre, u_pre, p_pre);
     printf("Post-shock state: ρ=%.4f, u=%.4f, p=%.4f\n", rho_post, u_post, p_post);
     
-    // 奇偶扰动幅度（非常小，模拟数值误差或网格扰动）
+    // Odd-even perturbation amplitude (very small, simulating numerical error or grid imperfection)
     double perturbation = 1e-6;
     
+    // Physical grid dimensions (excluding ghost cells)
+    double nx = rows - 2 * GhostCell;
+    double ny = cols - 2 * GhostCell;
+
     #pragma omp parallel for collapse(2)
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
+    // Initialize only physical cells (ghost cells handled by boundary conditions)
+    for (i = GhostCell; i < rows - GhostCell; i++) {
+        for (j = GhostCell; j < cols - GhostCell; j++) {
             
-            // 激波位置：初始时刻位于 x = Lx/4 处
-            double x_pos = (double)i / rows * (*Lx);
-            double y_pos = (double)j / cols * (*Ly);
+            // Calculate physical coordinates (cell-centered coordinates)
+            // Using i+0.5 to get cell center in x-direction
+            double x_pos = (double)(i + 0.5 - GhostCell) / nx * (*Lx);
+            double y_pos = (double)(j + 0.5 - GhostCell) / ny * (*Ly);
             
+            // Shock location: initially positioned at x = Lx/4
             if (x_pos < (*Lx) * 0.25) {
-                // 激波后区域（左侧）
-                x[0][i][j] = rho_post;
-                x[1][i][j] = u_post;
-                x[2][i][j] = v_pre;
-                x[3][i][j] = p_post;
+                // Post-shock region (left side of shock)
+                x[0][i][j] = rho_post;  // Density
+                x[1][i][j] = u_post;    // x-velocity
+                x[2][i][j] = v_pre;     // y-velocity (zero)
+                x[3][i][j] = p_post;    // Pressure
             } else {
-                // 激波前区域（右侧）
-                x[0][i][j] = rho_pre;
-                x[1][i][j] = u_pre;
-                x[2][i][j] = v_pre;
-                x[3][i][j] = p_pre;
+                // Pre-shock region (right side of shock)
+                x[0][i][j] = rho_pre;   // Density
+                x[1][i][j] = u_pre;     // x-velocity
+                x[2][i][j] = v_pre;     // y-velocity (zero)
+                x[3][i][j] = p_pre;     // Pressure
             }
             
-            // 关键步骤：在激波后区域施加奇偶扰动（仅对密度和压力）
-            // 模拟Quirk论文中的网格中心线扰动
-            if (x_pos < (*Lx) * 0.25) {
-                if (j % 2 == 0) {  // 偶数网格点
-                    x[0][i][j] += perturbation;
-                    x[3][i][j] += perturbation;
-                } else {           // 奇数网格点
-                    x[0][i][j] -= perturbation;
-                    x[3][i][j] -= perturbation;
+            // KEY STEP: Apply odd-even perturbation to density and pressure in post-shock region
+            // This simulates the grid centerline perturbation described in Quirk's paper
+            /*if (x_pos < (*Lx) * 1) {
+                if (j % 2 == 0) {  // Even grid points in y-direction
+                    x[0][i][j] += perturbation;  // Increase density
+                    x[3][i][j] += perturbation;  // Increase pressure
+                } else {           // Odd grid points in y-direction
+                    x[0][i][j] -= perturbation;  // Decrease density
+                    x[3][i][j] -= perturbation;  // Decrease pressure
+                }
+            }*/
+            
+            // Optional: Apply small perturbation in pre-shock region to simulate grid imperfection
+            // Uncomment if you want to be closer to Quirk's original setup
+            /*
+            if (x_pos >= (*Lx) * 0.25) {
+                if ((i + j) % 2 == 0) {  // Different parity pattern (diagonal)
+                    x[0][i][j] += perturbation * 0.1;
+                    x[3][i][j] += perturbation * 0.1;
+                } else {
+                    x[0][i][j] -= perturbation * 0.1;
+                    x[3][i][j] -= perturbation * 0.1;
                 }
             }
-            
-            // 可选：在激波前区域也施加微小扰动，模拟网格不完美
-            // 这会更接近Quirk的实际情况
-            // if (x_pos >= (*Lx) * 0.25) {
-            //     if ((i + j) % 2 == 0) {  // 另一种奇偶模式
-            //         x[0][i][j] += perturbation * 0.1;
-            //         x[3][i][j] += perturbation * 0.1;
-            //     } else {
-            //         x[0][i][j] -= perturbation * 0.1;
-            //         x[3][i][j] -= perturbation * 0.1;
-            //     }
-            // }
+            */
         }
     }
 
-    *Time = 2.0;  // 足够的时间让激波传播并发展出失耦现象
+    *Time = 2.0;  // Sufficient time for shock to propagate and decoupling to develop
+    
     printf("Computational domain: Lx = %.2f, Ly = %.2f\n", *Lx, *Ly);
     printf("Final simulation time: t = %.2f\n", *Time);
     printf("Odd-Even perturbation amplitude: %e\n", perturbation);
     printf("Boundary Conditions: All outflow\n");
-    printf("Initial shock at x = %.2f\n", *Lx * 0.25);
-    printf("Note: This test is designed to reveal Odd-Even Decoupling with Roe-type solvers.\n");
+    printf("Initial shock location: x = %.2f\n", *Lx * 0.25);
+    printf("Physical cells initialized: %d x %d\n", (int)nx, (int)ny);
+    printf("Ghost cells: %d per boundary\n", GhostCell);
+    printf("\nTest Configuration Notes:\n");
+    printf("1. Designed to trigger Odd-Even Decoupling phenomenon with Roe-type solvers\n");
+    printf("2. Strong shock (M=6) aligned with x-direction\n");
+    printf("3. Small perturbations (±%e) applied to density and pressure in post-shock region\n", perturbation);
+    printf("4. Perturbations applied with opposite signs on even/odd y-grid lines\n");
+    printf("5. Expected: With Roe solver, decoupling should develop along shock front\n");
 }
-
 
 
 double L_fixed_value_state[4] = {1.4, (1.4)*3.0, 0.0, (1.0)/0.4 + 0.5 * (1.4) *3.0 *3.0}; 
@@ -1113,7 +1161,7 @@ static inline void initEulerflux2D(int var, int rows, int cols, double (*y)[rows
 // Map Conserved Variables To Primitive Variables
 static inline void Con_to_Pri_2D(int var, int rows, int cols, double (*x)[rows][cols], double (*y)[rows][cols]){
 
-    //#pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for (int i = GhostCell-1; i <= rows-GhostCell; i++) {
         for (int j = GhostCell-1; j <= cols-GhostCell; j++){
             double rho, u, v, p;

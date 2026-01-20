@@ -78,7 +78,7 @@ static inline double van_leer(double a, double b){
 
 static inline double van_albada(double a, double b){
     double epsilo = 1e-6;
-	return (fmax(a*b,0) * (a+b))/(pow(a,2)+pow(b,2));
+	return (fmax(a*b,0) * (a+b))/(pow(a,2)+pow(b,2) + epsilo);
 }
 
 static inline double SuperBee(double a, double b){
@@ -140,6 +140,40 @@ static inline double Get_Delta_T_2D(int rows, int cols, int depth, double (*x)[c
     }
     
     return CFL * min_of_two(dx, dy) / (S_plus_x + S_plus_y);
+}
+
+static inline double Get_Delta_T_2D_X(int rows, int cols, int depth, double (*x)[cols][depth], double dx, double dy) {
+    double S_plus_x = 0.0, S_plus_y = 0.0;
+
+    #pragma omp parallel for reduction(max: S_plus_x, S_plus_y) collapse(2)
+    for (int j = GhostCell; j < cols - GhostCell; j++) {
+        for (int k = GhostCell; k < depth - GhostCell; k++) {
+            // Read The Known Left And Right Original Variables
+            double rho = x[0][j][k];
+            double rhou = x[1][j][k];
+            double rhov = x[2][j][k];
+            double rhoe = x[3][j][k];
+            double u = rhou / rho;
+            double v = rhov / rho;
+            double p = (rhoe - 0.5 * rho * (u*u + v*v)) * (M_gamma - 1);
+            // Calculate The Speed Of Sound
+            double a = sqrt(M_gamma * p / rho);
+            //Calculate Local Maximum Wave Speed
+            double local_S_plus_x = fabs(u) + a;
+            double local_S_plus_y = fabs(v) + a;
+            
+            // Reduction Operation Updates The Global Maximum
+            if (local_S_plus_x > S_plus_x) S_plus_x = local_S_plus_x;
+            if (local_S_plus_y > S_plus_y) S_plus_y = local_S_plus_y;
+        }
+    }
+    
+    // 根据公式计算 Δtx 和 Δty
+    double delta_tx = dx / S_plus_x;
+    double delta_ty = dy / S_plus_y;
+    
+    // 计算最终的 Δt
+    return CFL * (delta_tx * delta_ty) / (delta_tx + delta_ty);
 }
 
 //计算总守恒量

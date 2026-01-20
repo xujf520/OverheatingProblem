@@ -12,10 +12,16 @@ static inline double TVD_minmod_L();
 static inline double TVD_minmod_R();
 static inline double TVD_vanleer_L();
 static inline double TVD_vanleer_R();
+static inline double TVD_VanAlbada_L();
+static inline double TVD_VanAlbada_R();
+static inline double OED_TVD_VanAlbada_L();
+static inline double OED_TVD_VanAlbada_R();
 static inline double WENO3_L();
 static inline double WENO3_R();
 static inline double WENO5_L();
 static inline double WENO5_R();
+static inline double WENO5Z_L();
+static inline double WENO5Z_R();
 
 /*                               ************************************                               */
 /*                               ************************************                               */
@@ -305,8 +311,8 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         
                         // Apply TVD reconstruction in characteristic space
                         // Uses van Leer limiter for better accuracy than minmod
-                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_x);
-                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_x);
+                        Characteristic_Variable_L = TVD_minmod_L(&uu[2], delta_x);
+                        Characteristic_Variable_R = TVD_minmod_R(&uu[2], delta_x);
 
                         // Transform reconstructed characteristic variables back to conservative space
                         // u' = R * w, where w is the reconstructed characteristic variable
@@ -359,8 +365,8 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         }
                         
                         // Apply TVD reconstruction in characteristic space
-                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_y);
-                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_y);
+                        Characteristic_Variable_L = TVD_minmod_L(&uu[2], delta_y);
+                        Characteristic_Variable_R = TVD_minmod_R(&uu[2], delta_y);
 
                         // Transform back to conservative space: u' = R * w
                         for (int m = 0; m < var; m++) {
@@ -409,8 +415,210 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         
                         // Apply TVD reconstruction using minmod limiter
                         // &fu[2] points to the central 3-point stencil [i-1, i, i+1]
-                        conserl[k][i][j] = TVD_vanleer_L(&fu[2], delta_x);  // Left state at interface i+1/2
-                        conserr[k][i][j] = TVD_vanleer_R(&fu[2], delta_x);  // Right state at interface i+1/2
+                        conserl[k][i][j] = TVD_minmod_L(&fu[2], delta_x);  // Left state at interface i+1/2
+                        conserr[k][i][j] = TVD_minmod_R(&fu[2], delta_x);  // Right state at interface i+1/2
+                    }
+                }
+            }
+        } 
+        else if (dir == 2) {
+            // Y-direction reconstruction using VanAlbda limiter
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k in y-direction
+                        double fu[6];  // Stencil: fu[0]=j-2, fu[1]=j-1, fu[2]=j, fu[3]=j+1, fu[4]=j+2, fu[5]=j+3
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i][j - 2 + nn];
+                        }
+                        
+                        // Apply TVD reconstruction using VanAlbda limiter
+                        // &fu[2] points to the central 3-point stencil [j-1, j, j+1]
+                        conserl[k][i][j] = TVD_minmod_L(&fu[2], delta_y);  // Left state at interface j+1/2
+                        conserr[k][i][j] = TVD_minmod_R(&fu[2], delta_y);  // Right state at interface j+1/2
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+static inline void TVD_Reconstruction_OED(int dir, int var, int rows, int cols, int GC, 
+                                      double (*y)[rows][cols],
+                                      double (*conserl)[rows][cols], 
+                                      double (*conserr)[rows][cols], 
+                                      double delta_x, double delta_y) {
+    
+    // Check if characteristic decomposition is enabled
+    if (Characteriz) {
+        // Dynamic memory allocation for characteristic decomposition arrays
+        double (*Pri)[rows][cols] = malloc(var * sizeof(double[rows][cols]));        // Primitive variables
+        double (*Eigen_L)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Left eigenvectors
+        double (*Eigen_R)[var][rows][cols] = malloc(var * sizeof(double[var][rows][cols]));  // Right eigenvectors
+        
+        // Check memory allocation
+        if (!Pri || !Eigen_L || !Eigen_R) {
+            fprintf(stderr, "Memory allocation failed in TVD_Reconstruction\n");
+            free(Pri); free(Eigen_L); free(Eigen_R);
+            return;
+        }
+
+        // Convert conservative variables to primitive variables
+        Con_to_Pri_2D(var, rows, cols, Pri, y);
+        
+        if (dir == 1) {
+            // X-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=1.0, ny=0.0)
+            Compute_Eigen_2DX(var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in x-direction
+            #pragma omp parallel for collapse(2)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    // Local arrays for characteristic decomposition
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Single characteristic variable (left)
+                    double Characteristic_Variable_R;  // Single characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [i-2, i-1, i, i+1, i+2, i+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil
+                        // uu array indices: 0=i-2, 1=i-1, 2=i, 3=i+1, 4=i+2, 5=i+3
+                        for (int nn = i - 2; nn <= i + 3; nn++) {
+                            uu[nn - i + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - i + 2] += y[m][nn][j] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        // Apply TVD reconstruction in characteristic space
+                        // Uses van Leer limiter for better accuracy than minmod
+                        Characteristic_Variable_L = TVD_VanAlbada_L(&uu[2], delta_x);
+                        Characteristic_Variable_R = TVD_VanAlbada_R(&uu[2], delta_x);
+
+                        // Transform reconstructed characteristic variables back to conservative space
+                        // u' = R * w, where w is the reconstructed characteristic variable
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                    
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];  // Left state: u_L = R * w_L
+                            conserr[k][i][j] += Chara_R[m][k];  // Right state: u_R = R * w_R
+                        }
+                    }
+                }
+            }
+        }
+        else if (dir == 2) {
+            // Y-direction reconstruction with characteristic decomposition
+            
+            // Compute eigenvectors for normal direction (nx=0.0, ny=1.0)
+            //Compute_Eigen_2DY(var, rows, cols, Pri, Eigen_L, Eigen_R);
+            Compute_Eigen_2DY(var, rows, cols, Pri, Eigen_L, Eigen_R);
+            
+            // Process each cell interface in y-direction
+            #pragma omp parallel for collapse(2)
+            for (int i = GC; i < rows - GC; i++) {
+                for (int j = GC - 1; j < cols - GC; j++) {
+                    double Chara_L[4][4];  // Left state in characteristic space
+                    double Chara_R[4][4];  // Right state in characteristic space
+                    double Characteristic_Variable_L;  // Characteristic variable (left)
+                    double Characteristic_Variable_R;  // Characteristic variable (right)
+                    double uu[10];  // Array for characteristic variables in 5-point stencil [j-2, j-1, j, j+1, j+2, j+3]
+                    
+                    // Process each characteristic field separately
+                    for (int k = 0; k < var; k++) {
+                        // Extract characteristic variables for 5-point stencil in y-direction
+                        for (int nn = j - 2; nn <= j + 3; nn++) {
+                            uu[nn - j + 2] = 0.0;
+                            // Project conservative variables to characteristic space: w = L * u
+                            for (int m = 0; m < var; m++) {
+                                uu[nn - j + 2] += y[m][i][nn] * Eigen_L[k][m][i][j];
+                            }
+                        }
+                        
+                        //奇偶失联测试代码
+                        double perturbation = 2e-3;
+                        Characteristic_Variable_L = OED_TVD_VanAlbada_L(&uu[2], delta_y-perturbation, delta_y+perturbation);
+                        Characteristic_Variable_R = OED_TVD_VanAlbada_R(&uu[2], delta_y+perturbation, delta_y-perturbation);
+                        /*if (j % 2 == 0){
+                            // Apply TVD reconstruction in characteristic space
+                            Characteristic_Variable_L = OED_TVD_VanAlbada_L(&uu[2], delta_y+perturbation, delta_y-perturbation);
+                            Characteristic_Variable_R = OED_TVD_VanAlbada_R(&uu[2], delta_y);
+                        }
+                        else{
+                            // Apply TVD reconstruction in characteristic space
+                            Characteristic_Variable_L = TVD_VanAlbada_L(&uu[2], delta_y);
+                            Characteristic_Variable_R = TVD_VanAlbada_R(&uu[2], delta_y);
+                        }*/
+                        
+                        
+
+                        // Transform back to conservative space: u' = R * w
+                        for (int m = 0; m < var; m++) {
+                            Chara_L[k][m] = Characteristic_Variable_L * Eigen_R[m][k][i][j];
+                            Chara_R[k][m] = Characteristic_Variable_R * Eigen_R[m][k][i][j];
+                        }
+                    }
+                    
+                    // Combine contributions from all characteristic fields
+                    for (int k = 0; k < var; k++) {
+                        conserl[k][i][j] = 0.0;
+                        conserr[k][i][j] = 0.0;
+                        
+                        // Sum contributions: u = Σ (R * w) for each characteristic field
+                        for (int m = 0; m < var; m++) {
+                            conserl[k][i][j] += Chara_L[m][k];
+                            conserr[k][i][j] += Chara_R[m][k];
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Free allocated memory for characteristic decomposition
+        free(Pri); 
+        free(Eigen_L); 
+        free(Eigen_R);
+    } 
+    else {
+        // Standard reconstruction without characteristic decomposition
+        // Direct TVD reconstruction in conservative variable space
+        
+        if (dir == 1) {
+            // X-direction reconstruction using minmod limiter
+            // 5-point stencil: [i-2, i-1, i, i+1, i+2, i+3] for boundary handling
+            
+            #pragma omp parallel for collapse(3)
+            for (int i = GC - 1; i < rows - GC; i++) {
+                for (int j = GC; j < cols - GC; j++) {
+                    for (int k = 0; k < var; k++) {
+                        // Extract 5-point stencil for conservative variable k
+                        double fu[6];  // Stencil: fu[0]=i-2, fu[1]=i-1, fu[2]=i, fu[3]=i+1, fu[4]=i+2, fu[5]=i+3
+                        for (int nn = 0; nn < 6; nn++) {
+                            fu[nn] = y[k][i - 2 + nn][j];
+                        }
+                        
+                        // Apply TVD reconstruction using minmod limiter
+                        // &fu[2] points to the central 3-point stencil [i-1, i, i+1]
+                        conserl[k][i][j] = TVD_minmod_L(&fu[2], delta_x);  // Left state at interface i+1/2
+                        conserr[k][i][j] = TVD_minmod_R(&fu[2], delta_x);  // Right state at interface i+1/2
                     }
                 }
             }
@@ -430,8 +638,24 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         
                         // Apply TVD reconstruction using minmod limiter
                         // &fu[2] points to the central 3-point stencil [j-1, j, j+1]
-                        conserl[k][i][j] = TVD_vanleer_L(&fu[2], delta_y);  // Left state at interface j+1/2
-                        conserr[k][i][j] = TVD_vanleer_R(&fu[2], delta_y);  // Right state at interface j+1/2
+                        //  = TVD_minmod_L(&fu[2], delta_y);  // Left state at interface j+1/2
+                        //  = TVD_minmod_R(&fu[2], delta_y);  // Right state at interface j+1/2
+                        double perturbation = 0.0;
+                        //conserl[k][i][j] = OED_TVD_VanAlbada_L(&fu[2], delta_y-perturbation, delta_y+perturbation);
+                        //conserr[k][i][j] = OED_TVD_VanAlbada_R(&fu[2], delta_y+perturbation, delta_y-perturbation);
+
+                        // 从边界来开始计算，在j = 3时，dy——j = delta_y-perturbation，此时dy——j+1 = delta_y+perturbation
+                        if (j % 2 == 0){
+                            // Apply TVD reconstruction in characteristic space
+                            conserl[k][i][j] = OED_TVD_VanAlbada_L(&fu[2], delta_y+perturbation, delta_y-perturbation);
+                            conserr[k][i][j] = OED_TVD_VanAlbada_R(&fu[2], delta_y-perturbation, delta_y+perturbation);
+                            
+                        }
+                        else{
+                            // Apply TVD reconstruction in characteristic space
+                            conserl[k][i][j] = OED_TVD_VanAlbada_L(&fu[2], delta_y-perturbation, delta_y+perturbation);
+                            conserr[k][i][j] = OED_TVD_VanAlbada_R(&fu[2], delta_y+perturbation, delta_y-perturbation);
+                        }
                     }
                 }
             }
@@ -714,8 +938,8 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                         
                         // Apply WENO-5 reconstruction in characteristic space
                         // Uses 5-point stencil centered at positions 0-4 of uu array (indices: i-2, i-1, i, i+1, i+2)
-                        Characteristic_Variable_L = WENO5_L(&uu[2]);  // Left interface value w_{i+1/2}^-
-                        Characteristic_Variable_R = WENO5_R(&uu[2]);  // Right interface value w_{i+1/2}^+
+                        Characteristic_Variable_L = WENO5Z_L(&uu[2]);  // Left interface value w_{i+1/2}^-
+                        Characteristic_Variable_R = WENO5Z_R(&uu[2]);  // Right interface value w_{i+1/2}^+
 
                         // Transform reconstructed characteristic variables back to conservative space
                         // u' = R * w, where w is the reconstructed characteristic variable
@@ -770,8 +994,8 @@ static inline void WENO5_Reconstruction(int dir, int var, int rows, int cols, in
                         }
                         
                         // Apply WENO-5 reconstruction in characteristic space
-                        Characteristic_Variable_L = WENO5_L(&uu[2]);  // Left interface value w_{j+1/2}^-
-                        Characteristic_Variable_R = WENO5_R(&uu[2]);  // Right interface value w_{j+1/2}^+
+                        Characteristic_Variable_L = WENO5Z_L(&uu[2]);  // Left interface value w_{j+1/2}^-
+                        Characteristic_Variable_R = WENO5Z_R(&uu[2]);  // Right interface value w_{j+1/2}^+
                     
                         // Transform back to conservative space: u' = R * w
                         for (int m = 0; m < var; m++) {
@@ -976,6 +1200,121 @@ double TVD_vanleer_R(double *f, double delta)
     return v2 - 0.5 * slope * delta;
 }
 
+
+/**
+ * TVD reconstruction using van Leer limiter (left interface)
+ * Van Albada limiter: harmonic mean of slopes
+ * 
+ * @param f Pointer to array of cell-centered values [i-1, i, i+1]
+ * @param delta Grid spacing
+ * @return Reconstructed value at left cell interface (i+1/2)
+ */
+double TVD_VanAlbada_L(double *f, double delta)
+{
+    int k;
+    double v1, v2, v3;
+    double slope1, slope2, slope;
+
+    // Assign values to v1, v2, v3 for stencil [i-1, i, i+1]
+    k = 0;  // Stencil centered at cell i
+    v1 = *(f + k - 1);  // Value at cell i-1
+    v2 = *(f + k);      // Value at cell i (center)
+    v3 = *(f + k + 1);  // Value at cell i+1
+    
+    // Compute slopes
+    slope1 = (v2 - v1) / delta;  // Left slope
+    slope2 = (v3 - v2) / delta;  // Right slope
+    
+    // Apply van Leer limiter
+    slope = van_albada(slope1, slope2);
+
+    // Reconstruct value at left interface: u_{i+1/2}^- = u_i + 0.5 * slope * Δx
+    return v2 + 0.5 * slope * delta;
+}
+
+/**
+ * TVD reconstruction using van Leer limiter (right interface)
+ * 
+ * @param f Pointer to array of cell-centered values [i, i+1, i+2]
+ * @param delta Grid spacing
+ * @return Reconstructed value at right cell interface (i+1/2)
+ */
+double TVD_VanAlbada_R(double *f, double delta)
+{
+    int k;
+    double v1, v2, v3;
+    double slope1, slope2, slope;
+
+    // Assign values to v1, v2, v3 for stencil [i, i+1, i+2]
+    k = 1;  // Stencil centered at cell i+1
+    v1 = *(f + k - 1);  // Value at cell i
+    v2 = *(f + k);      // Value at cell i+1 (center)
+    v3 = *(f + k + 1);  // Value at cell i+2
+    
+    // Compute slopes
+    slope1 = (v2 - v1) / delta;  // Left slope
+    slope2 = (v3 - v2) / delta;  // Right slope
+    
+    // Apply van Leer limiter
+    slope = van_albada(slope1, slope2);
+
+    // Reconstruct value at right interface: u_{i+1/2}^+ = u_{i+1} - 0.5 * slope * Δx
+    return v2 - 0.5 * slope * delta;
+}
+
+double OED_TVD_VanAlbada_L(double *f, double delta_a, double delta_b)
+{
+    int k;
+    double v1, v2, v3;
+    double slope1, slope2, slope;
+
+    // Assign values to v1, v2, v3 for stencil [i-1, i, i+1]
+    k = 0;  // Stencil centered at cell i
+    v1 = *(f + k - 1);  // Value at cell i-1
+    v2 = *(f + k);      // Value at cell i (center)
+    v3 = *(f + k + 1);  // Value at cell i+1
+    
+    // Compute slopes
+    slope1 = (v2 - v1) / delta_a;  // Left slope
+    slope2 = (v3 - v2) / delta_b;  // Right slope
+    
+    // Apply van Leer limiter
+    slope = van_albada(slope1, slope2);
+
+    // Reconstruct value at left interface: u_{i+1/2}^- = u_i + 0.5 * slope * Δx
+    return v2 + 0.5 * slope * delta_b;
+}
+
+/**
+ * TVD reconstruction using van Leer limiter (right interface)
+ * 
+ * @param f Pointer to array of cell-centered values [i, i+1, i+2]
+ * @param delta Grid spacing
+ * @return Reconstructed value at right cell interface (i+1/2)
+ */
+double OED_TVD_VanAlbada_R(double *f, double delta_a, double delta_b)
+{
+    int k;
+    double v1, v2, v3;
+    double slope1, slope2, slope;
+
+    // Assign values to v1, v2, v3 for stencil [i, i+1, i+2]
+    k = 1;  // Stencil centered at cell i+1
+    v1 = *(f + k - 1);  // Value at cell i
+    v2 = *(f + k);      // Value at cell i+1 (center)
+    v3 = *(f + k + 1);  // Value at cell i+2
+    
+    // Compute slopes
+    slope1 = (v2 - v1) / delta_a;  // Left slope
+    slope2 = (v3 - v2) / delta_b;  // Right slope
+    
+    // Apply van Leer limiter
+    slope = van_albada(slope1, slope2);
+
+    // Reconstruct value at right interface: u_{i+1/2}^+ = u_{i+1} - 0.5 * slope * Δx
+    return v2 - 0.5 * slope * delta_a;
+}
+
 /**
  * WENO-3 reconstruction (left interface)
  * Third-order Weighted Essentially Non-Oscillatory scheme
@@ -1167,6 +1506,123 @@ static inline double WENO5_R(double *f)
          + w2 * (-v2 + 5.0 * v3 + 2.0 * v4) / 6.0
          + w3 * (2.0 * v3 + 5.0 * v4 - v5) / 6.0;
 }
+
+
+/**
+ * WENO-5 reconstruction (left interface)
+ * Fifth-order Weighted Essentially Non-Oscillatory scheme
+ * Uses 5-point stencil: [i-2, i-1, i, i+1, i+2]
+ * 
+ * @param f Pointer to array of cell-centered values [i-2, i-1, i, i+1, i+2]
+ * @return Reconstructed value at left cell interface (i+1/2)
+ */
+static inline double WENO5Z_L(double *f)
+{
+    int k;
+    double v1, v2, v3, v4, v5;
+    double s1, s2, s3;
+    double a1, a2, a3, w1, w2, w3;
+    double epsilon = 1.0e-15;
+
+    // Assign values to v1, v2, v3, v4, v5 for stencil [i-2, i-1, i, i+1, i+2]
+    k = 0;  // Stencil centered at cell i
+    v1 = *(f + k - 2);  // Value at cell i-2
+    v2 = *(f + k - 1);  // Value at cell i-1
+    v3 = *(f + k);      // Value at cell i (center)
+    v4 = *(f + k + 1);  // Value at cell i+1
+    v5 = *(f + k + 2);  // Value at cell i+2
+
+    // Compute smoothness indicators (Jiang & Shu, 1996)
+    s1 = 13.0/12.0 * (v1 - 2.0 * v2 + v3) * (v1 - 2.0 * v2 + v3) 
+       + 0.25 * (v1 - 4.0 * v2 + 3.0 * v3) * (v1 - 4.0 * v2 + 3.0 * v3);
+    
+    s2 = 13.0/12.0 * (v2 - 2.0 * v3 + v4) * (v2 - 2.0 * v3 + v4) 
+       + 0.25 * (v2 - v4) * (v2 - v4);
+    
+    s3 = 13.0/12.0 * (v3 - 2.0 * v4 + v5) * (v3 - 2.0 * v4 + v5) 
+       + 0.25 * (3.0 * v3 - 4.0 * v4 + v5) * (3.0 * v3 - 4.0 * v4 + v5);
+
+
+    double tau_5 = fabs(s1-s3);
+
+    // Compute nonlinear weights
+    a1 = 0.1*(1.0  + tau_5 /(s1 +epsilon));
+	a2 = 0.6*(1.0  + tau_5 /(s2 +epsilon));
+	a3 = 0.3*(1.0  + tau_5 /(s3 +epsilon));
+
+    // Normalize weights
+    w1 = a1 / (a1 + a2 + a3);
+    w2 = a2 / (a1 + a2 + a3);
+    w3 = a3 / (a1 + a2 + a3);
+    
+    // Check for negative weights
+    if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0)
+        printf("Negative weights appear in WENO!!!\n");
+    
+    // Return weighted average of third-order reconstructions
+    // First polynomial: (2v1 - 7v2 + 11v3)/6 (left-most)
+    // Second polynomial: (-v2 + 5v3 + 2v4)/6 (centered)
+    // Third polynomial: (2v3 + 5v4 - v5)/6 (right-most)
+    return w1 * (2.0 * v1 - 7.0 * v2 + 11.0 * v3) / 6.0
+         + w2 * (-v2 + 5.0 * v3 + 2.0 * v4) / 6.0
+         + w3 * (2.0 * v3 + 5.0 * v4 - v5) / 6.0;
+}
+
+/**
+ * WENO-5 reconstruction (right interface)
+ * 
+ * @param f Pointer to array of cell-centered values [i+3, i+2, i+1, i, i-1]
+ * @return Reconstructed value at right cell interface (i+1/2)
+ */
+
+static inline double WENO5Z_R(double *f)
+{
+    int k;
+    double v1, v2, v3, v4, v5;
+    double s1, s2, s3;
+    double a1, a2, a3, w1, w2, w3;
+    double epsilon = 1.0e-15;
+
+    // Assign values to v1, v2, v3, v4, v5 for stencil [i+3, i+2, i+1, i, i-1]
+    k = 1;  // Stencil centered at cell i+1 (mirrored for right interface)
+    v1 = *(f + k + 2);  // Value at cell i+3
+    v2 = *(f + k + 1);  // Value at cell i+2
+    v3 = *(f + k);      // Value at cell i+1 (center)
+    v4 = *(f + k - 1);  // Value at cell i
+    v5 = *(f + k - 2);  // Value at cell i-1
+
+    // Compute smoothness indicators (mirrored stencil)
+    s1 = 13.0/12.0 * (v1 - 2.0 * v2 + v3) * (v1 - 2.0 * v2 + v3) 
+       + 0.25 * (v1 - 4.0 * v2 + 3.0 * v3) * (v1 - 4.0 * v2 + 3.0 * v3);
+    
+    s2 = 13.0/12.0 * (v2 - 2.0 * v3 + v4) * (v2 - 2.0 * v3 + v4) 
+       + 0.25 * (v2 - v4) * (v2 - v4);
+    
+    s3 = 13.0/12.0 * (v3 - 2.0 * v4 + v5) * (v3 - 2.0 * v4 + v5) 
+       + 0.25 * (3.0 * v3 - 4.0 * v4 + v5) * (3.0 * v3 - 4.0 * v4 + v5);
+
+    // Compute nonlinear weights
+    double tau_5 = fabs(s1-s3);
+    // Compute nonlinear weights
+    a1 = 0.1*(1.0  + tau_5 /(s1 +epsilon));
+	a2 = 0.6*(1.0  + tau_5 /(s2 +epsilon));
+	a3 = 0.3*(1.0  + tau_5 /(s3 +epsilon));
+
+    // Normalize weights
+    w1 = a1 / (a1 + a2 + a3);
+    w2 = a2 / (a1 + a2 + a3);
+    w3 = a3 / (a1 + a2 + a3);
+    
+    // Check for negative weights
+    if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0)
+        printf("Negative weights appear in WENO!!!\n");
+    
+    // Return weighted average of third-order reconstructions
+    return w1 * (2.0 * v1 - 7.0 * v2 + 11.0 * v3) / 6.0
+         + w2 * (-v2 + 5.0 * v3 + 2.0 * v4) / 6.0
+         + w3 * (2.0 * v3 + 5.0 * v4 - v5) / 6.0;
+}
+
 
 
 

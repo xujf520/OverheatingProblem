@@ -70,6 +70,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             break;
         case 2:  // Second-order TVD
             TVD_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
+//            TVD_Reconstruction_OED(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
             break;
         case 3:  // Third-order WENO
             WENO3_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
@@ -109,6 +110,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             break;
         default:
             LLF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
+            //LF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux,dt,dx,dy);
             // ER_Flux(var, rows, GC, prileft, priright, Flux);
             // Add appropriate handling logic based on actual requirements
             break;
@@ -134,6 +136,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             break;
         case 2:  // Second-order TVD
             TVD_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
+//            TVD_Reconstruction_OED(space_dir, var, rows, cols, GC, y, Conserl, Conserr, dx, dy);
             break;
         case 3:  // Third-order WENO
             WENO3_Reconstruction(space_dir, var, rows, cols, GC, y, Conserl, Conserr);
@@ -174,6 +177,7 @@ static inline void Flux_Reconstruction_RP(int AR_scheme, int var, int rows, int 
             break;
         default:
             LLF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux);
+            //LF_Flux(space_dir, var, rows, cols, GC, Conserl, Conserr, Flux,dt,dx,dy);
             // ER_Flux(var, rows, GC, prileft, priright, Flux);
             // Add appropriate handling logic based on actual requirements
             break;

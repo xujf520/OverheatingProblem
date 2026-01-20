@@ -95,10 +95,10 @@ int main(int argc, char *argv[]) {
     } else {
         printf("Using default parameters (no control file specified)\n");
         // Set Default Control Parameters
-        ctrl_params.test_case = TEST_OddEven_Decoupling;
-        ctrl_params.L_nx = 200;
-        ctrl_params.L_ny = 10;
-        ctrl_params.Time_ADM = 3;
+        ctrl_params.test_case = TEST_BACKWARD_STEP;
+        ctrl_params.L_nx = 300;
+        ctrl_params.L_ny = 100;
+        ctrl_params.Time_ADM = 1;
         ctrl_params.scheme = 10; 
         ctrl_params.M_gamma = 1.4;
         ctrl_params.Source = false;
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
         ctrl_params.Control_Compution = 0;
         ctrl_params.Control_output = 4;
         ctrl_params.Recon_Accur = 1;        // 添加默认值
-        ctrl_params.Characteriz = false;    // 添加默认值
+        ctrl_params.Characteriz = true;    // 添加默认值
         strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
     }
     // Set Global Parameters According To The Control File
@@ -173,6 +173,7 @@ int main(int argc, char *argv[]) {
                 // Record start time of current step
                 double step_start_time = omp_get_wtime();
                 Delta_T = Get_Delta_T_2D(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
+                //Delta_T = Get_Delta_T_2D_X(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
                 
                 // Ensure we don't exceed next output time point or Tmax
                 if (Time + Delta_T > next_output_time) {
@@ -184,11 +185,16 @@ int main(int argc, char *argv[]) {
 
                 switch (ctrl_params.Time_ADM) {
                     case 1:
+                        //RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
                         RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
+                    case 2:
+                        RK2_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        //RK2_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        break;
                     case 3:
-                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
-                        //RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        //RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     default:
                         fprintf(stderr, "Error: Invalid time advancement method\n");
@@ -500,14 +506,20 @@ void ReadControlFile(const char* filename) {
     
     fclose(file);
     
-    // 打印读取的参数
+
+    // Print The Read Parameters
     printf("╔═══════════════════════════════════════════════════╗\n");
     printf("║            Control Parameters Loaded              ║\n");
     printf("╠═══════════════════════════════════════════════════╣\n");
     printf("║ Test Case:         %-30s ║\n", getTestCaseName(ctrl_params.test_case));
     printf("║ Grid Size (nx×ny): %-5d × %-5d               ║\n", ctrl_params.L_nx, ctrl_params.L_ny);
-    printf("║ Time Integration:  %-30s ║\n", ctrl_params.Time_ADM == 1 ? "RK1" : "RK3");
-    
+
+    // 使用条件运算符处理三种时间格式
+    printf("║ Time Integration:  %-30s ║\n", 
+        ctrl_params.Time_ADM == 1 ? "RK1" : 
+        (ctrl_params.Time_ADM == 2 ? "RK2" : 
+        (ctrl_params.Time_ADM == 3 ? "RK3" : "Unknown")));
+        
     // Riemann求解器显示
     const char* scheme_name;
     switch (ctrl_params.scheme) {
@@ -751,7 +763,7 @@ int isBlankRegion(double x, double y) {
 void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, double *my, 
                         double (*U)[rows][cols], double (*FU)[rows][cols], 
                         double (*pri)[rows][cols], double now_time, int scheme_type) {
-    printf("Output result(rho, u, v, p, T, U_M, U_E)\n");
+    printf("Output result(rho, u, v, p, T, Entropy, U_M, U_E)\n");
     
     // 获取算例名称
     const char* case_name;
@@ -840,8 +852,8 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
     }
     
     // Tecplot格式头信息 - 修正变量列表，添加IBLANK
-    fprintf(file, "TITLE = \"2D Fluid Dynamics Data - %s with %s\"\n", case_name, scheme_name);
-    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"rhou\", \"rhov\", \"rhoE\", \"IBLANK\"\n");
+     fprintf(file, "TITLE = \"2D Fluid Dynamics Data - %s with %s\"\n", case_name, scheme_name);
+    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"Entropy\", \"rhou\", \"rhov\", \"rhoE\", \"IBLANK\"\n");
     
     int output_rows = rows - 2*GC;
     int output_cols = cols - 2*GC;
@@ -851,9 +863,6 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         printf("Processing BACKWARD_STEP case with IBLANK blanking...\n");
         
         // 对于后台阶算例，输出整个区域，使用IBLANK标记空白区域
-        // 空白区域规则：x在[0.6, 3.0]且y在[0.0, 0.2]的是空区域
-        
-        // 修正ZONE语法：所有参数在一行，使用POINT格式
         fprintf(file, "ZONE T=\"Backward Step: Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
                 now_time, output_cols, output_rows);
         
@@ -870,15 +879,17 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
                 }
                 
                 double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
                 
-                // 输出数据，包括IBLANK值
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                // 输出数据，包括Entropy和IBLANK值
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
                         mx[i], my[j], 
                         pri[0][actual_i][actual_j], 
                         pri[1][actual_i][actual_j], 
                         pri[2][actual_i][actual_j], 
                         pri[3][actual_i][actual_j],
                         temperature,
+                        entropy,  // 新增的绝热指数（熵）
                         U[1][actual_i][actual_j], 
                         U[2][actual_i][actual_j], 
                         U[3][actual_i][actual_j],
@@ -886,8 +897,7 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
             }
         }
         
-        printf("Backward Step region output with IBLANK: %d x %d points\n", output_cols, output_rows);
-        printf("IBLANK=0 for blanked region (x=[0.6,3.0], y=[0.0,0.2]), IBLANK=1 for active region.\n");
+        printf("Backward Step region output with IBLANK and Entropy\n");
         
     } else {
         // 其他算例保持原样输出，IBLANK全部设为1
@@ -901,15 +911,17 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
                 int actual_j = j + GC;
                 
                 double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
                 
                 // IBLANK=1 表示所有区域有效
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
                         mx[i], my[j], 
                         pri[0][actual_i][actual_j], 
                         pri[1][actual_i][actual_j], 
                         pri[2][actual_i][actual_j], 
                         pri[3][actual_i][actual_j],
                         temperature,
+                        entropy,  // 新增的绝热指数（熵）
                         U[1][actual_i][actual_j], 
                         U[2][actual_i][actual_j], 
                         U[3][actual_i][actual_j],

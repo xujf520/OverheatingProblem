@@ -482,7 +482,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     // Physical parameters for Double Mach Reflection problem (Woodward & Colella, 1984)
     double Lx = 4.0;          // Domain length in x-direction
     double Ly = 1.0;          // Domain height in y-direction
-    double shock_slope = 1.732;  // tan(60°) for 60-degree incident shock
+    double shock_slope = sqrt(3.0);  // tan(60°) for 60-degree incident shock
     double shock_start_x = 1.0/6.0;  // Initial shock position at bottom wall
     double wall_start_x = 1.0/6.0;   // Starting point of reflecting wall
     double gamma = 1.4;       // Specific heat ratio
@@ -495,9 +495,9 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
     
     // Post-shock state (behind shock) - primitive variables
     double post_shock_rho = 8.0;      // Density
-    double post_shock_u = 7.145;      // x-velocity
+    double post_shock_u = 7.1447;      // x-velocity
     double post_shock_v = -4.125;     // y-velocity
-    double post_shock_p = 116.83333;  // Pressure
+    double post_shock_p = 116.5;  // Pressure
     
     // Convert primitive variables to conservative variables
     // Pre-shock conservative variables
@@ -563,7 +563,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
         // Calculate physical coordinate (cell center)
         double x_pos = (double)(j+0.5-Ghost_cell)/ nx * Lx;
         
-        if (x_pos >= wall_start_x) {
+        if (x_pos > wall_start_x) {
             // Reflecting wall region (right portion of bottom boundary)
             
             // Density - extrapolate from interior
@@ -591,6 +591,8 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
             x[3][j][Ghost_cell-4] = x[3][j][Ghost_cell+3];
             
         } else {
+
+
             // Non-wall region (left portion of bottom boundary) - post-shock inflow
            
             // Density
@@ -616,6 +618,7 @@ static inline void BC_DoubleMach_2D(int var, int rows, int cols, double (*x)[row
             x[3][j][Ghost_cell-2] = post_E;
             x[3][j][Ghost_cell-3] = post_E;
             x[3][j][Ghost_cell-4] = post_E;
+
         }
     }
     
@@ -974,6 +977,145 @@ static inline void Boundary_Conditions(int var, int rows, int cols, double (*y)[
         bc_funcs[bc_types[i]](var, rows, cols, y, sides[i], GC);
     }
     
+}
+
+
+
+/*
+ * Fix_Corner - Corner Treatment Correction (Woodward & Colella, 1984)
+ * 
+ * PURPOSE:
+ *   Applies entropy and enthalpy corrections to cells near the corner singularity
+ *   in the backward-facing step problem. This correction maintains steady flow
+ *   and reduces numerical errors that occur at geometric singularities.
+ *
+ * METHODOLOGY:
+ *   Based on the Woodward & Colella (1984) corner treatment:
+ *   1. Entropy Correction: Adjusts density in 'b' cells to match the adiabatic
+ *      constant (entropy) from reference cell 'a'
+ *   2. Enthalpy Correction: Scales velocities in 'b' cells to maintain total
+ *      enthalpy consistency with reference cell 'a'
+ *
+ * CELL DEFINITIONS:
+ *   Reference cell 'a': Located at (Corner_Index_x-1, Corner_Index_y-1)
+ *                       Left-bottom cell relative to the corner
+ *   Cells 'b' (corrected cells):
+ *     1st row: 4 cells immediately right of corner (y = Corner_Index_y)
+ *     2nd row: 2 cells above the first row (y = Corner_Index_y+1)
+ *
+ * PHYSICAL BACKGROUND:
+ *   The corner point (x=0.6, y=0.2) is a geometric singularity where:
+ *   - Streamlines converge/divergence
+ *   - Rarefaction fan originates
+ *   - Numerical methods tend to violate entropy conservation
+ *   This correction ensures physically consistent flow behavior near the corner.
+ *
+ * REFERENCE:
+ *   Woodward & Colella, "The Numerical Simulation of Two-Dimensional Fluid Flow
+ *   with Strong Shocks", Journal of Computational Physics, 1984.
+ *
+ * INPUT PARAMETERS:
+ *   var            - Variable index (currently unused, reserved for future extensions)
+ *   rows, cols     - Dimensions of the computational domain including ghost cells
+ *   GC             - Number of ghost cells at each boundary
+ *   y              - 4D array of conserved variables [rho, rho*u, rho*v, rho*E]
+ *                    Dimensions: [4][rows][cols]
+ *   Corner_Index_x - X-index of the corner point in grid coordinates
+ *   Corner_Index_y - Y-index of the corner point in grid coordinates
+ *
+ * OUTPUT:
+ *   Modified conserved variables in 'b' cells
+ *
+ * CALLING SEQUENCE:
+ *   Typically called after each time step for the backward step test case
+ *   when flow features are established near the corner (t > 0)
+ *
+ * RESTRICTIONS:
+ *   - Assumes ideal gas equation of state with global constant M_gamma
+ *   - Corner indices must be within valid grid bounds (considering ghost cells)
+ *   - Primarily designed for the Mach 3 step flow problem
+ *
+ * SIDE EFFECTS:
+ *   Modifies the conserved variables array y in-place
+ *   Changes affect both the solution and any subsequent calculations
+ *
+ * REVISION HISTORY:
+ *   [Date]  - Initial implementation based on Donat & Marquina (1996)
+ *   [Date]  - Updated with detailed comments and error checking
+ */
+static inline void Fix_Corner(int var, int rows, int cols, int GC, double (*y)[rows][cols],int Corner_Index_x, int Corner_Index_y){
+    // Fixed physical parameters
+    double gamma_minus_one = M_gamma - 1.0;
+    double gamma_ratio = M_gamma / gamma_minus_one;
+
+    // Extract reference cell 'a' values (left-bottom corner cell)
+    double Fix_rho = y[0][Corner_Index_x-1][Corner_Index_y-1];
+    double Fix_rhou = y[1][Corner_Index_x-1][Corner_Index_y-1];
+    double Fix_rhov = y[2][Corner_Index_x-1][Corner_Index_y-1];
+    double Fix_rhoe = y[3][Corner_Index_x-1][Corner_Index_y-1];
+    
+    // Compute primitive variables from conserved variables for reference cell 'a'
+    double Fix_u = Fix_rhou / Fix_rho;
+    double Fix_v = Fix_rhov / Fix_rho;
+    double Fix_q2 = Fix_u*Fix_u + Fix_v*Fix_v;
+    double Fix_p = (Fix_rhoe - 0.5 * Fix_rho * Fix_q2) * gamma_minus_one;
+    
+    // Compute adiabatic constant (entropy) for reference cell 'a'
+    double Fix_s = Fix_p / pow(Fix_rho, M_gamma);
+
+    // Correct first row of 4 cells above the step (immediately right of corner)
+    for (int i = Corner_Index_x; i < Corner_Index_x+4; i++) {
+        // Extract conserved variables for cell 'b'
+        double rho = y[0][i][Corner_Index_y];
+        double rhou = y[1][i][Corner_Index_y];
+        double rhov = y[2][i][Corner_Index_y];
+        double rhoe = y[3][i][Corner_Index_y];
+        
+        // Compute primitive variables for cell 'b'
+        double u = rhou / rho;
+        double v = rhov / rho;
+        double q2 = u*u + v*v;
+        double p = (rhoe - 0.5 * rho * q2) * gamma_minus_one;
+    
+        // Apply entropy correction: adjust density to match reference entropy
+        rho = pow(p / Fix_s, 1.0 / M_gamma);
+
+        // Compute scaling factor alpha for enthalpy correction
+        double alpha = (0.5 * Fix_q2 + gamma_ratio * Fix_s * (pow(Fix_rho, gamma_minus_one) - pow(rho, gamma_minus_one))) / (0.5 * q2);
+        
+        // Update conserved variables with both entropy and enthalpy corrections
+        y[0][i][Corner_Index_y] = rho;
+        y[1][i][Corner_Index_y] = sqrt(alpha) * rho * u;
+        y[2][i][Corner_Index_y] = sqrt(alpha) * rho * v;
+        y[3][i][Corner_Index_y] = p / gamma_minus_one + 0.5 * rho * alpha * q2;
+    }
+    
+    // Correct second row of 2 cells above the step (two cells above first row)
+    for (int i = Corner_Index_x+1; i < Corner_Index_x + 3; i++) {
+        // Extract conserved variables for cell 'b' (second row)
+        double rho = y[0][i][Corner_Index_y+1];
+        double rhou = y[1][i][Corner_Index_y+1];
+        double rhov = y[2][i][Corner_Index_y+1];
+        double rhoe = y[3][i][Corner_Index_y+1];
+        
+        // Compute primitive variables for cell 'b'
+        double u = rhou / rho;
+        double v = rhov / rho;
+        double q2 = u*u + v*v;
+        double p = (rhoe - 0.5 * rho * q2) * gamma_minus_one;
+        
+        // Apply entropy correction: adjust density to match reference entropy
+        rho = pow(p / Fix_s, 1.0 / M_gamma);
+
+        // Compute scaling factor alpha for enthalpy correction
+        double alpha = (0.5 * Fix_q2 + gamma_ratio * Fix_s * (pow(Fix_rho, gamma_minus_one) - pow(rho, gamma_minus_one))) / (0.5 * q2);
+        // Update conserved variables with both entropy and enthalpy corrections
+        y[0][i][Corner_Index_y+1] = rho;
+        y[1][i][Corner_Index_y+1] = sqrt(alpha) * rho * u;
+        y[2][i][Corner_Index_y+1] = sqrt(alpha) * rho * v;
+        y[3][i][Corner_Index_y+1] = p / gamma_minus_one + 0.5 * rho * alpha * q2;
+    }
+
 }
 
 
