@@ -193,8 +193,8 @@ int main(int argc, char *argv[]) {
                         //RK2_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     case 3:
-                        //RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
-                        RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        //RK3_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     default:
                         fprintf(stderr, "Error: Invalid time advancement method\n");
@@ -364,7 +364,13 @@ int main(int argc, char *argv[]) {
 }
 
 
-
+/*==============================================================================
+ * Function: ReadControlFile
+ * Description: Reads simulation control parameters from a configuration file
+ *              and sets up the simulation accordingly.
+ * Parameters:
+ *   - filename: Path to the control file
+ *============================================================================*/
 void ReadControlFile(const char* filename) {
     FILE* file = fopen(filename, "r");
     if (!file) {
@@ -376,36 +382,37 @@ void ReadControlFile(const char* filename) {
     char key[100];
     char value[150];
     
-    // 设置默认值
+    // Set default values for all control parameters
     ctrl_params.test_case = TEST_RAYLEIGH_TAYLOR;
     ctrl_params.L_nx = 100;
     ctrl_params.L_ny = 400;
-    ctrl_params.Time_ADM = 3;
-    ctrl_params.scheme = 1;  // 默认使用HLL
-    ctrl_params.M_gamma = 1.4;
-    ctrl_params.Source = false;
-    ctrl_params.Gravity = 1.0;
-    ctrl_params.CFL = 0.4;
-    ctrl_params.Tmax = 1.0;
-    ctrl_params.Control_Compution = 0;
-    ctrl_params.Control_output = 2;
-    ctrl_params.Recon_Accur = 2;        // 默认2阶TVD
-    ctrl_params.Characteriz = false;    // 默认不使用特征重构
-    strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");
+    ctrl_params.Time_ADM = 3;               // Default: RK3 time integration
+    ctrl_params.scheme = 1;                 // Default: HLL Riemann solver
+    ctrl_params.M_gamma = 1.4;              // Default: Air (γ = 1.4)
+    ctrl_params.Source = false;             // Default: No source terms
+    ctrl_params.Gravity = 1.0;              // Default gravity constant
+    ctrl_params.CFL = 0.4;                  // Default CFL number
+    ctrl_params.Tmax = 1.0;                 // Default maximum simulation time
+    ctrl_params.Control_Compution = 0;      // Default: Time-controlled simulation
+    ctrl_params.Control_output = 2;         // Default output interval
+    ctrl_params.Recon_Accur = 2;            // Default: 2nd order TVD reconstruction
+    ctrl_params.Characteriz = false;        // Default: Primitive variable reconstruction
+    strcpy(ctrl_params.output_dir, "/mnt/d/Desktop/RP_FVM/data");  // Default output directory
     
+    // Read and parse control file line by line
     while (fgets(line, sizeof(line), file)) {
-        // 跳过注释行和空行
+        // Skip comment lines and empty lines
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
             continue;
         }
         
-        // 移除行尾的换行符
+        // Remove trailing newline characters
         line[strcspn(line, "\n")] = 0;
         line[strcspn(line, "\r")] = 0;
         
-        // 解析键值对
+        // Parse key-value pairs (format: "key: value")
         if (sscanf(line, "%99[^:]: %149[^\n]", key, value) == 2) {
-            // 去除键值两端的空格
+            // Trim whitespace from key and value
             char *key_trim = key;
             char *value_trim = value;
             while (*key_trim == ' ') key_trim++;
@@ -415,18 +422,30 @@ void ReadControlFile(const char* filename) {
             while (*value_trim && value_trim[strlen(value_trim)-1] == ' ') 
                 value_trim[strlen(value_trim)-1] = 0;
             
+            // Process recognized parameters
             if (strcmp(key_trim, "TestCase") == 0) {
-                if (strcmp(value_trim, "Sod_Shocktube") == 0) 
+                // Map test case string to enumeration value
+                if (strcmp(value_trim, "1D_Sod_Shocktube") == 0) 
                     ctrl_params.test_case = TEST_1D_SHOCKTUBE;
-                else if (strcmp(value_trim, "Riemann_Case1") == 0) 
+                else if (strcmp(value_trim, "1D_Contact_Wave") == 0) 
+                    ctrl_params.test_case = TEST_1D_CONTACTWAVE;
+                else if (strcmp(value_trim, "1D_Shock_Impact") == 0) 
+                    ctrl_params.test_case = TEST_1D_SHOCKIMPACT;
+                else if (strcmp(value_trim, "1D_Impact_Wall") == 0) 
+                    ctrl_params.test_case = TEST_1D_IMPACTWALL;
+                else if (strcmp(value_trim, "1D_Double_Rarefaction") == 0) 
+                    ctrl_params.test_case = TEST_1D_DOUBLERARE;
+                else if (strcmp(value_trim, "1D_Noh_Problem") == 0) 
+                    ctrl_params.test_case = TEST_1D_NOHPROBLEM;
+                else if (strcmp(value_trim, "2D_Riemann_Case1") == 0) 
                     ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE1;
-                else if (strcmp(value_trim, "Riemann_Case2") == 0) 
+                else if (strcmp(value_trim, "2D_Riemann_Case2") == 0) 
                     ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE2;
-                else if (strcmp(value_trim, "Riemann_Case3") == 0) 
+                else if (strcmp(value_trim, "2D_Riemann_Case3") == 0) 
                     ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE3;
-                else if (strcmp(value_trim, "Riemann_Case4") == 0) 
+                else if (strcmp(value_trim, "2D_Riemann_Case4") == 0) 
                     ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE4;
-                else if (strcmp(value_trim, "Riemann_Case5") == 0) 
+                else if (strcmp(value_trim, "2D_Riemann_Case5") == 0) 
                     ctrl_params.test_case = TEST_2D_SHOCKTUBE_CASE5;
                 else if (strcmp(value_trim, "Taylor_Green_Vortex") == 0) 
                     ctrl_params.test_case = TEST_TAYLOR_GREEN_VORTEX;
@@ -444,7 +463,7 @@ void ReadControlFile(const char* filename) {
                     ctrl_params.test_case = TEST_BACKWARD_STEP;
                 else if (strcmp(value_trim, "Blast_Wave") == 0) 
                     ctrl_params.test_case = TEST_BLAST_WAVE;
-                else if (strcmp(value_trim, "Noh_Problem") == 0) 
+                else if (strcmp(value_trim, "2D_Noh_Problem") == 0) 
                     ctrl_params.test_case = TEST_NOH_PROBLEM;
                 else {
                     fprintf(stderr, "Warning: Unknown test case '%s', using default Rayleigh_Taylor\n", value_trim);
@@ -480,7 +499,7 @@ void ReadControlFile(const char* filename) {
                 strcpy(ctrl_params.output_dir, value_trim);
             else if (strcmp(key_trim, "Recon_Accur") == 0) {
                 int recon_val = atoi(value_trim);
-                // 验证重构精度值的有效性
+                // Validate reconstruction accuracy value
                 if (recon_val == 1 || recon_val == 2 || recon_val == 3 || recon_val == 5) {
                     ctrl_params.Recon_Accur = recon_val;
                 } else {
@@ -507,20 +526,20 @@ void ReadControlFile(const char* filename) {
     fclose(file);
     
 
-    // Print The Read Parameters
+    // Display loaded control parameters in formatted output
     printf("╔═══════════════════════════════════════════════════╗\n");
     printf("║            Control Parameters Loaded              ║\n");
     printf("╠═══════════════════════════════════════════════════╣\n");
     printf("║ Test Case:         %-30s ║\n", getTestCaseName(ctrl_params.test_case));
     printf("║ Grid Size (nx×ny): %-5d × %-5d               ║\n", ctrl_params.L_nx, ctrl_params.L_ny);
 
-    // 使用条件运算符处理三种时间格式
+    // Display time integration method
     printf("║ Time Integration:  %-30s ║\n", 
-        ctrl_params.Time_ADM == 1 ? "RK1" : 
-        (ctrl_params.Time_ADM == 2 ? "RK2" : 
-        (ctrl_params.Time_ADM == 3 ? "RK3" : "Unknown")));
+        ctrl_params.Time_ADM == 1 ? "RK1 (Euler)" : 
+        (ctrl_params.Time_ADM == 2 ? "RK2 (Midpoint)" : 
+        (ctrl_params.Time_ADM == 3 ? "RK3 (TVD)" : "Unknown")));
         
-    // Riemann求解器显示
+    // Display Riemann solver type
     const char* scheme_name;
     switch (ctrl_params.scheme) {
         case 1: scheme_name = "HLL"; break;
@@ -543,7 +562,7 @@ void ReadControlFile(const char* filename) {
     printf("║ Output Interval:   %-30d ║\n", ctrl_params.Control_output);
     printf("║ Output Directory:  %-30s ║\n", ctrl_params.output_dir);
     
-    // 重构参数显示
+    // Display reconstruction method
     const char* recon_name;
     switch (ctrl_params.Recon_Accur) {
         case 1: recon_name = "1st Order (Constant)"; break;
@@ -554,21 +573,28 @@ void ReadControlFile(const char* filename) {
     }
     printf("║ Reconstruction:    %-30s ║\n", recon_name);
     
-    printf("║ Characteristic:    %-30s ║\n", 
+    printf("║ Variable Type:     %-30s ║\n", 
            ctrl_params.Characteriz ? "Characteristic" : "Primitive");
     printf("╚═══════════════════════════════════════════════════╝\n\n");
 }
-// 读取控制文件的函数
-void set_material_parameters(double gamma, bool source, double gravity, double cfl) {
 
+/*==============================================================================
+ * Function: set_material_parameters
+ * Description: Sets global material parameters for the simulation
+ * Parameters:
+ *   - gamma: Specific heat ratio (γ)
+ *   - source: Enable/disable source terms
+ *   - gravity: Gravity constant value
+ *   - cfl: CFL stability number
+ *============================================================================*/
+void set_material_parameters(double gamma, bool source, double gravity, double cfl) {
     M_gamma = gamma;
     Source = source;
     Gravity = gravity;
-
     CFL = cfl;
     
-    printf("Material parameters set:\n");
-    printf("  Gamma: %.3f\n", M_gamma);
+    printf("Material parameters configured:\n");
+    printf("  Gamma (γ): %.3f\n", M_gamma);
     printf("  Gravity source: %s\n", Source ? "ON" : "OFF");
     if (Source) {
         printf("  Gravity constant: %.3f\n", Gravity);
@@ -576,56 +602,16 @@ void set_material_parameters(double gamma, bool source, double gravity, double c
     printf("  CFL number: %.3f\n", CFL);
 }
 
-/*                                            *********                                          */
-/*                                            算例名称函数实现                                    */
-/*                                            *********                                          */
-// 获取完整算例名称
-const char* getTestCaseName(TestCase2D test_case) {
-    switch(test_case) {
-        case TEST_1D_SHOCKTUBE: return "1D_Sod_Shocktube";
-        case TEST_2D_SHOCKTUBE_CASE1: return "2D_Riemann_Case1";
-        case TEST_2D_SHOCKTUBE_CASE2: return "2D_Riemann_Case2";
-        case TEST_2D_SHOCKTUBE_CASE3: return "2D_Riemann_Case3";
-        case TEST_2D_SHOCKTUBE_CASE4: return "2D_Riemann_Case4";
-        case TEST_2D_SHOCKTUBE_CASE5: return "2D_Riemann_Case5";
-        case TEST_TAYLOR_GREEN_VORTEX: return "Taylor_Green_Vortex";
-        case TEST_GAUSSIAN_PULSE: return "Gaussian_Pulse";
-        case TEST_KELVIN_HELMHOLTZ: return "Kelvin_Helmholtz";
-        case TEST_RAYLEIGH_TAYLOR: return "Rayleigh_Taylor";
-        case TEST_DOUBLE_MACH_REFLECTION: return "Double_Mach_Reflection";
-        case TEST_BACKWARD_STEP: return "Backward_Step";
-        case TEST_OddEven_Decoupling: return "OddEven_DEcouple";
-        case TEST_BLAST_WAVE: return "Blast_Wave";
-        case TEST_NOH_PROBLEM: return "Noh_Problem";
-        default: return "Unknown_Case";
-    }
-}
 
-// 获取简短算例名称（用于文件名）
-const char* getTestCaseShortName(TestCase2D test_case) {
-    switch(test_case) {
-        case TEST_1D_SHOCKTUBE: return "Sod";
-        case TEST_2D_SHOCKTUBE_CASE1: return "Riemann1";
-        case TEST_2D_SHOCKTUBE_CASE2: return "Riemann2";
-        case TEST_2D_SHOCKTUBE_CASE3: return "Riemann3";
-        case TEST_2D_SHOCKTUBE_CASE4: return "Riemann4";
-        case TEST_2D_SHOCKTUBE_CASE5: return "Riemann5";
-        case TEST_TAYLOR_GREEN_VORTEX: return "TGV";
-        case TEST_GAUSSIAN_PULSE: return "Gaussian";
-        case TEST_KELVIN_HELMHOLTZ: return "KH_Smooth";
-        case TEST_RAYLEIGH_TAYLOR: return "RT";
-        case TEST_DOUBLE_MACH_REFLECTION: return "DMR";
-        case TEST_BACKWARD_STEP: return "BackStep";
-        case TEST_OddEven_Decoupling: return "OEdeCouple";
-        case TEST_BLAST_WAVE: return "Blast";
-        case TEST_NOH_PROBLEM: return "Noh";
-        default: return "Unknown";
-    }
-}
-// 设置当前算例
+// Set current test case and log information
 void set_current_test_case(TestCase2D test_case) {
     current_test_case = test_case;
-    printf("Current test case set to: %s\n", getTestCaseName(test_case));
+    printf("================================================\n");
+    printf("Test case configured:\n");
+    printf("  Full Name:  %s\n", getTestCaseName(test_case));
+    printf("  Short Name: %s\n", getTestCaseShortName(test_case));
+    printf("  Description: %s\n", getTestCaseDescription(test_case));
+    printf("================================================\n");
 }
 
 
@@ -765,59 +751,33 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
                         double (*pri)[rows][cols], double now_time, int scheme_type) {
     printf("Output result(rho, u, v, p, T, Entropy, U_M, U_E)\n");
     
-    // 获取算例名称
+   // Get Case Name Systematic Abbreviation
     const char* case_name;
     switch(current_test_case) {
-        case TEST_NOH_PROBLEM: 
-            case_name = "NOH"; 
-            break;
-        case TEST_BACKWARD_STEP: 
-            case_name = "BACKSTEP"; 
-            break;
-        case TEST_DOUBLE_MACH_REFLECTION: 
-            case_name = "DMR"; 
-            break;
-        case TEST_BLAST_WAVE: 
-            case_name = "BLAST"; 
-            break;
-        case TEST_1D_SHOCKTUBE: 
-            case_name = "SOD"; 
-            break;
-        case TEST_2D_SHOCKTUBE_CASE1: 
-            case_name = "RIEMANN1"; 
-            break;
-        case TEST_2D_SHOCKTUBE_CASE2: 
-            case_name = "RIEMANN2"; 
-            break;
-        case TEST_2D_SHOCKTUBE_CASE3: 
-            case_name = "RIEMANN3"; 
-            break;
-        case TEST_2D_SHOCKTUBE_CASE4: 
-            case_name = "RIEMANN4"; 
-            break;
-        case TEST_2D_SHOCKTUBE_CASE5: 
-            case_name = "RIEMANN5"; 
-            break;
-        case TEST_TAYLOR_GREEN_VORTEX: 
-            case_name = "TGV"; 
-            break;
-        case TEST_GAUSSIAN_PULSE: 
-            case_name = "GAUSSIAN"; 
-            break;
-        case TEST_KELVIN_HELMHOLTZ: 
-            case_name = "KH"; 
-            break;
-        case TEST_RAYLEIGH_TAYLOR: 
-            case_name = "RT"; 
-            break;
-        case TEST_OddEven_Decoupling: 
-            case_name = "OEDC"; 
-            break;
-        default: 
-            case_name = "UNKNOWN";
+        case TEST_1D_SHOCKTUBE:        case_name = "1D_SOD"; break;
+        case TEST_1D_CONTACTWAVE:      case_name = "1D_CONTACT"; break;
+        case TEST_1D_SHOCKIMPACT:      case_name = "1D_SHOCKIMPACT"; break;
+        case TEST_1D_IMPACTWALL:       case_name = "1D_IMPACTWALL"; break;
+        case TEST_1D_DOUBLERARE:       case_name = "1D_DOUBLERARE"; break;
+        case TEST_1D_NOHPROBLEM:       case_name = "1D_NOH"; break;
+        case TEST_2D_SHOCKTUBE_CASE1:  case_name = "2D_RIEMANN1"; break;
+        case TEST_2D_SHOCKTUBE_CASE2:  case_name = "2D_RIEMANN2"; break;
+        case TEST_2D_SHOCKTUBE_CASE3:  case_name = "2D_RIEMANN3"; break;
+        case TEST_2D_SHOCKTUBE_CASE4:  case_name = "2D_RIEMANN4"; break;
+        case TEST_2D_SHOCKTUBE_CASE5:  case_name = "2D_RIEMANN5"; break;
+        case TEST_TAYLOR_GREEN_VORTEX: case_name = "TGV"; break;
+        case TEST_GAUSSIAN_PULSE:      case_name = "GAUSSIAN"; break;
+        case TEST_KELVIN_HELMHOLTZ:    case_name = "KH"; break;
+        case TEST_RAYLEIGH_TAYLOR:     case_name = "RT"; break;
+        case TEST_DOUBLE_MACH_REFLECTION: case_name = "DMR"; break;
+        case TEST_BLAST_WAVE:          case_name = "BLASTWAVE"; break;
+        case TEST_NOH_PROBLEM:         case_name = "2D_NOH"; break;
+        case TEST_OddEven_Decoupling:  case_name = "OEDC"; break;
+        case TEST_BACKWARD_STEP:       case_name = "BACKSTEP"; break;
+        default:                       case_name = "UNKNOWN"; break;
     }
     
-    // 获取Riemann Solver名称
+    // Get Riemann Solver Name
     const char* scheme_name;
     switch(scheme_type) {
         case 1: scheme_name = "HLL"; break;
@@ -829,13 +789,26 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         default: scheme_name = "ExactRiemann"; break;
     }
     
-    // 生成文件名：使用 .dat 扩展名表示ASCII格式
+    int output_rows = rows - 2*GC;
+    int output_cols = cols - 2*GC;
+    
+    // 根据维数选择不同的文件名和输出格式
     char filename[512];
-    sprintf(filename, "%s/%s_%s_output_data_%.6f.plt", 
-            ctrl_params.output_dir, 
-            getTestCaseShortName(ctrl_params.test_case),
-            scheme_name, 
-            now_time);
+    if (output_cols == 1) {
+        // 一维剖面数据 - 使用.dat扩展名
+        sprintf(filename, "%s/%s_%s_profile_%.6f.dat", 
+                ctrl_params.output_dir, 
+                getTestCaseShortName(ctrl_params.test_case),
+                scheme_name, 
+                now_time);
+    } else {
+        // 二维数据 - 使用.plt扩展名
+        sprintf(filename, "%s/%s_%s_output_data_%.6f.plt", 
+                ctrl_params.output_dir, 
+                getTestCaseShortName(ctrl_params.test_case),
+                scheme_name, 
+                now_time);
+    }
     
     printf("Writing to file: %s\n", filename);
     
@@ -851,81 +824,117 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         return;
     }
     
-    // Tecplot格式头信息 - 修正变量列表，添加IBLANK
-     fprintf(file, "TITLE = \"2D Fluid Dynamics Data - %s with %s\"\n", case_name, scheme_name);
-    fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"Entropy\", \"rhou\", \"rhov\", \"rhoE\", \"IBLANK\"\n");
-    
-    int output_rows = rows - 2*GC;
-    int output_cols = cols - 2*GC;
-    
-    // 检查是否为后台阶算例
-    if (current_test_case == TEST_BACKWARD_STEP) {
-        printf("Processing BACKWARD_STEP case with IBLANK blanking...\n");
+    if (output_cols == 1) {
+        // 一维剖面输出 - 优化为Origin格式
         
-        // 对于后台阶算例，输出整个区域，使用IBLANK标记空白区域
-        fprintf(file, "ZONE T=\"Backward Step: Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
-                now_time, output_cols, output_rows);
+        // Origin格式：使用注释行开头，然后是表头
+        fprintf(file, "! 1D Profile Data - %s with %s\n", case_name, scheme_name);
+        fprintf(file, "! Time = %.6f\n", now_time);
+        fprintf(file, "! Number of points = %d\n", output_rows);
+        // 表头行 - Origin可以识别简单的表头
+        // 使用空格分隔的表头，Origin可以自动识别为列名
+        fprintf(file, "X\tDensity\tU\tV\tPressure\tTemperature\tEntropy\tMomentumX\tMomentumY\tEnergy\n");
         
-        // 输出整个区域的数据
+        // 一维剖面数据输出（每行对应一个x位置）
         for (int i = 0; i < output_rows; i++) {
-            for (int j = 0; j < output_cols; j++) {
-                int actual_i = i + GC;
-                int actual_j = j + GC;
-                
-                // 判断是否为空白区域
-                int iblank = 1; // 默认1表示有效区域
-                if (mx[i] >= 0.6 && mx[i] <= 3.0 && my[j] >= 0.0 && my[j] <= 0.2) {
-                    iblank = 0; // 0表示空白区域
-                }
-                
-                double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
-                double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
-                
-                // 输出数据，包括Entropy和IBLANK值
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
-                        mx[i], my[j], 
-                        pri[0][actual_i][actual_j], 
-                        pri[1][actual_i][actual_j], 
-                        pri[2][actual_i][actual_j], 
-                        pri[3][actual_i][actual_j],
-                        temperature,
-                        entropy,  // 新增的绝热指数（熵）
-                        U[1][actual_i][actual_j], 
-                        U[2][actual_i][actual_j], 
-                        U[3][actual_i][actual_j],
-                        iblank);
-            }
+            int actual_i = i + GC;
+            int actual_j = GC;  // 对于一维情况，只取中间的y位置
+            
+            double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+            double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
+            
+            // 输出数据，使用制表符分隔，Origin可以正确识别
+            // 格式：x坐标 + 8个物理量
+            fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\n",
+                    mx[i],  // x坐标
+                    pri[0][actual_i][actual_j],  // 密度 rho
+                    pri[1][actual_i][actual_j],  // x方向速度 u
+                    pri[2][actual_i][actual_j],  // y方向速度 v
+                    pri[3][actual_i][actual_j],  // 压力 p
+                    temperature,                 // 温度 T
+                    entropy,                     // 熵
+                    U[1][actual_i][actual_j],    // x方向动量 rhou
+                    U[2][actual_i][actual_j],    // y方向动量 rhov
+                    U[3][actual_i][actual_j]);   // 总能量 rhoE
         }
         
-        printf("Backward Step region output with IBLANK and Entropy\n");
+        printf("1D profile data output successful (Origin compatible format)\n");
         
     } else {
-        // 其他算例保持原样输出，IBLANK全部设为1
-        fprintf(file, "ZONE T=\"Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
-                now_time, output_cols, output_rows);
+        // 二维输出 - 保持原有Tecplot格式
+        // Tecplot格式头信息 - 修正变量列表，添加IBLANK
+        fprintf(file, "TITLE = \"2D Fluid Dynamics Data - %s with %s\"\n", case_name, scheme_name);
+        fprintf(file, "VARIABLES = \"X\", \"Y\", \"rho\", \"u\", \"v\", \"p\", \"T\", \"Entropy\", \"rhou\", \"rhov\", \"rhoE\", \"IBLANK\"\n");
         
-        // 输出数据
-        for (int i = 0; i < output_rows; i++) {
-            for (int j = 0; j < output_cols; j++) {
-                int actual_i = i + GC;
-                int actual_j = j + GC;
-                
-                double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
-                double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
-                
-                // IBLANK=1 表示所有区域有效
-                fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
-                        mx[i], my[j], 
-                        pri[0][actual_i][actual_j], 
-                        pri[1][actual_i][actual_j], 
-                        pri[2][actual_i][actual_j], 
-                        pri[3][actual_i][actual_j],
-                        temperature,
-                        entropy,  // 新增的绝热指数（熵）
-                        U[1][actual_i][actual_j], 
-                        U[2][actual_i][actual_j], 
-                        U[3][actual_i][actual_j],
-                        1); // IBLANK=1
+        // 检查是否为后台阶算例
+        if (current_test_case == TEST_BACKWARD_STEP) {
+            printf("Processing BACKWARD_STEP case with IBLANK blanking...\n");
+            
+            // 对于后台阶算例，输出整个区域，使用IBLANK标记空白区域
+            fprintf(file, "ZONE T=\"Backward Step: Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
+                    now_time, output_cols, output_rows);
+            
+            // 输出整个区域的数据
+            for (int i = 0; i < output_rows; i++) {
+                for (int j = 0; j < output_cols; j++) {
+                    int actual_i = i + GC;
+                    int actual_j = j + GC;
+                    
+                    // 判断是否为空白区域
+                    int iblank = 1; // 默认1表示有效区域
+                    if (mx[i] >= 0.6 && mx[i] <= 3.0 && my[j] >= 0.0 && my[j] <= 0.2) {
+                        iblank = 0; // 0表示空白区域
+                    }
+                    
+                    double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                    double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
+                    
+                    // 输出数据，包括Entropy和IBLANK值
+                    fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                            mx[i], my[j], 
+                            pri[0][actual_i][actual_j], 
+                            pri[1][actual_i][actual_j], 
+                            pri[2][actual_i][actual_j], 
+                            pri[3][actual_i][actual_j],
+                            temperature,
+                            entropy,  // 新增的绝热指数（熵）
+                            U[1][actual_i][actual_j], 
+                            U[2][actual_i][actual_j], 
+                            U[3][actual_i][actual_j],
+                            iblank);
+                }
+            }
+            
+            printf("Backward Step region output with IBLANK and Entropy\n");
+            
+        } else {
+            // 其他算例保持原样输出，IBLANK全部设为1
+            fprintf(file, "ZONE T=\"Time=%.6f\", I=%d, J=%d, DATAPACKING=POINT\n", 
+                    now_time, output_cols, output_rows);
+            
+            // 输出数据
+            for (int i = 0; i < output_rows; i++) {
+                for (int j = 0; j < output_cols; j++) {
+                    int actual_i = i + GC;
+                    int actual_j = j + GC;
+                    
+                    double temperature = pri[3][actual_i][actual_j] / pri[0][actual_i][actual_j];
+                    double entropy = pri[3][actual_i][actual_j] / pow(pri[0][actual_i][actual_j], M_gamma);
+                    
+                    // IBLANK=1 表示所有区域有效
+                    fprintf(file, "%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%.8f\t%d\n",
+                            mx[i], my[j], 
+                            pri[0][actual_i][actual_j], 
+                            pri[1][actual_i][actual_j], 
+                            pri[2][actual_i][actual_j], 
+                            pri[3][actual_i][actual_j],
+                            temperature,
+                            entropy,  // 新增的绝热指数（熵）
+                            U[1][actual_i][actual_j], 
+                            U[2][actual_i][actual_j], 
+                            U[3][actual_i][actual_j],
+                            1); // IBLANK=1
+                }
             }
         }
     }
@@ -936,7 +945,14 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
     printf("Riemann Solver: %s\n", scheme_name);
     printf("Time: %.6f\n", now_time);
     printf("File: %s\n", filename);
-    printf("Grid size: %d x %d (excluding ghost cells)\n", output_cols, output_rows);
+    
+    if (output_cols == 1) {
+        printf("1D profile data with %d points (x-direction)\n", output_rows);
+        printf("Format optimized for Origin software\n");
+        printf("Columns: X, Density, U, V, Pressure, Temperature, Entropy, MomentumX, MomentumY, Energy\n");
+    } else {
+        printf("Grid size: %d x %d (excluding ghost cells)\n", output_cols, output_rows);
+    }
     
     if (Con_out) {
         printf("Output calculation result successful\n");

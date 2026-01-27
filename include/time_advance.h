@@ -823,8 +823,8 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     // 第一步计算
     if (Source)
         Source_Gravity(var,rows,cols,GC,y,Source_G); 
-    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
-//    Boundary_Conditions(var, rows, cols, y, GC);
+//    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
+    Boundary_Conditions(var, rows, cols, y, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
@@ -840,8 +840,8 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     //第二步计算
     if (Source)
         Source_Gravity(var,rows,cols,GC,Conser_U1,Source_G); 
-   BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
-//    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
+//    BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
+    Boundary_Conditions(var, rows, cols, Conser_U1, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
@@ -858,8 +858,8 @@ static inline void RK3_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     if (Source)
         Source_Gravity(var,rows,cols,GC,Conser_U2,Source_G); 
     // 施加边界条件
-    BC_DoubleMach_2D(var, rows, cols, Conser_U2, GC,Time); 
-//    Boundary_Conditions(var, rows, cols, Conser_U2, GC);
+//    BC_DoubleMach_2D(var, rows, cols, Conser_U2, GC,Time); 
+    Boundary_Conditions(var, rows, cols, Conser_U2, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U2,Flux_F,Flux_G,dt,dx,dy);
     Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 

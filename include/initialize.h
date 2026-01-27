@@ -25,8 +25,15 @@ static inline void initEuler2D(int var, int rows, int cols, double (*x)[rows][co
 
 }
 
-//初始条件
-static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+//==============================================================================
+// 1D Shock Tube Test (Sod Problem)
+// Left state:  (ρ, u, v, p) = (1, 0, 0, 1)
+// Right state: (ρ, u, v, p) = (0.125, 0, 0, 0.1)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: All outflow
+// Reference time: t = 0.2
+//==============================================================================
+static inline void initEulerpri1D_Shocktube(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
 
     printf("=== 1D Shock Tube Test Case ===\n");
     
@@ -34,7 +41,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
     bc_config.left = BC_OUTFLOW;      
     bc_config.right = BC_OUTFLOW;     
     bc_config.bottom = BC_OUTFLOW;
-    bc_config.top = BC_REFLECTION;
+    bc_config.top = BC_OUTFLOW;
 
     int i, j;
     *Lx = 1.0;    
@@ -43,7 +50,7 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
     #pragma omp parallel for collapse(2)
     for (i = 0; i < rows; i++) {
         for ( j = 0; j < cols; j++){
-            if( j < cols/2 ){
+            if( i < rows/2 ){
                 x[0][i][j] = 1.0;
                 x[1][i][j] = 0.0;
                 x[2][i][j] = 0.0;
@@ -58,15 +65,253 @@ static inline void initEulerpri2D_1DShocktube(int var, int rows, int cols, doubl
         }
     }
 
-    *Time = 0.4;
+    *Time = 0.2;
     printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
     printf("Final simulation time: t = %f \n", *Time);
     printf("Boundary Conditions:\n");
     printf("  Left:   Outflow\n");
     printf("  Right:  Outflow\n");
-    printf("  Bottom: Reflective Wall\n");
-    printf("  Top:    Reflective Wall\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
 }
+
+//==============================================================================
+// 1D Contact Discontinuity Test
+// Left state:  (ρ, u, v, p) = (1, 0, 0, 1)
+// Right state: (ρ, u, v, p) = (0.125, 0, 0, 1)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: All outflow
+// Reference time: t = 0.2
+// Purpose: Tests numerical diffusion at contact interfaces
+//==============================================================================
+static inline void initEulerpri1D_ContactWave(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Contact Discontinuity Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_OUTFLOW;      
+    bc_config.right = BC_OUTFLOW;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 1.0;    
+    *Ly = 1.0;    
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 ){
+                x[0][i][j] = 1.0;
+                x[1][i][j] = 0.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+            else {
+                x[0][i][j] = 0.125;
+                x[1][i][j] = 0.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+        }
+    }
+
+    *Time = 0.2;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+//==============================================================================
+// 1D Shock Impact (Symmetric Shock Collision) Test
+// Left state:  (ρ, u, v, p) = (1, 4, 0, 1)
+// Right state: (ρ, u, v, p) = (1, -4, 0, 1)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: All outflow
+// Reference time: t = 0.2
+// Purpose: Tests overheating behavior in shock collision
+//==============================================================================
+static inline void initEulerpri1D_ShockImpact(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Symmetric Shock Collision Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_OUTFLOW;      
+    bc_config.right = BC_OUTFLOW;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 1.0;    
+    *Ly = 1.0;    
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 ){
+                x[0][i][j] = 1.0;
+                x[1][i][j] = 4.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+            else {
+                x[0][i][j] = 1.0;
+                x[1][i][j] = -4.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+        }
+    }
+
+    *Time = 0.2;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+//==============================================================================
+// 1D Double Rarefaction Wave Test
+// Left state:  (ρ, u, v, p) = (1, -2, 0, 0.4)
+// Right state: (ρ, u, v, p) = (1, 2, 0, 0.4)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: All outflow
+// Reference time: t = 0.15
+// Purpose: Tests performance in low-density and vacuum regions
+//==============================================================================
+static inline void initEulerpri1D_DoubleRare(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Double Rarefaction Wave Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_OUTFLOW;      
+    bc_config.right = BC_OUTFLOW;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 1.0;    
+    *Ly = 1.0;    
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            if( i < rows/2 ){
+                x[0][i][j] = 1.0;
+                x[1][i][j] = -2.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+            else {
+                x[0][i][j] = 1.0;
+                x[1][i][j] = 2.0;
+                x[2][i][j] = 0.0;
+                x[3][i][j] = 1.0;
+            }
+        }
+    }
+
+    *Time = 0.15;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+//==============================================================================
+// 1D Shock-Wall Impact (Shock Reflection) Test
+// Initial state: (ρ, u, v, p) = (1, 1, 0, 0.001)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: Left/outflow, Right/reflecting wall
+// Reference time: t = 0.6
+// Purpose: Tests wall overheating phenomenon in shock capturing
+//==============================================================================
+static inline void initEulerpri1D_ShockImpactWall(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Shock Reflection from Rigid Wall Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_OUTFLOW;      
+    bc_config.right = BC_REFLECTION;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 1.0;    
+    *Ly = 1.0;    
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            x[0][i][j] = 1.0;
+            x[1][i][j] = 1.0;
+            x[2][i][j] = 0.0;
+            x[3][i][j] = 1.0;
+        }
+    }
+
+    *Time = 0.6;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  ReFelection\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
+//==============================================================================
+// 1D Noh Problem (Strong Implosion Test)
+// Initial state: (ρ, u, v, p) = (1, -1, 0, 1e-6)
+// Domain: [0,1] × [0,1]
+// Boundary conditions: Left/outflow, Right/reflecting wall
+// Reference time: t = 0.6
+// Purpose: Tests strong converging shocks and analytical solution
+//==============================================================================
+static inline void initEulerpri1D_NohProblem(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    printf("=== 1D Noh Implosion Problem Test Case ===\n");
+    
+    // Set boundary conditions for 1D shock tube
+    bc_config.left = BC_REFLECTION;      
+    bc_config.right = BC_OUTFLOW;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 1.0;    
+    *Ly = 1.0;    
+    
+    #pragma omp parallel for collapse(2)
+    for (i = 0; i < rows; i++) {
+        for ( j = 0; j < cols; j++){
+            x[0][i][j] = 1.0;
+            x[1][i][j] = -1.0;
+            x[2][i][j] = 0.0;
+            x[3][i][j] = 1e-6;
+        }
+    }
+
+    *Time = 0.6;
+    printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
+    printf("Final simulation time: t = %f \n", *Time);
+    printf("Boundary Conditions:\n");
+    printf("  Left:   Outflow\n");
+    printf("  Right:  Outflow\n");
+    printf("  Bottom: Outflow\n");
+    printf("  Top:    Outflow\n");
+}
+
 
 // Case 1
 static inline void initEulerpri2D_Shocktube1(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
@@ -1188,7 +1433,27 @@ static inline void initEulerTestCase(TestCase2D test_case,
     // Select The Corresponding Initialization Function According To The Test Cases
     switch(test_case) {
         case TEST_1D_SHOCKTUBE:
-            initEulerpri2D_1DShocktube(var, rows, cols, x, Lx, Ly, Time);
+            initEulerpri1D_Shocktube(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
+        case TEST_1D_CONTACTWAVE:
+            initEulerpri1D_ContactWave(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
+        case TEST_1D_SHOCKIMPACT:
+            initEulerpri1D_ShockImpact(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
+        case TEST_1D_IMPACTWALL:
+            initEulerpri1D_ShockImpactWall(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
+        case TEST_1D_DOUBLERARE:
+            initEulerpri1D_DoubleRare(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
+        case TEST_1D_NOHPROBLEM:
+            initEulerpri1D_NohProblem(var, rows, cols, x, Lx, Ly, Time);
             break;
             
         case TEST_2D_SHOCKTUBE_CASE1:
@@ -1250,7 +1515,7 @@ static inline void initEulerTestCase(TestCase2D test_case,
         default:
             printf("Error: Unknown test case selected!\n");
             // Default Use Of 1 D Shock Tube
-            initEulerpri2D_1DShocktube(var, rows, cols, x, Lx, Ly, Time);
+            initEulerpri1D_Shocktube(var, rows, cols, x, Lx, Ly, Time);
             break;
     }
 }
@@ -1274,6 +1539,11 @@ static inline void Init_Euler_2D(TestCase2D test_case,
     printf("Selected test case: ");
     switch(test_case) {
         case TEST_1D_SHOCKTUBE: printf("1D Sod Shock Tube\n"); break;
+       case TEST_1D_CONTACTWAVE: printf("1D Contact Discontinuity Test\n"); break;
+        case TEST_1D_SHOCKIMPACT: printf("1D Shock Impact Problem\n"); break;
+        case TEST_1D_IMPACTWALL: printf("1D Shock-Wall Impact Problem\n"); break;
+        case TEST_1D_DOUBLERARE: printf("1D Double Rarefaction Wave Test\n"); break;
+        case TEST_1D_NOHPROBLEM: printf("1D Noh Problem Test\n"); break;
         case TEST_2D_SHOCKTUBE_CASE1: printf("2D Riemann Problem Case 1\n"); break;
         case TEST_2D_SHOCKTUBE_CASE2: printf("2D Riemann Problem Case 2\n"); break;
         case TEST_2D_SHOCKTUBE_CASE3: printf("2D Riemann Problem Case 3\n"); break;
@@ -1300,10 +1570,74 @@ static inline void Init_Euler_2D(TestCase2D test_case,
     printf("========== Initialization Complete ==========\n\n");
 }
 
+/*                                            *********                                          */
+/*                                        Test Case Name Functions                               */
+/*                                            *********                                          */
+
+// Get full test case name (for display purposes)
+const char* getTestCaseName(TestCase2D test_case) {
+    switch(test_case) {
+        case TEST_1D_SHOCKTUBE: return "1D Sod Shock Tube Problem";
+        case TEST_1D_CONTACTWAVE: return "1D Contact Discontinuity Test";
+        case TEST_1D_SHOCKIMPACT: return "1D Symmetric Shock Collision";
+        case TEST_1D_IMPACTWALL: return "1D Shock Reflection from Rigid Wall";
+        case TEST_1D_DOUBLERARE: return "1D Double Rarefaction Wave Problem";
+        case TEST_1D_NOHPROBLEM: return "1D Noh Implosion Problem";
+        case TEST_2D_SHOCKTUBE_CASE1: return "2D Riemann Problem - Case 1";
+        case TEST_2D_SHOCKTUBE_CASE2: return "2D Riemann Problem - Case 2";
+        case TEST_2D_SHOCKTUBE_CASE3: return "2D Riemann Problem - Case 3";
+        case TEST_2D_SHOCKTUBE_CASE4: return "2D Riemann Problem - Case 4";
+        case TEST_2D_SHOCKTUBE_CASE5: return "2D Riemann Problem - Case 5";
+        case TEST_TAYLOR_GREEN_VORTEX: return "Taylor-Green Vortex";
+        case TEST_GAUSSIAN_PULSE: return "Gaussian Pulse";
+        case TEST_KELVIN_HELMHOLTZ: return "Kelvin-Helmholtz Instability";
+        case TEST_RAYLEIGH_TAYLOR: return "Rayleigh-Taylor Instability";
+        case TEST_DOUBLE_MACH_REFLECTION: return "Double Mach Reflection";
+        case TEST_BACKWARD_STEP: return "Backward-Facing Step Flow";
+        case TEST_OddEven_Decoupling: return "Odd-Even Decoupling Test";
+        case TEST_BLAST_WAVE: return "Spherical Blast Wave";
+        case TEST_NOH_PROBLEM: return "2D Noh Problem";
+        default: return "Unknown Test Case";
+    }
+}
+
+// Get short test case name (for file naming)
+const char* getTestCaseShortName(TestCase2D test_case) {
+    switch(test_case) {
+        case TEST_1D_SHOCKTUBE: return "SOD";
+        case TEST_1D_CONTACTWAVE: return "CONTACT";
+        case TEST_1D_SHOCKIMPACT: return "SHOCKIMPACT";
+        case TEST_1D_IMPACTWALL: return "IMPACTWALL";
+        case TEST_1D_DOUBLERARE: return "DOUBLERARE";
+        case TEST_1D_NOHPROBLEM: return "NOH1D";
+        case TEST_2D_SHOCKTUBE_CASE1: return "RIEMANN1";
+        case TEST_2D_SHOCKTUBE_CASE2: return "RIEMANN2";
+        case TEST_2D_SHOCKTUBE_CASE3: return "RIEMANN3";
+        case TEST_2D_SHOCKTUBE_CASE4: return "RIEMANN4";
+        case TEST_2D_SHOCKTUBE_CASE5: return "RIEMANN5";
+        case TEST_TAYLOR_GREEN_VORTEX: return "TGV";
+        case TEST_GAUSSIAN_PULSE: return "GAUSSIAN";
+        case TEST_KELVIN_HELMHOLTZ: return "KH";
+        case TEST_RAYLEIGH_TAYLOR: return "RT";
+        case TEST_DOUBLE_MACH_REFLECTION: return "DMR";
+        case TEST_BACKWARD_STEP: return "BACKSTEP";
+        case TEST_OddEven_Decoupling: return "OEDC";
+        case TEST_BLAST_WAVE: return "BLAST";
+        case TEST_NOH_PROBLEM: return "NOH2D";
+        default: return "UNKNOWN";
+    }
+}
+
+
 // Get The Description Information Of The Test Case
 static inline const char* getTestCaseDescription(TestCase2D test_case) {
     switch(test_case) {
         case TEST_1D_SHOCKTUBE: return "1D Sod shock tube problem - classical benchmark";
+        case TEST_1D_CONTACTWAVE: return "1D Contact discontinuity problem - for testing contact resolution";
+        case TEST_1D_SHOCKIMPACT: return "1D Symmetric shock collision problem - tests overheating behavior";
+        case TEST_1D_IMPACTWALL: return "1D Shock reflection from rigid wall - wall heating test";
+        case TEST_1D_DOUBLERARE: return "1D Double rarefaction wave problem - low density test";
+        case TEST_1D_NOHPROBLEM: return "1D Noh problem - strong shock implosion test";  
         case TEST_2D_SHOCKTUBE_CASE1: return "2D Riemann problem case 1 - four interacting states";
         case TEST_2D_SHOCKTUBE_CASE2: return "2D Riemann problem case 2 - complex wave interactions";
         case TEST_2D_SHOCKTUBE_CASE3: return "2D Riemann problem case 3 - shock interactions";
