@@ -26,6 +26,40 @@ static inline void initEuler2D(int var, int rows, int cols, double (*x)[rows][co
 }
 
 //==============================================================================
+// 1D Euler Equations with Exact Solution Test
+// Initial conditions: ρ(x,0) = 1 + 0.2*sin(x), u(x,0) = 1, p(x,0) = 1
+// Exact solution: ρ(x,t) = 1 + 0.2*sin(x - t)
+// Domain: [0, 2π]
+// Boundary conditions: Periodic
+// Final time: t = 2.0
+//==============================================================================
+static inline void initEulerpri1D_PrecisionTest(int var, int rows, int cols, double (*x)[rows][cols], double *Lx, double *Ly, double *Time) {
+
+    // Set The Boundary Condition To Periodic
+    bc_config.left = BC_PERIODICITY;      
+    bc_config.right = BC_PERIODICITY;     
+    bc_config.bottom = BC_OUTFLOW;
+    bc_config.top = BC_OUTFLOW;
+
+    int i, j;
+    *Lx = 2.0 * M_PI;    // 计算域长度 [0, 2π]
+    *Ly = 1.0;           // y方向长度
+    
+    int nx = rows - 2 * GhostCell;
+    double dx = *Lx / nx;
+   
+    //#pragma omp parallel
+    for (i = GhostCell; i < rows-GhostCell; i++) {
+        x[0][i][GhostCell] = 1.0 + 0.2 * sin((i - GhostCell + 0.5) * dx);
+        x[1][i][GhostCell] = 1.0;
+        x[2][i][GhostCell] = 0.0;
+        x[3][i][GhostCell] = 1.0;
+    }
+
+    *Time = 2.0;
+}
+
+//==============================================================================
 // 1D Shock Tube Test (Sod Problem)
 // Left state:  (ρ, u, v, p) = (1, 0, 0, 1)
 // Right state: (ρ, u, v, p) = (0.125, 0, 0, 0.1)
@@ -306,7 +340,7 @@ static inline void initEulerpri1D_NohProblem(int var, int rows, int cols, double
     printf("Computational domain dimensions: Lx = %f, Ly = %f \n", *Lx, *Ly);
     printf("Final simulation time: t = %f \n", *Time);
     printf("Boundary Conditions:\n");
-    printf("  Left:   Outflow\n");
+    printf("  Left:   Reflection\n");
     printf("  Right:  Outflow\n");
     printf("  Bottom: Outflow\n");
     printf("  Top:    Outflow\n");
@@ -990,20 +1024,16 @@ static inline void initEulerpri2D_BlastWave(int var, int rows, int cols,
             if (radius <= blast_radius) {
                 // High Pressure Blast Area
                 x[0][i][j] = high_density;
-                x[1][i][j] = high_density * init_velocity_x;
-                x[2][i][j] = high_density * init_velocity_y;
-                x[3][i][j] = high_pressure/(M_gamma-1.0) + 
-                            0.5 * high_density * (init_velocity_x * init_velocity_x + 
-                                                init_velocity_y * init_velocity_y);
+                x[1][i][j] = init_velocity_x;
+                x[2][i][j] = init_velocity_y;
+                x[3][i][j] = high_pressure;
                 high_pressure_cells++;
             } else {
                 // 低压环境区域
                 x[0][i][j] = low_density;
-                x[1][i][j] = low_density * init_velocity_x;
-                x[2][i][j] = low_density * init_velocity_y;
-                x[3][i][j] = low_pressure/(M_gamma-1.0) + 
-                            0.5 * low_density * (init_velocity_x * init_velocity_x + 
-                                               init_velocity_y * init_velocity_y);
+                x[1][i][j] = init_velocity_x;
+                x[2][i][j] = init_velocity_y;
+                x[3][i][j] = low_pressure;
                 low_pressure_cells++;
             }
         }
@@ -1432,6 +1462,10 @@ static inline void initEulerTestCase(TestCase2D test_case,
     
     // Select The Corresponding Initialization Function According To The Test Cases
     switch(test_case) {
+        case TEST_PRECISION:
+            initEulerpri1D_PrecisionTest(var, rows, cols, x, Lx, Ly, Time);
+            break;
+
         case TEST_1D_SHOCKTUBE:
             initEulerpri1D_Shocktube(var, rows, cols, x, Lx, Ly, Time);
             break;
@@ -1538,6 +1572,7 @@ static inline void Init_Euler_2D(TestCase2D test_case,
     // Initialize Using A Unified Test Case Function
     printf("Selected test case: ");
     switch(test_case) {
+        case TEST_PRECISION: printf("Scheme Precision Test\n"); break;
         case TEST_1D_SHOCKTUBE: printf("1D Sod Shock Tube\n"); break;
        case TEST_1D_CONTACTWAVE: printf("1D Contact Discontinuity Test\n"); break;
         case TEST_1D_SHOCKIMPACT: printf("1D Shock Impact Problem\n"); break;
@@ -1568,6 +1603,29 @@ static inline void Init_Euler_2D(TestCase2D test_case,
     initEulerflux2D(var, rows, cols, y, f, g);
     
     printf("========== Initialization Complete ==========\n\n");
+}
+
+
+static inline void Init_Precision(TestCase2D test_case,
+                                int var, int rows, int cols, int GC, 
+                                double (*x)[rows][cols], double (*y)[rows][cols], 
+                                double (*f)[rows][cols], double (*g)[rows][cols], 
+                                double *Lx, double *Ly, double *Time) {
+    
+
+    // Initialize Array Set To Zero
+    initEuler2D(var, rows, cols, x);
+    initEuler2D(var, rows, cols, y);
+    initEuler2D(var, rows, cols, f);
+    initEuler2D(var, rows, cols, g);
+    
+    //
+    initEulerpri1D_PrecisionTest(var, rows, cols, x, Lx, Ly, Time);
+    
+    initEulerconser2D(var, rows, cols, x, y);
+    
+    initEulerflux2D(var, rows, cols, y, f, g);
+    
 }
 
 /*                                            *********                                          */

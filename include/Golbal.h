@@ -6,6 +6,7 @@
 
 // Define test case enumeration type in header file
 typedef enum {
+    TEST_PRECISION,             //
     TEST_1D_SHOCKTUBE,          // 1D Sod shock tube problem - classical benchmark
     TEST_1D_CONTACTWAVE,        // 1D Contact discontinuity problem - for testing contact resolution
     TEST_1D_SHOCKIMPACT,        // 1D Symmetric shock collision problem - tests overheating behavior
@@ -54,9 +55,9 @@ static int GhostCell = 4;
 static double CFL = 0.5;
 // Reconstruction method control variable {0 is 0th order, 2 is 2nd order TVD scheme; 3 is 3rd order WENO, 5 is 5th order WENO reconstruction}
 // TVD includes Vanleer Limiter, Minmod limiter, etc. Modify in CFD_convection.h: 
-static int Recon_Accur = 1;
+static int Recon_Accur = 5;
 // Whether to use characteristic reconstruction
-static bool Characteriz = true;
+static bool Characteriz = false;
 // Whether to enable gravity:
 static bool Source;
 static double Gravity;

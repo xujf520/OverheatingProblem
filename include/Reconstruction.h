@@ -311,8 +311,8 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         
                         // Apply TVD reconstruction in characteristic space
                         // Uses van Leer limiter for better accuracy than minmod
-                        Characteristic_Variable_L = TVD_minmod_L(&uu[2], delta_x);
-                        Characteristic_Variable_R = TVD_minmod_R(&uu[2], delta_x);
+                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_x);
+                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_x);
 
                         // Transform reconstructed characteristic variables back to conservative space
                         // u' = R * w, where w is the reconstructed characteristic variable
@@ -365,8 +365,8 @@ static inline void TVD_Reconstruction(int dir, int var, int rows, int cols, int 
                         }
                         
                         // Apply TVD reconstruction in characteristic space
-                        Characteristic_Variable_L = TVD_minmod_L(&uu[2], delta_y);
-                        Characteristic_Variable_R = TVD_minmod_R(&uu[2], delta_y);
+                        Characteristic_Variable_L = TVD_vanleer_L(&uu[2], delta_y);
+                        Characteristic_Variable_R = TVD_vanleer_R(&uu[2], delta_y);
 
                         // Transform back to conservative space: u' = R * w
                         for (int m = 0; m < var; m++) {
@@ -1411,7 +1411,7 @@ static inline double WENO5_L(double *f)
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-6;
+    double epsilon = 1.0e-15;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i-2, i-1, i, i+1, i+2]
     k = 0;  // Stencil centered at cell i
@@ -1467,7 +1467,7 @@ static inline double WENO5_R(double *f)
     double v1, v2, v3, v4, v5;
     double s1, s2, s3;
     double a1, a2, a3, w1, w2, w3;
-    double epsilon = 1.0e-6;
+    double epsilon = 1.0e-15;
 
     // Assign values to v1, v2, v3, v4, v5 for stencil [i+3, i+2, i+1, i, i-1]
     k = 1;  // Stencil centered at cell i+1 (mirrored for right interface)

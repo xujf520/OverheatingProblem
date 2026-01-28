@@ -58,6 +58,7 @@ void Get_RP_Parameters();
 //Simple Grid Code
 void Mesh(int n, double deltax, double *x);
 void Mesh_2D();
+void Precision_test();
 /*                                            *********                                          */
 /*                                        Partial Parameters                                      */
 /*                                            *********                                          */
@@ -113,6 +114,12 @@ int main(int argc, char *argv[]) {
     }
     // Set Global Parameters According To The Control File
     set_current_test_case(ctrl_params.test_case);
+
+    //精度测试：
+    if(ctrl_params.test_case == TEST_PRECISION){
+        Precision_test();
+        return 0;
+    }
     
     int LNX_ngc = ctrl_params.L_nx + 2 * GhostCell; 
     int LNY_ngc = ctrl_params.L_ny + 2 * GhostCell; 
@@ -185,8 +192,8 @@ int main(int argc, char *argv[]) {
 
                 switch (ctrl_params.Time_ADM) {
                     case 1:
-                        //RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
-                        RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
+                        RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                        //RK1_TimeAd_Unified(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y, ctrl_params.test_case);
                         break;
                     case 2:
                         RK2_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
@@ -265,9 +272,10 @@ int main(int argc, char *argv[]) {
             printf("] 100.00%% (Simulation completed!)\n");
             break;
         }
-            
+        
+        // 迭代步数控制
         case 1:
-            // 迭代步数控制
+           
             Time = 0.0;
             for (int m = 0; m <= 399; m++) {
                 // 记录单步开始时间
@@ -425,7 +433,9 @@ void ReadControlFile(const char* filename) {
             // Process recognized parameters
             if (strcmp(key_trim, "TestCase") == 0) {
                 // Map test case string to enumeration value
-                if (strcmp(value_trim, "1D_Sod_Shocktube") == 0) 
+                if (strcmp(value_trim, "Precision_Test") == 0) 
+                    ctrl_params.test_case = TEST_PRECISION;
+                else if (strcmp(value_trim, "1D_Sod_Shocktube") == 0) 
                     ctrl_params.test_case = TEST_1D_SHOCKTUBE;
                 else if (strcmp(value_trim, "1D_Contact_Wave") == 0) 
                     ctrl_params.test_case = TEST_1D_CONTACTWAVE;
@@ -592,14 +602,6 @@ void set_material_parameters(double gamma, bool source, double gravity, double c
     Source = source;
     Gravity = gravity;
     CFL = cfl;
-    
-    printf("Material parameters configured:\n");
-    printf("  Gamma (γ): %.3f\n", M_gamma);
-    printf("  Gravity source: %s\n", Source ? "ON" : "OFF");
-    if (Source) {
-        printf("  Gravity constant: %.3f\n", Gravity);
-    }
-    printf("  CFL number: %.3f\n", CFL);
 }
 
 
@@ -754,6 +756,7 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
    // Get Case Name Systematic Abbreviation
     const char* case_name;
     switch(current_test_case) {
+        case TEST_PRECISION:           case_name = "Error"; break;
         case TEST_1D_SHOCKTUBE:        case_name = "1D_SOD"; break;
         case TEST_1D_CONTACTWAVE:      case_name = "1D_CONTACT"; break;
         case TEST_1D_SHOCKIMPACT:      case_name = "1D_SHOCKIMPACT"; break;
@@ -960,4 +963,110 @@ void OutputData_file_2D(bool Con_out, int rows, int cols, int GC, double *mx, do
         printf("The %d th calculation ended at %f\n", Ite, now_time);
     }
     printf("----------------------------------------\n");
+}
+
+/**
+ * Perform precision test for convergence analysis
+ * Tests the numerical scheme with different grid resolutions
+ * Calculates L1, L2, and L∞ errors for each grid
+ * Prints convergence table showing errors and orders of accuracy
+ */
+void Precision_test() {
+    
+    // Define grid point sequence (consistent with Table 3.3 in the reference paper)
+    int nx_values[] = {10, 20, 40, 80, 160, 320, 640};
+    int num_nx = sizeof(nx_values) / sizeof(nx_values[0]);
+    
+    // Initialize error counter
+    error_count = 0;
+    
+    // Loop over different grid resolutions
+    for (int idx = 0; idx < num_nx; idx++) {
+        int nx = nx_values[idx];
+        int LNX_ngc = nx + 2 * GhostCell;      // Total rows including ghost cells
+        int LNY_ngc = ctrl_params.L_ny + 2 * GhostCell;  // Total columns including ghost cells
+
+        double Lx, Ly;                         // Domain dimensions
+        double Tmax = ctrl_params.Tmax;        // Final simulation time
+        double Delta_x, Delta_y;               // Grid spacing in x and y directions
+        double Delta_T;                        // Time step
+
+        double mesh_x[nx], mesh_y[ctrl_params.L_ny];     // Mesh coordinates
+        double pri_Ver1[4], pri_Ver2[4];                  // Temporary primitive variables
+        
+        // Allocate memory for primitive variables, conservative variables, and fluxes
+        double (*pri)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+        double (*U)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+        double (*FU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+        double (*GU)[LNX_ngc][LNY_ngc] = malloc(4 * sizeof(double[LNX_ngc][LNY_ngc]));
+        
+        // Check if memory allocation was successful
+        if (pri == NULL || U == NULL || FU == NULL || GU == NULL) {
+            fprintf(stderr, "Memory allocation failed in Main\n");
+            free(pri); free(U); free(FU); free(GU);
+            continue;  // Skip to next grid resolution
+        } 
+        
+        // Set material parameters (gamma, source terms, gravity, CFL number)
+        set_material_parameters(ctrl_params.M_gamma, ctrl_params.Source, ctrl_params.Gravity, ctrl_params.CFL);
+        
+        // Initialize flow field with test case configuration
+        Init_Precision(ctrl_params.test_case, var, LNX_ngc, LNY_ngc, GhostCell, pri, U, FU, GU, &Lx, &Ly, &Tmax);
+
+        // Calculate grid spacing
+        Delta_x = Lx / nx;
+        Delta_y = Ly / ctrl_params.L_ny;
+
+        // Generate computational mesh
+        Mesh_2D(nx, ctrl_params.L_ny, mesh_x, mesh_y, Delta_x, Delta_y);
+
+        // Time integration loop
+        double Time = 0.0;
+        for (Time = 0.0; Time < Tmax; Time = Time + Delta_T) {
+            // Calculate time step based on CFL condition
+            Delta_T = Precision_Get_Delta_T_2D(var, LNX_ngc, LNY_ngc, U, Delta_x, Delta_y);
+            
+            // Adjust final time step to exactly reach Tmax
+            if (Time + Delta_T >= Tmax) {
+                Delta_T = Tmax - Time;
+            }
+            
+            // Perform time advancement using selected Runge-Kutta method
+            switch (ctrl_params.Time_ADM) {
+                case 1:
+                    RK1_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                    break;
+                case 2:
+                    RK2_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                    break;
+                case 3:
+                    RK3_TimeAd(ctrl_params.scheme, var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_T, Delta_x, Delta_y);
+                    break;
+                default:
+                    fprintf(stderr, "Error: Invalid time advancement method");
+                    break;
+            }
+        }
+        
+        // Store current grid index for error data
+        int current_index = error_count;
+        error_count++;
+        
+        // Calculate and store all error norms
+        TEST_Scheme_Error_L1(var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_x, Time, nx, current_index);
+        TEST_Scheme_Error_L2(var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_x, Time, current_index);
+        TEST_Scheme_Error_Linf(var, LNX_ngc, LNY_ngc, GhostCell, U, Delta_x, Time, current_index);
+        
+        printf("\n--- Completed calculation for Nx = %d, Δx = %.6f ---", nx, Delta_x);
+        // Free allocated memory
+        free(pri);
+        free(U);
+        free(FU);
+        free(GU);
+    }
+    // Calculate convergence orders from error data
+    calculate_orders();
+    // Print formatted error table
+    print_error_table();
+    printf("The program has completed its execution.");
 }

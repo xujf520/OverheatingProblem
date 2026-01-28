@@ -681,8 +681,8 @@ static inline void RK1_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
     Boundary_Conditions(var, rows, cols, y, GC); 
 //    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
-    //Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
-    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    //Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
     /*if (Time_Step == 0)
         Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
     else
@@ -747,8 +747,8 @@ static inline void RK2_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
 //    BC_DoubleMach_2D(var, rows, cols, y, GC,Time); 
     Boundary_Conditions(var, rows, cols, y, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,y,Flux_F,Flux_G,dt,dx,dy);
-    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
-//    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+//    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
     #pragma omp parallel for collapse(3)
     for ( k = 0; k < var; k++){
@@ -765,8 +765,8 @@ static inline void RK2_TimeAd(int AR_scheme, int var, int rows,int cols, int GC,
 //    BC_DoubleMach_2D(var, rows, cols, Conser_U1, GC,Time); 
     Boundary_Conditions(var, rows, cols, Conser_U1, GC);
     Flux_Reconstruction_RP(AR_scheme,var,rows,cols,GC,Conser_U1,Flux_F,Flux_G,dt,dx,dy);
-//    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
-    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+    Space_Discrete_Item(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
+//    Space_Discrete_Item_OED(var,rows,cols,GC,dx,dy,Flux_F,Flux_G,Source_G,Space_Item);
 
     #pragma omp parallel for collapse(3)
     for ( k = 0; k < var; k++){
